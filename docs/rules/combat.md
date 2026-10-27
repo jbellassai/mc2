@@ -85,9 +85,31 @@ The same roll serves every non-combat skill through `_SkillUp0` (INT 62h AH=0x31
 `_DecSta(hero, field, amount)` subtracts with floor 0. `_IsHeTr(hero)`: energy 0 → `HERO+0xBD |= 0x10` (exhausted); energy < 15 → `HERO+0xBE |= 0x20` (tired), else cleared.
 
 ## Combat flow (`_DoACmbt` → P96 setup → P94 fight → P95 aftermath)
-1. `_DoACmbt` loads P06 at 0CA8:2000 (room half), V06 into `_rvarbuf` (INT 61h), then runs **P96** at 0CA8:0000: builds the 24 `CMBTNT` records (`ovl_020a`: party slots 0–5 from the heroes via `ovl_0f2a`, monsters from the encounter group `_grpsptr[grpno−60]` or `_monstlist`, count = `D06 ptr8[7·diff + RndCo]` when the group gives none), places them on the 11×9 arena, and shows the pre-fight parley menu (`ovl_06e7`: *rally* = `RndCo(100) < h_ldrshp` of the acting leader (P96 0x789) gives every other party member `bravery += RndCo(3)+1` and `agility += 4`, both capped at 12; *hail the leader* = truce / bribe dialogue; `_ambflg` = ambush).
+1. `_DoACmbt` loads P06 at 0CA8:2000 (room half), V06 into `_rvarbuf` (INT 61h), then runs **P96** at 0CA8:0000: builds the 24 `CMBTNT` records (`ovl_020a`: party slots 0–5 from the heroes via `ovl_0f2a`, monsters from the encounter group `_grpsptr[grpno−60]` or `_monstlist`, count = `D06 ptr8[7·diff + RndCo]` when the group gives none), places them on the 11×9 arena (*Arena placement* below), and shows the pre-fight parley menu (`ovl_06e7`: *rally* = `RndCo(100) < h_ldrshp` of the acting leader (P96 0x789) gives every other party member `bravery += RndCo(3)+1` and `agility += 4`, both capped at 12; *hail the leader* = truce / bribe dialogue; `_ambflg` = ambush).
 2. If `_endcmbt == 0`, **P94** runs the fight (`ovl_00b4` → `ovl_02e8`, rounds until `_endcmbt != 0`), then **P95** handles the aftermath (loot, resurrection prompts).
 3. INT 61h/08 (`V06 INT61_08`) sets `_endcmbt` after every action: 1 = no living monster left (win), 2 = every party member dead, 3 = every party member fled/removed.
+
+### Arena placement (P96 `ovl_0f2a` heroes, `ovl_1037` monsters)
+`_cmbtyp` tells where the fight started: 1 = wilderness (`P01`), 0 = town street (`P02`), ≥ 2 = a dungeon/room fight (5 = the special stronghold fights checked by the EXE). The **side code** `_rmdata+6` (6–9; always 6 in the wilderness, otherwise the `type` byte of the entrance/spot record the party came through, also used by `P07` when the party enters a dungeon room) picks a formation `f = side − 6`.
+- Heroes: wilderness → formation 0; town → each hero keeps its street position relative to the view (`p1x/p1y − OV_0x18c`); rooms → formation `f`. `_setupxy` (48 B, written at new game from P81 file 0x162F) = 24 x then 24 y bytes, member `m` of formation `f` at index `6f+m`:
+
+| f (side) | x | y | party stands |
+|---|---|---|---|
+| 0 (6) | 4,4,4,3,3,1 | 2,4,6,3,5,4 | left |
+| 1 (7) | 3,5,7,4,6,5 | 3,3,3,2,2,1 | top |
+| 2 (8) | 6,6,6,7,7,9 | 2,4,6,3,5,4 | right |
+| 3 (9) | 3,5,7,4,6,5 | 5,5,5,6,6,7 | bottom |
+
+- Monsters (P96 file 0x19 = x ranges, 0x29 = y ranges, `{lo,hi}` word pairs; a random cell in the rectangle, re-rolled until `_PlacePerson` finds a free passable cell; wilderness fights instead take a random cell of the whole 11×9 map, scanning forward from `RndCo(99)+17` for a free one):
+
+| side | melee monsters | casters (`c_magskl ≠ 0`, except Vankruh and Doombeast) |
+|---|---|---|
+| 6 | x 6–10, y 0–8 | x 10, y 0–8 |
+| 7 | x 0–10, y 5–8 | x 0–10, y 8 |
+| 8 | x 0–4, y 0–8 | x 0, y 0–8 |
+| 9 | x 0–10, y 0–3 | x 0–10, y 0 |
+
+So the party always enters from one wall, melee monsters fill the far half and spellcasters hug the far wall. Monster records also get `c_alignmnt = 1`, `c_energy = 99`, `c_target = 0xFF`, the leader rank (file 0x39) and the undead flag (file 0x62 → `c_state |= 2`).
 
 ### A round (`P94 ovl_02e8`)
 - `_curphase = 1`, `_timestop` cleared at the end of each round.

@@ -18,6 +18,6 @@ Resolved today: companion assignments and captures (`rules/assignments.md`), ser
 Still open, roughly by value for a port:
 1. ~~Ships and captains~~ → `rules/ships.md` (D36 ids 1–4 are huts/camps, not piers).
 2. ~~Character creation and the skill-up base table~~ → `rules/new_game.md`, `combat.md` (bases 30/15/25/20/25, FFFAR data = address − 4), `skills.md` (full `_maxtbl`).
-3. Monster row bytes 16–18 and P96 arena placement rectangles (file 0x19/0x29); song charm duration.
+3. ~~Monster bytes 16–18 (unused by code), arena placement, song charm duration~~ → `combat.md` *Arena placement*, `encounters.md`.
 4. P08 details: ghost spell check, Marked Ones `Offer1` branches, ending sequence; P07 room programs (`P06` 26 entries) beyond chests/prisoners.
 5. `E80` maps without tileset; `_ChkDepartures`; inn "wait here" (`_capdays`) semantics; `C` file regions 10–17 and the +0x64 bytes.
