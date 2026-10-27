@@ -21,7 +21,7 @@ Entering a room from a dungeon map copies its record to `_hroomrec` (P01 does it
 - `hrmmap & 0xF` selects one of the small room maps (`_thismap` + n·0x65), `hrmxy[4]` are the four door/feature positions placed by `ovl_049a`.
 - `hrmgrp` = the **encounter group** guarding the room (`_grpsptr[grp − 60]`, combat type 5); after the guards die the room's bit in `_dunrms` is set and they never return.
 - `hrmreward`/`hrmrewamt`: a **chest** (tile 0x1F at (1,1)) with `amount × item`, or if `reward ≥ 0x80` a **fountain** (tile 0x1C at (9,0)) of spell `reward − 0x80` with `amount` charges. Opened chests / drunk fountains are remembered in `_duntre` by `hrmid`.
-- `_hroomtype`: 1 = prison cell, 2–5 = lock types (P07 adds `(type−1)·4` to `lkdata`), 6 = Vankruh's chamber (needs `_events+8 & 2`); types 2–5 also check event bit `type + 0x3C`.
+- `_hroomtype` is set when a door is entered (`P02` → V02 service 0x12, table at V02 file 0xE19: room ids `12 15 1D 49 4A F6 F7 FD FE` → 1 prison cell; `F8 F9 FA FB` → 2–5 Dark Candle rooms; `44` → 6 Vankruh's chamber, shown only with `_events+8 & 4`, `_VANKRUHXY`). Types 2–5 use `lkdata` row `type−1` (4 bytes: the candle at (4,1) and its inscription text) and open permanently once event `0x3C + type` is set.
 
 ### Opening a chest (`P07 ovl_0969`)
 Requires **using a Pick** (0x50) on the chest from an adjacent square. Already open → "The chest is already open." Otherwise:
@@ -36,6 +36,13 @@ Then "It contains %b %as. Will %h take them?" → `IncObj(hero, item, amount)` (
 
 ### Fountains (`ovl_0d54`)
 "Will %h drink from it?" → if the hero has magic (`h_magic ≠ 0`) and the spell is not 0x2A: `h_spells[spell] += amount` (cap 99), "%h gains %b %a spells." Spell 0x2A (or no magic) is a plain drink: "How refreshing!" (effect TODO — `ovl_0f04`). Once per fountain (`_duntre`).
+
+### Dark Candle rooms (`_hroomtype` 2–5, data `D98`, P07 `ovl_06c2`)
+Four elden are imprisoned in candle flames; each room is reached through a dungeon door (`tools/doors.py`): Despair (id 0xF8) in Dorak 6, Pain (0xF9) in Ruz 2, Anguish (0xFA) in Namaz 6, Slow Death (0xFB) in Dragos 3 and Dreax 2. *Look* shows the inscription (`D98` texts 0–3). The room reacts to **using the matching scroll** (item `0x4A + type`: White 0x4C Despair/Zifar, Gray 0x4D Pain/Zulain, 0x4E Anguish/Zewinul, Blue 0x4F Slow Death/Zidoni; the elden's name is `D98.gwrds[item − 0x4C]`):
+- scroll not yet deciphered (`h_invamt & 0x80` clear, `items.md`) → "The scroll is blank." (text 4);
+- user has `h_magic == 0` → "%h cannot pronounce the arcane words scribed on the %a. The foul candle blazes on!" (5);
+- else texts 6–7 (the incantation, the flame burns the scroll), sound 5, the scroll is consumed, the candle tile changes (`_mapyl+6 = 0x5D`), a `Bang` at the hero, "%o has been set free!" (8), the room's KNPC pointer is advanced `(type−1)·11` bytes so the freed elden appears, and **event `0x3C + type`** (62 Zifar, 63 Zulain, 64 Zewinul, 65 Zidoni) is set.
+The freed elden then speak `D98` texts 9–12 (meet at Wanasol Hall; Zidoni: bring King Rebnard) and the Wanasol Hall scene in `quest_scenes.md` takes over. The Blue Scroll comes from that scene; the others are found/bought and deciphered through library research (`services.md`).
 
 ### Prisoners (`_hroomtype == 1`)
 Companions captured earlier (stealth failure while travelling, `assignments.md`) are stored as assignment records with task 0x65 at this location/room/hroom (`_AssignedHere` compares `as_loc/as_room/as_hroom`). On entry each such record is cleared, the companion is placed at (2,4) and says "Many thanks for the rescue!"; four specific captives (P07 table @0x56A) also set an event bit. Leaving clears their `_npcsta` bit so they re-appear per the normal placement rules (`npcs.md`).
@@ -74,4 +81,4 @@ Ships and captains: `ships.md`.
 30 patches (feature ids 0–29) across 14 regions; the item grown at patch `id` is `D04.gwrds[id]` (0x33 Sermin, 0x34 Gonshi, 0x35 Nift, 0x36 Mirget, 0x37 Luffin, 0x3C Loka — Turpin is never grown). The patch map is variant `_curter` (terrain under the party) of the 16 11×9 maps in `G00E00.MCM`. State: `_mushsta` (DS:7067, 32 bytes, one **nibble per patch**: even id = high nibble) = mushrooms left, 0–15, all 15 in a new game; **regrowth** +1 every 8th day (`_juldate & 7 == 0`, `P92 ovl_02cb`). Entering draws `count` mushrooms at the first `count` of 15 fixed positions (P04 file 0x88/0x97: x `[3,3,4,6,7,7,8,8,8,7,6,3,2,2,1]`, y `[2,1,1,1,1,2,2,3,5,7,7,6,6,5,4]`, placed with `_PlacePerson` so occupied cells shift); stepping on one asks "%h may pick %b %as" and gives `amount[kind]` = Sermin 6, Gonshi 4, Nift 3, Mirget 2, Luffin 3, Turpin 2, Loka 2 (file 0x72) to the acting member (`_IncObj`; a full pack refuses and the mushroom stays), then `count−1` is written back. Empty patch: "No more mushrooms are growing here."
 
 ## Still to extract
-Town `spetbl` types other than 2/3 and the callers of `ovl_1926` (0x1082, 0x1105, 0x119E, 0x18CA); `spdoors` first/last bytes; lock types 2–5 and the `lkdata` 4-byte stride in P07; `P04`/`P05` (dungeon map programs: traps, pits, teleportals, mindstones); `P08` court scenes; `P09` engraved-word puzzles; the `notyet0` pointer.
+Town `spetbl` types other than 2/3 and the callers of `ovl_1926` (0x1082, 0x1105, 0x119E, 0x18CA); `spdoors` first/last bytes; lock types 2–5 and the `lkdata` 4-byte stride in P07; `P06` (dungeon level program: roaming monsters/attacks, traps, pits, teleportals, mindstones); `P08` court scenes; `P09` engraved-word puzzles; the `notyet0` pointer.
