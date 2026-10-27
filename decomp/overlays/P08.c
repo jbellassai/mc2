@@ -361,7 +361,7 @@ void ovl_09df(void)
   undefined2 unaff_DS;
   int iStack0002;
   
-  (*(code *)*(undefined2 *)(in_BX + 100))(0x1ca8,&OV_0xa5c,0x1ca8,0x20,0);
+  (*(code *)*(undefined2 *)(in_BX + 100))(&OV_0xa5c,0x1ca8,0x20,0);
   OV_0xa5c = 1;
   OV_0xa76 = 1;
   iVar4 = 0x1f;
@@ -370,7 +370,7 @@ void ovl_09df(void)
   do {
     if ((*(byte *)(iVar6 + 0x16) & 0x80) != 0) {
       puVar1 = (undefined2 *)(G_savebx + 0x280);
-      iVar2 = EXE_viaptr_puVar1(0x1000,-(iVar4 + -0x20));
+      iVar2 = EXE_InParty(0x1000,-(iVar4 + -0x20));
       if (iVar2 == -1) {
         iVar5 = iVar5 + 1;
       }
@@ -453,7 +453,7 @@ void ovl_0af8(void)
     UNLOCK();
     if (cVar3 != '\0') {
       puVar6 = (undefined2 *)(G_savebx + 0xac);
-      EXE_viaptr_puVar6(0x1000,6 - iVar7);
+      EXE_SetPlTilNo(0x1000,6 - iVar7);
       if (cVar4 == '\x1a') {
         LOCK();
         iVar2 = OV_0xbf4;
@@ -576,7 +576,7 @@ void ovl_0c92(void)
           ((G_events+11 & 0x40) == 0)) {
     uVar4 = G_curpla;
     G_curpla = 0;
-    EXE_IModTxt(0x1ca8,0xc);
+    EXE_IModTxt(0xc);
     G_curpla = uVar4;
   }
   return;
@@ -704,12 +704,12 @@ void ovl_0f20(void)
   G_rmdata+6 = (char)((uint)uVar2 >> 8);
   G_rmdata+7 = 3;
   G_curpla = 0;
-  EXE_PrtW3(0x1ca8);
-  EXE_SumStat(0x1ca8);
+  EXE_PrtW3();
+  EXE_SumStat();
   ovl_100c();
-  EXE_SetTxtWnd(0x1ca8,0);
-  EXE_ClrTxtWnd(0x1ca8);
-  EXE_SetTxtWnd(0x1ca8,1);
+  EXE_SetTxtWnd(0);
+  EXE_ClrTxtWnd();
+  EXE_SetTxtWnd(1);
   if (OV_0x1c9 == 'L') {
     EXE_ClrTxtWnd();
     EXE_ClrMnuWnd();
@@ -742,16 +742,16 @@ void ovl_0fb9(void)
   uVar1 = G_cursorx;
   uVar2 = G_cursory;
   uVar3 = G_txtbkgd;
-  EXE_SetTxtWnd(0x1ca8,0);
+  EXE_SetTxtWnd(0);
   iVar5 = 0x50;
   do {
-    uVar4 = EXE_RndCo(0x1ca8,0x100);
+    uVar4 = EXE_RndCo(0x100);
     G_txtbkgd = uVar4;
-    EXE_ClrTxtWnd(0x1ca8);
-    EXE_GameSound(0x1ca8,0xe);
+    EXE_ClrTxtWnd();
+    EXE_GameSound(0xe);
     iVar5 = iVar5 + -1;
   } while (iVar5 != 0);
-  EXE_SetTxtWnd(0x1ca8,1,in_BX);
+  EXE_SetTxtWnd(1,in_BX);
   G_txtbkgd = uVar3;
   G_cursory = uVar2;
   G_cursorx = uVar1;
@@ -829,9 +829,9 @@ void ovl_1034(undefined2 param_1)
   G_swgreet = 2;
   if (G_npcno == 'H') {
     if ((G_curpla == '\0') && ((G_events+1 & 0x20) == 0)) {
-      EXE_IModTxt(0x1ca8,0);
-      EXE_PrtWrd(0x1ca8,G_comtxtptr);
-      iVar3 = EXE_SearchInv(0x1ca8,0x11,0xffff,&OV_0x15b,0x1ca8);
+      EXE_IModTxt(0);
+      EXE_PrtWrd(G_comtxtptr);
+      iVar3 = EXE_SearchInv(0x11,0xffff,&OV_0x15b,0x1ca8);
       if (iVar3 != 0) {
         OV_0x1194 = 0xff;
       }
@@ -974,12 +974,12 @@ void ovl_12e1(void)
   undefined2 unaff_DS;
   
   G_npcno = 0x39;
-  EXE_IModTxt(0x1ca8,2);
-  EXE_PrtWrd(0x1ca8,G_comtxtptr);
-  iVar1 = EXE_IncObj(0x1ca8,*(undefined2 *)(G_curpla * 2 + &G_heroptr),0x5a,
+  EXE_IModTxt(2);
+  EXE_PrtWrd(G_comtxtptr);
+  iVar1 = EXE_IncObj(*(undefined2 *)(G_curpla * 2 + &G_heroptr),0x5a,
                      1);
   if (iVar1 != 0) {
-    EXE_IModTxt(0x1ca8,3,in_BX);
+    EXE_IModTxt(3,in_BX);
     G_events+3 = G_events+3 | 4;
   }
   return;
@@ -1070,7 +1070,7 @@ void ovl_13bb(void)
   int unaff_DI;
   undefined2 unaff_DS;
   
-  EXE_InitNPC(0x1ca8);
+  EXE_InitNPC();
   OV_0x155 = *(undefined2 *)(unaff_SI + 2);
   if (OV_0x1d2 != '\0') {
     ovl_0af8();
@@ -1230,7 +1230,7 @@ void ovl_1507(void)
   undefined2 *puVar5;
   undefined2 unaff_DS;
   
-  EXE_LoadMap(0x1ca8,in_DL,0,0x47);
+  EXE_LoadMap(in_DL,0,0x47);
   if (OV_0x154 != 0) {
     puVar5 = (undefined2 *)&G_thismap;
     puVar4 = (undefined2 *)((int)puVar5 + (uint)OV_0x154 * 0x65);
@@ -1335,7 +1335,7 @@ void ovl_15c7(void)
   int in_BX;
   undefined2 unaff_DS;
   
-  EXE_FillWindow(0x1ca8,0,0);
+  EXE_FillWindow(0,0);
   return;
 }
 
@@ -1382,7 +1382,7 @@ void ovl_15d5(void)
     OV_0x1c3 = uVar1;
     UNLOCK();
     puVar4 = (undefined2 *)(uVar5 + 0xe0);
-    EXE_viaptr_puVar4(0x1000,&G_events,CONCAT11(extraout_AH,uVar2),uVar5);
+    EXE_SetBit(0x1000,&G_events,CONCAT11(extraout_AH,uVar2),uVar5);
   }
   return;
 }
@@ -1401,8 +1401,8 @@ void ovl_16e9(void)
   undefined2 unaff_DS;
   int iVar3;
   
-  EXE_InitScrap(0x1ca8);
-  EXE_ClrTxtWnd(0x1ca8);
+  EXE_InitScrap();
+  EXE_ClrTxtWnd();
   EXE_SetTxtObj(OV_0x1c5);
   EXE_AddScrap(&OV_0x223,0x1000,8);
   iVar2 = EXE_ChkRng(G_lookdata+2 & 0xff,G_lookdata+2 >> 8,
@@ -1468,9 +1468,9 @@ void ovl_1855(void)
   int unaff_DI;
   undefined2 unaff_DS;
   
-  EXE_InitScrap(0x1ca8);
-  EXE_ClrTxtWnd(0x1ca8);
-  EXE_AddScrap(0x1ca8,G_loc+10);
+  EXE_InitScrap();
+  EXE_ClrTxtWnd();
+  EXE_AddScrap(G_loc+10);
   EXE_PrtScrap(OV_0x1d0,in_BX);
   return;
 }
@@ -1484,7 +1484,7 @@ void ovl_187e(void)
   int in_BX;
   undefined2 unaff_DS;
   
-  EXE_InvertWindow(0x1ca8,0,3);
+  EXE_InvertWindow(0,3);
   return;
 }
 
@@ -1529,8 +1529,8 @@ void __cdecl16near ovl_18cd(uint param_1)
   undefined2 unaff_DS;
   
   iVar3 = G_savebx;
-  EXE_MFXInit(0x1ca8);
-  uVar1 = EXE_Locate(0x1ca8,param_1 & 0xff,param_1 >> 8);
+  EXE_MFXInit();
+  uVar1 = EXE_Locate(param_1 & 0xff,param_1 >> 8);
   G_mfxtnum = uVar1 & 0xff;
   uVar2 = ovl_1976();
   G_mfxcoords = uVar2;
@@ -1538,7 +1538,7 @@ void __cdecl16near ovl_18cd(uint param_1)
   G_egadrawcode = 0;
   G_egaeffectstimer = 60000;
   G_egaeffectsflag = 3;
-  EXE_MultiFX(0x1ca8,iVar3);
+  EXE_MultiFX(iVar3);
   return;
 }
 
@@ -1554,7 +1554,7 @@ void __cdecl16near ovl_191b(undefined2 param_1)
   undefined2 unaff_DS;
   
   iVar2 = G_savebx;
-  EXE_MFXInit(0x1ca8);
+  EXE_MFXInit();
   G_mfxtnum = param_1;
   uVar1 = ovl_1976();
   G_mfxcoords = uVar1;
@@ -1562,12 +1562,12 @@ void __cdecl16near ovl_191b(undefined2 param_1)
   G_egadrawcode = 0;
   G_egaeffectstimer = 4000;
   G_egaeffectsflag = 7;
-  EXE_MultiFX(0x1ca8);
-  EXE_MultiFX(0x1ca8);
-  EXE_MultiFX(0x1ca8);
-  EXE_MultiFX(0x1ca8);
+  EXE_MultiFX();
+  EXE_MultiFX();
+  EXE_MultiFX();
+  EXE_MultiFX();
   G_egaeffectsflag = 3;
-  EXE_MultiFX(0x1ca8,iVar2);
+  EXE_MultiFX(iVar2);
   return;
 }
 
@@ -1616,17 +1616,17 @@ void __cdecl16near FUN_1000_e406(undefined1 param_1,uint param_2)
     iVar4 = iVar4 + 1;
   } while (iVar4 != 99);
   puVar1 = (undefined2 *)(G_savebx + 0x2c4);
-  EXE_viaptr_puVar1(0x1ca8,0,G_savebx);
+  EXE_MultiBang(0,G_savebx);
   G_egaeffectsflag = 0x1001;
   G_egadrawcode = 0;
   G_egaeffectstimer = 1;
   uVar2 = ovl_1976();
   iVar3 = G_savebx;
-  EXE_movectileFX(0x1ca8,param_1,uVar2 & 0xff,uVar2 >> 8);
-  EXE_GameSound(0x1ca8,0x1d);
-  EXE_WaitForSound(0x1ca8);
-  EXE_RestBG(0x1ca8,param_2 & 0xff,param_2 >> 8);
-  EXE_PageFlip(0x1ca8,iVar3);
+  EXE_movectileFX(param_1,uVar2 & 0xff,uVar2 >> 8);
+  EXE_GameSound(0x1d);
+  EXE_WaitForSound();
+  EXE_RestBG(param_2 & 0xff,param_2 >> 8);
+  EXE_PageFlip(iVar3);
   return;
 }
 

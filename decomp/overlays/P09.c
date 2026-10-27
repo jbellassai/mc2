@@ -239,7 +239,7 @@ L_0579:
 L_05af:
         puVar13 = (undefined2 *)(in_BX + 0x108);
         in_BX = 0x1000;
-        iVar14 = EXE_viaptr_puVar13();
+        iVar14 = EXE_InitScrap();
         if (iVar14 == 0) {
           uVar5 = *(undefined2 *)
                    ((uint)*(byte *)(OV_0x17f + 2) * 4 +
@@ -470,7 +470,7 @@ L_0f38:
           EXE_PrtScrap();
           puVar13 = (undefined2 *)(in_stack_0000001c + 0x88);
           in_stack_0000001c = -0x25f3;
-          EXE_viaptr_puVar13();
+          EXE_InitScrap();
           goto L_0310;
         }
       }
@@ -530,7 +530,7 @@ L_066f:
     EXE_SetTxtWnd();
     puVar13 = (undefined2 *)(in_BX + 0xe4);
     in_BX = 0x1000;
-    EXE_viaptr_puVar13();
+    EXE_InitScrap();
   }
   else {
     OV_0x765 = iVar17;
@@ -560,7 +560,7 @@ L_066f:
     EXE_SetTxtWnd();
     puVar13 = (undefined2 *)(in_BX + 0xe4);
     in_BX = 0x1000;
-    EXE_viaptr_puVar13();
+    EXE_InitScrap();
   }
   goto L_031b;
   while( true ) {
@@ -702,7 +702,7 @@ code_r0x0001d542:
         G_loc+26 = (int)piVar18;
         UNLOCK();
         puVar7 = (undefined2 *)(iVar14 + 0x340);
-        EXE_viaptr_puVar7();
+        EXE_MFXInit();
         iVar14 = 9;
         iVar17 = 0;
         do {
@@ -790,16 +790,16 @@ void ovl_0611(void)
     return;
   }
   if ((G_events & 0x10) != 0) {
-    EXE_GreetKNPC(0x1ca8);
+    EXE_GreetKNPC();
     return;
   }
   if ((G_events+1 & 1) == 0) {
-    EXE_IModTxt(0x1ca8,4);
+    EXE_IModTxt(4);
     return;
   }
-  EXE_IModTxt(0x1ca8,5);
+  EXE_IModTxt(5);
   G_events = G_events | 0x10;
-  EXE_SetBit(0x1ca8,&G_met,0x71,in_BX);
+  EXE_SetBit(&G_met,0x71,in_BX);
   return;
 }
 
@@ -825,7 +825,7 @@ void ovl_0f91(void)
   UNLOCK();
   ovl_167e();
   G_scrapptr = G_scrapptr + -1;
-  EXE_AddScrap(0x1ca8,G_comtxtptr);
+  EXE_AddScrap(G_comtxtptr);
   return;
 }
 
@@ -951,7 +951,7 @@ void ovl_123e(void)
     if (*(int *)(iVar2 * 2 + &G_party) != 0xff) {
       *(undefined1 *)(iVar1 + 0xba) = 1;
       *(undefined1 *)(iVar1 + 0xca) = 1;
-      EXE_Bang(0x1ca8,G_zp_1415 & 0xff,G_zp_1415 >> 8,0);
+      EXE_Bang(G_zp_1415 & 0xff,G_zp_1415 >> 8,0);
     }
     iVar2 = iVar2 + 1;
     iVar3 = iVar3 + -1;
@@ -1063,18 +1063,18 @@ void ovl_1413(void)
   
   G_txtptr = &OV_0x1fb;
   G_txtptr+2 = 0x1ca8;
-  iVar1 = EXE_ChkRng(0x1ca8,G_lookdata+2 & 0xff,G_lookdata+2 >> 8,
+  iVar1 = EXE_ChkRng(G_lookdata+2 & 0xff,G_lookdata+2 >> 8,
                      1,0);
   if (iVar1 == 0) {
-    EXE_SetTxtWnd(0x1ca8,1);
-    EXE_ClrTxtWnd(0x1ca8);
+    EXE_SetTxtWnd(1);
+    EXE_ClrTxtWnd();
     ovl_16bc();
-    EXE_Advice(0x1ca8,(int)G_txtptr,
+    EXE_Advice((int)G_txtptr,
                (int)((ulong)G_txtptr >> 0x10),3,2,0x14);
     return;
   }
-  EXE_SetTxtWnd(0x1ca8,1);
-  EXE_ClrTxtWnd(0x1ca8);
+  EXE_SetTxtWnd(1);
+  EXE_ClrTxtWnd();
   ovl_16bc();
   EXE_AddScrap(G_loc+18);
   return;
@@ -1108,7 +1108,7 @@ void ovl_14a0(void)
   G_loc+6 = (int)pcVar1;
   UNLOCK();
   puVar4 = (undefined2 *)(iVar2 + 0x28c);
-  EXE_viaptr_puVar4(0x1000,G_loc+10,(int)(char)(cVar3 + '\t'),iVar2);
+  EXE_SetTxtParm(0x1000,G_loc+10,(int)(char)(cVar3 + '\t'),iVar2);
   ovl_1695();
   ovl_1695();
   return;
@@ -1181,10 +1181,10 @@ void __cdecl16near ovl_167e(void)
   int unaff_SI;
   undefined2 unaff_DS;
   
-  EXE_SetTxtWnd(0x1ca8,1);
-  EXE_ClrTxtWnd(0x1ca8);
-  EXE_InitScrap(0x1ca8);
-  EXE_AddScrap(0x1ca8,G_loc+10);
+  EXE_SetTxtWnd(1);
+  EXE_ClrTxtWnd();
+  EXE_InitScrap();
+  EXE_AddScrap(G_loc+10);
   return;
 }
 
@@ -1198,7 +1198,7 @@ void ovl_16bc(void)
   int unaff_SI;
   undefined2 unaff_DS;
   
-  EXE_AddScrap(0x1ca8,(int)G_txtptr,
+  EXE_AddScrap((int)G_txtptr,
              (int)((ulong)G_txtptr >> 0x10));
   return;
 }
@@ -1265,7 +1265,7 @@ void ovl_1710(void)
   int unaff_DI;
   undefined2 unaff_DS;
   
-  EXE_InitNPC(0x1ca8);
+  EXE_InitNPC();
   OV_0x10b = *(undefined2 *)(unaff_SI + 2);
   return;
 }
@@ -1349,7 +1349,7 @@ void ovl_1790(void)
   undefined2 *puVar6;
   undefined2 unaff_DS;
   
-  EXE_LoadMap(0x1ca8,in_DL,0,0x47);
+  EXE_LoadMap(in_DL,0,0x47);
   bVar3 = OV_0x183;
   if (OV_0x158 == '\x01') {
     bVar3 = bVar3 + 8;
@@ -1393,7 +1393,7 @@ void ovl_17e5(void)
   int in_BX;
   undefined2 unaff_DS;
   
-  EXE_FillWindow(0x1ca8,0,0);
+  EXE_FillWindow(0,0);
   return;
 }
 
@@ -1412,8 +1412,8 @@ void ovl_17f3(void)
   undefined1 *puVar5;
   undefined2 unaff_DS;
   
-  EXE_InitScrap(0x1ca8);
-  EXE_AddScrap(0x1ca8,G_loc+10);
+  EXE_InitScrap();
+  EXE_AddScrap(G_loc+10);
   puVar5 = (undefined1 *)&G_loc+42;
   puVar4 = (undefined1 *)&G_scrap;
   for (iVar3 = 9; iVar3 != 0; iVar3 = iVar3 + -1) {

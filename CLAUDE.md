@@ -20,6 +20,8 @@ Goal: fully document the game's rules/data formats, with an eye to a faithful po
 
 - Overlays (`P*.MCO`): mechanism in `docs/overlays.md`, API table `docs/overlay_api.md`, roles `docs/overlay_index.md`. Readable decompiles committed under `decomp/overlays/` (regenerate with `tools/ovl_batch.sh` + `tools/ovl_pp.py`). Full EXE decompile: run `DecompileAll.java` (10 MB, kept in `out/`, not committed).
 
+- Game rules: `docs/rules/*.md` (combat, spells), each citing the decompiled source. FFFAR INT 62h dispatch: `ghidra/fffar_dispatch.json`, `ghidra/int62.json`.
+
 ## Tooling plan
 - Ghidra 12.2 installed via `brew install ghidra` (formula, not cask): `ghidraRun`; headless at `$(brew --prefix ghidra)/libexec/support/analyzeHeadless`. No IDA on this machine.
 - Boxer gamebox for runtime; DOSBox-X (`brew install --cask dosbox-x-app`) if we need a debugger.

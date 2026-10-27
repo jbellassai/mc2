@@ -20,7 +20,9 @@ public class DumpOverlay extends GhidraScript {
     for (int i = 0; i < 64; i++) {
       Instruction in = L.getInstructionAt(p);
       if (in == null) { disassemble(p); in = L.getInstructionAt(p); }
-      if (in == null || !in.getMnemonicString().equals("JMP") || in.getLength() != 3) break;
+      if (in == null || !in.getMnemonicString().equals("JMP")) break;
+      if (in.getLength() == 2) { Instruction nop = L.getInstructionAt(p.add(2)); if (nop == null) { disassemble(p.add(2)); nop = L.getInstructionAt(p.add(2)); } if (nop == null || !nop.getMnemonicString().equals("NOP")) break; }
+      else if (in.getLength() != 3) break;
       Address t = in.getFlows().length > 0 ? in.getFlows()[0] : null;
       if (t == null) break;
       entries.add(t); p = p.add(3);

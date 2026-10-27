@@ -1,3 +1,13 @@
+// ===== ovl_0003 @ 1ca8:0003
+
+void ovl_0003(void)
+
+{
+  ovl_0147();
+  return;
+}
+
+
 // ===== ovl_0147 @ 1ca8:0147
 
 void ovl_0147(void)
@@ -157,7 +167,7 @@ void ovl_03d3(void)
       uVar4 = uVar4 + 1;
     } while (uVar4 < OV_0x20a);
     puVar1 = (undefined2 *)(G_savebx + 0xc4);
-    iVar3 = EXE_viaptr_puVar1();
+    iVar3 = EXE_ChkWlk();
     if (iVar3 != 0) {
       return;
     }

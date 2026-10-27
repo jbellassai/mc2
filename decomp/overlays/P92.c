@@ -389,10 +389,10 @@ void ovl_0447(void)
   iVar4 = 0;
   do {
     G_curpla = iVar4;
-    iVar2 = EXE_SearchInv(0x1ca8,0,iVar4,&OV_0x106,0x1ca8);
+    iVar2 = EXE_SearchInv(0,iVar4,&OV_0x106,0x1ca8);
     iVar4 = G_curpla;
     if (iVar2 != 0) {
-      EXE_DecObj0(0x1ca8,0,*(undefined2 *)(*(int *)(iVar4 * 2 + &G_heroptr) + 0xcc));
+      EXE_DecObj0(0,*(undefined2 *)(*(int *)(iVar4 * 2 + &G_heroptr) + 0xcc));
       iVar4 = G_curpla;
     }
     iVar4 = iVar4 + 1;
@@ -483,7 +483,7 @@ void ovl_04c7(void)
     OV_0x5c6 = bVar9;
     uVar8 = CONCAT11(bVar9,bVar5) & 0xff0f;
     puVar4 = (undefined2 *)(iVar12 + 0x134);
-    cVar7 = EXE_viaptr_puVar4(0x1000,((char)uVar8 - (char)(uVar8 >> 8)) + '\x02');
+    cVar7 = EXE_RndCo(0x1000,((char)uVar8 - (char)(uVar8 >> 8)) + '\x02');
     cVar2 = OV_0x5c6;
     LOCK();
     iVar10 = OV_0x5c4;
@@ -784,7 +784,7 @@ void ovl_07c4(void)
   *(uint *)(unaff_DI + 300) = (uint)(byte)(cVar2 + 5);
   OV_0x133 = &G_member6 + (uint)(byte)(cVar2 - 1) * 0xdc;
   puVar3 = (undefined2 *)(G_savebx + 0x158);
-  EXE_viaptr_puVar3(0x1000,OV_0x12e,*(undefined2 *)(unaff_DI + 300),
+  EXE_SearchInv(0x1000,OV_0x12e,*(undefined2 *)(unaff_DI + 300),
                      &OV_0x106,0x1000,G_savebx);
   pbVar1 = (byte *)(OV_0x133 + OV_0x108 + 0x53);
   *pbVar1 = *pbVar1 | 0x80;
@@ -909,7 +909,7 @@ void ovl_08f7(void)
     return;
   }
   puVar3 = (undefined2 *)(G_savebx + 0x134);
-  bVar4 = EXE_viaptr_puVar3(0x1000,0x50,G_savebx);
+  bVar4 = EXE_ClearBit(0x1000,0x50,G_savebx);
   if (bVar4 <= bVar5) {
     return;
   }
@@ -951,7 +951,7 @@ L_09ad:
   OV_0x133 = iVar7;
   UNLOCK();
   puVar3 = (undefined2 *)(iVar6 + 0x1bc);
-  EXE_viaptr_puVar3(0x1000,&G_npcsta,*(undefined2 *)(unaff_DI + 300),iVar6);
+  EXE_ClearBit(0x1000,&G_npcsta,*(undefined2 *)(unaff_DI + 300),iVar6);
   return;
 }
 
@@ -1250,11 +1250,11 @@ void ovl_0c39(void)
   int unaff_SI;
   undefined2 unaff_DS;
   
-  EXE_SetTxtWnd(0x1ca8,1);
-  EXE_ClrTxtWnd(0x1ca8);
-  EXE_InitScrap(0x1ca8);
-  EXE_AddScrap(0x1ca8,*(undefined2 *)(in_AX * 2 + &G_heroptr));
-  EXE_AddScrap(0x1ca8,G_comtxtptr);
+  EXE_SetTxtWnd(1);
+  EXE_ClrTxtWnd();
+  EXE_InitScrap();
+  EXE_AddScrap(*(undefined2 *)(in_AX * 2 + &G_heroptr));
+  EXE_AddScrap(G_comtxtptr);
   return;
 }
 

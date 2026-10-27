@@ -127,7 +127,7 @@ void ovl_020a(void)
   
   uVar13 = 0x1ca8;
   ovl_0cca();
-  EXE_InitNPC(0x1ca8);
+  EXE_InitNPC();
   if (G_cmbtyp == '\0') {
     G_npclocs = 0;
   }
@@ -416,7 +416,7 @@ void __cdecl16near ovl_05fd(void)
   } while (iVar3 != 0);
   if (local_4 != 0) {
     puVar1 = (undefined2 *)(G_savebx + 0x380);
-    EXE_viaptr_puVar1(0x1ca8,9,G_savebx);
+    EXE_MultiThing(9,G_savebx);
   }
   return;
 }
@@ -518,33 +518,33 @@ void ovl_06e7(void)
   
   uVar9 = 0x1ca8;
 code_r0x0001d167:
-  EXE_InitMap(0x1ca8);
+  EXE_InitMap();
   ovl_0205();
 L_06ef:
-  EXE_Menu(0x1ca8,0xe);
-  EXE_InitCom(0x1ca8,&OV_0x103,0x1ca8,2);
+  EXE_Menu(0xe);
+  EXE_InitCom(&OV_0x103,0x1ca8,2);
 L_070d:
-  iVar5 = EXE_Parser(0x1ca8,&G_mnuparms,0);
+  iVar5 = EXE_Parser(&G_mnuparms,0);
   if (iVar5 == -1) {
     return;
   }
   if (iVar5 == 0xfd) goto code_r0x0001d167;
   if (iVar5 != 0xfe) {
     if (iVar5 != 0) goto code_r0x0001d1b4;
-    uVar6 = EXE_CntPar(0x1ca8);
+    uVar6 = EXE_CntPar();
     if (uVar6 < 2) {
       ovl_139d();
       return;
     }
-    iVar8 = EXE_RndCo(0x1ca8,2);
+    iVar8 = EXE_RndCo(2);
     iVar5 = in_BX;
     if (iVar8 == 0) goto L_075a;
     ovl_139d();
-    EXE_PrtWrd(0x1ca8,G_comtxtptr);
+    EXE_PrtWrd(G_comtxtptr);
     iVar5 = 100;
-    bVar3 = EXE_RndCo(0x1ca8);
+    bVar3 = EXE_RndCo();
     if (bVar3 < (byte)in_BX) {
-      cVar4 = EXE_RndCo(0x1ca8,3);
+      cVar4 = EXE_RndCo(3);
       G_deftxtparms+2 = cVar4 + '\x01';
       G_deftxtparms = 4;
       iVar8 = 6;
@@ -601,7 +601,7 @@ code_r0x0001d1b4:
       G_ambflg = 1;
       iVar5 = G_savebx;
       ovl_134b();
-      EXE_PrtWrd(0x1ca8,G_comtxtptr);
+      EXE_PrtWrd(G_comtxtptr);
       return;
     }
     iVar5 = G_savebx;
@@ -797,7 +797,7 @@ undefined4 ovl_0ca5(void)
   undefined2 unaff_DS;
   
   puVar1 = (undefined2 *)(G_savebx + 0x230);
-  EXE_viaptr_puVar1(0x1ca8,in_AX & 0xff,in_AX >> 8);
+  EXE_ChkDoor(in_AX & 0xff,in_AX >> 8);
   return CONCAT22(in_DX,in_AX);
 }
 
@@ -1029,15 +1029,15 @@ void __cdecl16near ovl_0e98(void)
   uint uVar6;
   
   puVar1 = (undefined2 *)(G_savebx + 0x340);
-  EXE_viaptr_puVar1(0x1ca8,G_savebx);
+  EXE_RestBG(G_savebx);
   for (puVar4 = (uint *)&OV_0x1a1; *puVar4 != 0xffff; puVar4 = puVar4 + 1) {
     uVar2 = (uint)(byte)puVar4[10];
     uVar6 = *puVar4;
     puVar1 = (undefined2 *)(G_savebx + 0xf4);
-    EXE_viaptr_puVar1(0x1000,uVar6 & 0xff,uVar6 >> 8,G_savebx,uVar2,uVar6);
+    EXE_RestBG(0x1000,uVar6 & 0xff,uVar6 >> 8,G_savebx,uVar2,uVar6);
     *(undefined1 *)G_zp_0A = (char)uVar2;
     puVar1 = (undefined2 *)(G_savebx + 0x120);
-    EXE_viaptr_puVar1(0x1000,uVar6 & 0xff,uVar6 >> 8,G_savebx,uVar6);
+    EXE_RestBG(0x1000,uVar6 & 0xff,uVar6 >> 8,G_savebx,uVar6);
     iVar5 = G_mfxcnt;
     *(uint *)(iVar5 + &G_mfxtnum) = uVar2 & 0xff;
     uVar3 = ovl_0f1a();
@@ -1118,7 +1118,7 @@ void __cdecl16near ovl_0f2a(void)
   }
   puVar6 = (undefined1 *)
            (&G_setupxy + (uint)(byte)(cVar4 * '\x06' + G_rec1+31));
-  iVar5 = EXE_PlacePerson(0x1ca8,*puVar6,puVar6[0x18],unaff_BP);
+  iVar5 = EXE_PlacePerson(*puVar6,puVar6[0x18],unaff_BP);
 L_101c:
   bVar2 = G_rec1+31;
   G_rec1+1 = iVar5;
@@ -1323,7 +1323,7 @@ void __cdecl16near ovl_10ec(void)
       G_bkonly = 1;
       ovl_140f();
       G_bkonly = 0;
-      uVar6 = EXE_RndCo(0x1ca8,99);
+      uVar6 = EXE_RndCo(99);
       goto L_11aa;
     }
   }
@@ -1421,7 +1421,7 @@ void __cdecl16near ovl_1234(void)
       ovl_10ec();
       ovl_1405();
       puVar2 = (undefined2 *)(G_savebx + 0x1b8);
-      uVar3 = EXE_viaptr_puVar2(0x1000,G_curatt,in_BX);
+      uVar3 = EXE_FirsTil(0x1000,G_curatt,in_BX);
       *(undefined1 *)((uint)G_rec1+31 + &G_pltilno) = uVar3;
       iVar4 = iVar4 + -1;
     } while (iVar4 != 0);
@@ -1589,11 +1589,11 @@ void ovl_134b(void)
   undefined2 uVar1;
   
   uVar1 = 0xff;
-  EXE_SetTxtWnd(0x1ca8,1);
-  EXE_ClrTxtWnd(0x1ca8);
-  EXE_InitScrap(0x1ca8);
-  EXE_AddScrap(0x1ca8,G_comtxtptr);
-  EXE_PrtScrap(0x1ca8,uVar1,in_BX);
+  EXE_SetTxtWnd(1);
+  EXE_ClrTxtWnd();
+  EXE_InitScrap();
+  EXE_AddScrap(G_comtxtptr);
+  EXE_PrtScrap(uVar1,in_BX);
   return;
 }
 
@@ -1607,8 +1607,8 @@ void ovl_139d(void)
   int in_BX;
   undefined2 unaff_DS;
   
-  EXE_SetTxtWnd(0x1ca8,1);
-  EXE_IModTxt(0x1ca8,in_AX,in_BX);
+  EXE_SetTxtWnd(1);
+  EXE_IModTxt(in_AX,in_BX);
   return;
 }
 

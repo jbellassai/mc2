@@ -158,14 +158,14 @@ void ovl_027b(int param_1)
   undefined2 unaff_DS;
   
   do {
-    EXE_Menu(0x1ca8,4);
-    EXE_InitCom(0x1ca8,&OV_0x1d5,0x1ca8,9);
-    EXE_SetTxtWnd(0x1ca8,1);
-    EXE_ClrTxtWnd(0x1ca8);
+    EXE_Menu(4);
+    EXE_InitCom(&OV_0x1d5,0x1ca8,9);
+    EXE_SetTxtWnd(1);
+    EXE_ClrTxtWnd();
     ovl_03f3();
     while( true ) {
       G_animoff = 1;
-      uVar3 = EXE_Parser(0x1ca8,&G_mnuparms,0);
+      uVar3 = EXE_Parser(&G_mnuparms,0);
       if ((uVar3 == 0xfd) || (uVar3 == 0xfe)) break;
       if (uVar3 == 0xffff) {
         return;
@@ -178,7 +178,7 @@ void ovl_027b(int param_1)
         G_cursory = 0x68;
         ovl_03f3(uVar3);
         ovl_03f3();
-        iVar4 = EXE_WordIn(0x1ca8,&G_scrap,0xf);
+        iVar4 = EXE_WordIn(&G_scrap,0xf);
         if (iVar4 == -1) {
           return;
         }
@@ -192,12 +192,12 @@ void ovl_027b(int param_1)
             puVar5 = puVar5 + 1;
             *puVar2 = *puVar1;
           }
-          EXE_savegnames(0x1ca8);
+          EXE_savegnames();
         }
         if (G_curmpg != 4) {
           G_pwinxy = G_winxy;
         }
-        (*(code *)*(undefined2 *)(in_BX + 400))(0x1ca8);
+        (*(code *)*(undefined2 *)(in_BX + 400))();
         OV_0x1e2 = 1;
         return;
       }
@@ -219,14 +219,14 @@ void ovl_035e(void)
   undefined2 unaff_DS;
   
   do {
-    EXE_Menu(0x1ca8,4);
-    EXE_InitCom(0x1ca8,&OV_0x1d5,0x1ca8,9);
-    EXE_SetTxtWnd(0x1ca8,1);
-    EXE_ClrTxtWnd(0x1ca8);
+    EXE_Menu(4);
+    EXE_InitCom(&OV_0x1d5,0x1ca8,9);
+    EXE_SetTxtWnd(1);
+    EXE_ClrTxtWnd();
     ovl_03f3();
     while( true ) {
       G_animoff = 1;
-      uVar1 = EXE_Parser(0x1ca8,&G_mnuparms,0);
+      uVar1 = EXE_Parser(&G_mnuparms,0);
       if ((uVar1 == 0xfd) || (uVar1 == 0xfe)) break;
       if (uVar1 == 0xffff) {
         return;
@@ -235,9 +235,9 @@ void ovl_035e(void)
         return;
       }
       if (uVar1 < 8) {
-        iVar2 = EXE_RestoreGame(0x1ca8,uVar1 + 0x41);
+        iVar2 = EXE_RestoreGame(uVar1 + 0x41);
         if (iVar2 != 0) {
-          (*(code *)*(undefined2 *)(in_BX + 300))(0x1ca8,in_BX);
+          (*(code *)*(undefined2 *)(in_BX + 300))(in_BX);
           G_restarting = 1;
           return;
         }
@@ -259,7 +259,7 @@ void ovl_03f3(void)
   int unaff_SI;
   undefined2 unaff_DS;
   
-  EXE_PrtWrd(0x1ca8,(int)G_txtptr,
+  EXE_PrtWrd((int)G_txtptr,
              (int)((ulong)G_txtptr >> 0x10));
   return;
 }

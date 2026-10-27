@@ -34,7 +34,7 @@ void ovl_0404(void)
     ovl_0922();
     puVar1 = (undefined2 *)(in_BX + 0x178);
     in_BX = 0;
-    EXE_viaptr_puVar1(0x1ca8,G_comtxtptr);
+    EXE_PrtWrd(G_comtxtptr);
 L_03fb:
     EXE_ClrTxtWnd(uVar4,in_BX);
     return;
@@ -230,8 +230,8 @@ void ovl_06ab(void)
   int unaff_SI;
   undefined2 unaff_DS;
   
-  EXE_SetTxtWnd(0x1ca8,0);
-  EXE_ClrTxtWnd(0x1ca8);
+  EXE_SetTxtWnd(0);
+  EXE_ClrTxtWnd();
   ovl_0957();
   G_cursory = G_cursory + 0x10;
   G_cursorx = G_txtwx;
@@ -240,7 +240,7 @@ void ovl_06ab(void)
   G_cursorx =
        CONCAT11((char)((uint)G_txtwx >> 8),
                 (char)G_txtwx + '\x04');
-  EXE_MyCout(0x1ca8);
+  EXE_MyCout();
   return;
 }
 
@@ -255,18 +255,18 @@ void ovl_06fa(void)
   int unaff_DI;
   undefined2 unaff_DS;
   
-  EXE_SetTxtWnd(0x1ca8,1);
-  EXE_ClrTxtWnd(0x1ca8);
-  EXE_InitScrap(0x1ca8);
+  EXE_SetTxtWnd(1);
+  EXE_ClrTxtWnd();
+  EXE_InitScrap();
   G_deftxtparms = G_notepadsize;
-  EXE_AddScrap(0x1ca8,&OV_0x2fa,0x1ca8,1);
-  EXE_PrtScrap(0x1ca8,0xff);
-  EXE_MyRet(0x1ca8);
-  EXE_InitScrap(0x1ca8);
+  EXE_AddScrap(&OV_0x2fa,0x1ca8,1);
+  EXE_PrtScrap(0xff);
+  EXE_MyRet();
+  EXE_InitScrap();
   G_deftxtparms = G_noteptr;
-  EXE_AddScrap(0x1ca8,&OV_0x2fa,0x1ca8,2);
-  EXE_PrtScrap(0x1ca8,0xff);
-  EXE_MyRet(0x1ca8,in_BX);
+  EXE_AddScrap(&OV_0x2fa,0x1ca8,2);
+  EXE_PrtScrap(0xff);
+  EXE_MyRet(in_BX);
   return;
 }
 
@@ -282,10 +282,10 @@ uint ovl_076c(void)
   int unaff_DI;
   undefined2 unaff_DS;
   
-  EXE_InitScrap(0x1ca8);
-  EXE_AddScrap(0x1ca8,&OV_0x2fa,0x1ca8,in_AX);
-  EXE_PrtScrap(0x1ca8,0xff);
-  uVar1 = EXE_SetYN(0x1ca8,in_BX);
+  EXE_InitScrap();
+  EXE_AddScrap(&OV_0x2fa,0x1ca8,in_AX);
+  EXE_PrtScrap(0xff);
+  uVar1 = EXE_SetYN(in_BX);
   if (uVar1 != 0xffff) {
     uVar1 = uVar1 ^ 1;
   }
@@ -314,8 +314,8 @@ void ovl_07a0(void)
   undefined2 unaff_DS;
   uint uVar10;
   
-  EXE_ClrTxtWnd(0x1ca8);
-  EXE_InitScrap(0x1ca8);
+  EXE_ClrTxtWnd();
+  EXE_InitScrap();
   puVar7 = (undefined2 *)&G_scrap2;
   uVar3 = OV_0x103;
   puVar4 = (undefined2 *)((int)uVar3 + G_notepad + 0x10);
@@ -387,11 +387,11 @@ void ovl_0922(void)
   int unaff_DI;
   undefined2 unaff_DS;
   
-  EXE_SetTxtWnd(0x1ca8,1);
-  EXE_ClrTxtWnd(0x1ca8);
-  EXE_InitScrap(0x1ca8,in_BX,in_AX);
-  EXE_AddScrap(0x1ca8,&OV_0x2fa,0x1ca8,in_AX);
-  EXE_PrtScrap(0x1ca8,0xff,in_BX);
+  EXE_SetTxtWnd(1);
+  EXE_ClrTxtWnd();
+  EXE_InitScrap(in_BX,in_AX);
+  EXE_AddScrap(&OV_0x2fa,0x1ca8,in_AX);
+  EXE_PrtScrap(0xff,in_BX);
   return;
 }
 
@@ -405,7 +405,7 @@ void ovl_0957(void)
   int unaff_DI;
   undefined2 unaff_DS;
   
-  EXE_PrtWrd(0x1ca8,&OV_0x2fa,0x1ca8);
+  EXE_PrtWrd(&OV_0x2fa,0x1ca8);
   return;
 }
 

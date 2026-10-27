@@ -288,7 +288,7 @@ void ovl_050f(void)
   int unaff_SI;
   undefined2 unaff_DS;
   
-  EXE_NewPXY(0x1ca8);
+  EXE_NewPXY();
   iVar5 = 6;
   uVar6 = 0;
   do {
@@ -304,7 +304,7 @@ void ovl_050f(void)
     UNLOCK();
     uVar7 = uVar6 & 0x7fff;
     if (*(int *)(uVar6 * 2 + &G_party) != 0xff) {
-      uVar4 = EXE_PlacePerson(0x1ca8,uVar2,uVar3);
+      uVar4 = EXE_PlacePerson(uVar2,uVar3);
       *(undefined1 *)(uVar7 + &G_p1x) = (char)uVar4;
       *(undefined1 *)(uVar7 + &G_p1y) = (char)((uint)uVar4 >> 8);
     }
@@ -331,7 +331,7 @@ void ovl_055a(void)
   int iVar5;
   
   ovl_0129();
-  EXE_ClearShadowMap(0x1ca8);
+  EXE_ClearShadowMap();
   puVar2 = (uint *)&OV_0x1a6;
   while ((char)*puVar2 != -1) {
     uVar1 = *puVar2 >> 8;
@@ -359,7 +359,7 @@ undefined4 ovl_05a9(void)
   int unaff_DI;
   undefined2 unaff_DS;
   
-  EXE_Locate(0x1ca8);
+  EXE_Locate();
   *(undefined1 *)(G_zp_0A + 0x1c68) = (char)OV_0x186;
   return CONCAT22(in_DX,in_AX);
 }

@@ -5,7 +5,7 @@ import ghidra.program.model.lang.Register;
 public class SetCS extends GhidraScript {
   public void run() throws Exception {
     Register cs = currentProgram.getRegister("CS");
-    currentProgram.getProgramContext().setValue(cs, currentProgram.getMinAddress(), currentProgram.getMaxAddress(), BigInteger.valueOf(0x1ca8));
+    currentProgram.getProgramContext().setValue(cs, currentProgram.getMinAddress(), currentProgram.getMaxAddress(), BigInteger.valueOf(Integer.parseInt(getScriptArgs().length > 0 ? getScriptArgs()[0] : "1ca8", 16)));
     println("CS context set");
   }
 }

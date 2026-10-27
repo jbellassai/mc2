@@ -137,7 +137,7 @@ void __cdecl16far FUN_1000_db87(int param_1)
   }
   uVar2 = G_e_inpdev;
   G_e_inpdev = 0;
-  EXE_LoadAlphabet(0x1ca8);
+  EXE_LoadAlphabet();
   ovl_2c48();
   G_suppresstext = 0;
   G_curmap = 0x7fff;
@@ -175,14 +175,14 @@ void __cdecl16far FUN_1000_db87(int param_1)
   else if (G_e_display < 2) {
     G_tilebkgd = 0;
     G_txtbkgd = 0xff;
-    EXE_graphmode(0x1ca8,4);
-    EXE_graphbackground(0x1ca8,0);
-    EXE_palette(0x1ca8,3);
-    EXE_textcolor(0x1ca8,3);
+    EXE_graphmode(4);
+    EXE_graphbackground(0);
+    EXE_palette(3);
+    EXE_textcolor(3);
     G_screen+2 = 0xb800;
     G_oppscr = G_scrbuf;
     G_oppscr+2 = G_scrbuf+2;
-    EXE_fillYofstbl(0x1ca8,&G_yofstbl);
+    EXE_fillYofstbl(&G_yofstbl);
     ovl_13c2();
     ovl_1343();
     ovl_13c2();
@@ -190,8 +190,8 @@ void __cdecl16far FUN_1000_db87(int param_1)
   else if (G_e_display == 2) {
     G_tilebkgd = 2;
     G_txtbkgd = 7;
-    EXE_graphmode(0x1ca8,0xd);
-    EXE_fillEGAYofstbl(0x1ca8,&G_yofstbl);
+    EXE_graphmode(0xd);
+    EXE_fillEGAYofstbl(&G_yofstbl);
     G_egadrawcode = 0;
     G_screen+2 = 0xa000;
     G_oppscr = 0x2000;
@@ -204,8 +204,8 @@ void __cdecl16far FUN_1000_db87(int param_1)
   else {
     G_tilebkgd = 2;
     G_txtbkgd = 0x77;
-    EXE_graphmode(0x1ca8,9);
-    EXE_fillT1KYofstbl(0x1ca8,&G_yofstbl);
+    EXE_graphmode(9);
+    EXE_fillT1KYofstbl(&G_yofstbl);
     G_screen+2 = 0xb800;
     G_oppscr = G_scrbuf;
     G_oppscr+2 = G_scrbuf+2;
@@ -229,12 +229,12 @@ void __cdecl16far FUN_1000_db87(int param_1)
   G_mnuww = uVar4;
   G_txtwh = 0x28;
   G_mnuwh = 0x28;
-  EXE_IModTxt(0x1ca8,0);
+  EXE_IModTxt(0);
   G_animoff = 1;
   G_e_inpdev = uVar2;
-  EXE_ShowMouse(0x1ca8);
-  EXE_PrtWrd(0x1ca8,G_comtxtptr);
-  EXE_ClrTxtWnd(0x1ca8,in_BX);
+  EXE_ShowMouse();
+  EXE_PrtWrd(G_comtxtptr);
+  EXE_ClrTxtWnd(in_BX);
   return;
 }
 
@@ -247,9 +247,9 @@ void __cdecl16near ovl_1343(void)
   int in_BX;
   undefined2 unaff_DS;
   
-  EXE_song(0x1ca8,1);
-  EXE_delay(0x1ca8,0x5dc);
-  EXE_finishsong(0x1ca8,in_BX);
+  EXE_song(1);
+  EXE_delay(0x5dc);
+  EXE_finishsong(in_BX);
   return;
 }
 
@@ -570,7 +570,7 @@ undefined4 __cdecl16near ovl_158b(void)
   int in_BX;
   undefined2 unaff_DS;
   
-  EXE_buftoscr(0x1ca8);
+  EXE_buftoscr();
   return CONCAT22(in_DX,in_AX);
 }
 
@@ -589,14 +589,14 @@ undefined1 ovl_15ac(void)
   ovl_1011();
   G_member0 = 0;
   ovl_160a();
-  EXE_Menu(0x1ca8,0);
-  EXE_InitCom(0x1ca8,&OV_0x8ce,0x1ca8,4);
+  EXE_Menu(0);
+  EXE_InitCom(&OV_0x8ce,0x1ca8,4);
   do {
     G_animoff = 1;
-    uVar1 = EXE_Parser(0x1ca8,&G_mnuparms,0);
+    uVar1 = EXE_Parser(&G_mnuparms,0);
   } while (3 < uVar1);
   if (G_screen != 0) {
-    EXE_PageFlip(0x1ca8,in_BX);
+    EXE_PageFlip(in_BX);
   }
   return G_mnusel;
 }
@@ -610,10 +610,10 @@ void ovl_160a(void)
   int in_BX;
   undefined2 unaff_DS;
   
-  EXE_MyRet(0x1ca8);
-  EXE_MyRet(0x1ca8);
-  EXE_MyRet(0x1ca8);
-  EXE_MyRet(0x1ca8,in_BX);
+  EXE_MyRet();
+  EXE_MyRet();
+  EXE_MyRet();
+  EXE_MyRet(in_BX);
   return;
 }
 
