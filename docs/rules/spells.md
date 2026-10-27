@@ -6,48 +6,48 @@ Evidence: `_Magic` (EXE, FF module, `out/decomp/MC2_all.c`), tables in the data 
 
 | id | spell | energy | castable (mask) | trains magic skill | implemented in |
 |---|---|---|---|---|---|
-| 0 | Fear | 40 | prog 6(16) (0x10) | yes | combat: P94 table / location overlay slot |
-| 1 | Confuse | 25 | wilderness(1) (0x01) |  | combat: P94 table / location overlay slot |
-| 2 | Shatter | 20 | prog 6(16) (0x10) | yes | combat: P94 table / location overlay slot |
-| 3 | Repel | 10 | town(2), town-dungeon(4) (0x06) |  | combat: P94 table / location overlay slot |
-| 4 | Locate | 20 | wilderness(1) (0x01) | yes | combat: P94 table / location overlay slot |
-| 5 | Assess | 15 | prog 6(16) (0x10) |  | combat: P94 table / location overlay slot |
-| 6 | Fireball | 20 | prog 6(16) (0x10) | yes | combat: P94 table / location overlay slot |
-| 7 | Teleport | 30 | wilderness(1) (0x01) |  | combat: P94 table / location overlay slot |
+| 0 | Fear | 40 | prog 6(16) (0x10) | yes | combat: V06 `INT61_0d` (see below) |
+| 1 | Confuse | 25 | wilderness(1) (0x01) |  | location overlay (not castable in combat) |
+| 2 | Shatter | 20 | prog 6(16) (0x10) | yes | combat: V06 `INT61_10` (see below) |
+| 3 | Repel | 10 | town(2), town-dungeon(4) (0x06) |  | location overlay (not castable in combat) |
+| 4 | Locate | 20 | wilderness(1) (0x01) | yes | location overlay (not castable in combat) |
+| 5 | Assess | 15 | prog 6(16) (0x10) |  | combat: V06 `INT61_0c` (see below) |
+| 6 | Fireball | 20 | prog 6(16) (0x10) | yes | combat: V06 `INT61_11` (see below) |
+| 7 | Teleport | 30 | wilderness(1) (0x01) |  | location overlay (not castable in combat) |
 | 8 | Heal | 10 | anywhere (0xff) |  | FFFAR HEAL |
-| 9 | Weaken | 20 | prog 6(16) (0x10) | yes | combat: P94 table / location overlay slot |
-| 10 | Vision | 15 | town-dungeon(4) (0x04) |  | combat: P94 table / location overlay slot |
-| 11 | Freeze | 50 | prog 6(16) (0x10) | yes | combat: P94 table / location overlay slot |
+| 9 | Weaken | 20 | prog 6(16) (0x10) | yes | combat: V06 `INT61_13` (see below) |
+| 10 | Vision | 15 | town-dungeon(4) (0x04) |  | location overlay (not castable in combat) |
+| 11 | Freeze | 50 | prog 6(16) (0x10) | yes | combat: V06 `INT61_0e` (see below) |
 | 12 | Energy | 20 | anywhere (0xff) |  | FFFAR ENERGY |
-| 13 | Pierce | 15 | town(2), town-dungeon(4) (0x06) |  | combat: P94 table / location overlay slot |
-| 14 | Disappear | 25 | prog 6(16) (0x10) | yes | combat: P94 table / location overlay slot |
-| 15 | Walkwater | 15 | town-dungeon(4) (0x04) |  | combat: P94 table / location overlay slot |
+| 13 | Pierce | 15 | town(2), town-dungeon(4) (0x06) |  | location overlay (not castable in combat) |
+| 14 | Disappear | 25 | prog 6(16) (0x10) | yes | combat: V06 `INT61_14` (see below) |
+| 15 | Walkwater | 15 | town-dungeon(4) (0x04) |  | location overlay (not castable in combat) |
 | 16 | Shield | 15 | anywhere (0xff) |  | FFFAR SHIELD |
-| 17 | Resurrect | 90 | bit32 (0x20) |  | combat: P94 table / location overlay slot |
-| 18 | Zofir | 60 | prog 6(16) (0x10) | yes | combat: P94 table / location overlay slot |
-| 19 | Zapall | 40 | prog 6(16) (0x10) | yes | combat: P94 table / location overlay slot |
+| 17 | Resurrect | 90 | bit32 (0x20) |  | location overlay (not castable in combat) |
+| 18 | Zofir | 60 | prog 6(16) (0x10) | yes | combat: V06 `INT61_06` (see below) |
+| 19 | Zapall | 40 | prog 6(16) (0x10) | yes | combat: V06 `INT61_03` (see below) |
 | 20 | Zengrl | 40 | anywhere (0xff) |  | FFFAR ZENGRL |
 | 21 | Zishoxe | 30 | anywhere (0xff) |  | FFFAR ZISHOXE |
-| 22 | Zefoar | 30 | prog 6(16) (0x10) | yes | combat: P94 table / location overlay slot |
-| 23 | Zutyun | 90 | prog 6(16) (0x10) | yes | combat: P94 table / location overlay slot |
-| 24 | Jump | 20 | prog 6(16) (0x10) | yes | combat: P94 table / location overlay slot |
-| 25 | Detect | 25 | town(2), town-dungeon(4) (0x06) |  | combat: P94 table / location overlay slot |
-| 26 | Glamour | 25 | anywhere (0xff) |  | combat: P94 table / location overlay slot |
-| 27 | Drain | 45 | prog 6(16) (0x10) | yes | combat: P94 table / location overlay slot |
-| 28 | See | 45 | prog 6(16) (0x10) |  | combat: P94 table / location overlay slot |
+| 22 | Zefoar | 30 | prog 6(16) (0x10) | yes | combat: V06 `INT61_04` (see below) |
+| 23 | Zutyun | 90 | prog 6(16) (0x10) | yes | combat: V06 `INT61_05` (see below) |
+| 24 | Jump | 20 | prog 6(16) (0x10) | yes | combat: V06 `INT61_16` (see below) |
+| 25 | Detect | 25 | town(2), town-dungeon(4) (0x06) |  | location overlay (not castable in combat) |
+| 26 | Glamour | 25 | anywhere (0xff) |  | location overlay (not castable in combat) |
+| 27 | Drain | 45 | prog 6(16) (0x10) | yes | combat: V06 `INT61_41` (see below) |
+| 28 | See | 45 | prog 6(16) (0x10) |  | combat: V06 `INT61_0b` (see below) |
 | 29 | Disguise | 20 | never via Magic (0x00) |  | FFFAR DISGUISE |
-| 30 | Betray | 70 | prog 6(16) (0x10) | yes | combat: P94 table / location overlay slot |
-| 31 | Summon | 80 | prog 6(16) (0x10) | yes | combat: P94 table / location overlay slot |
-| 32 | Destroy | 60 | prog 6(16) (0x10) | yes | combat: P94 table / location overlay slot |
-| 33 | Terrify | 75 | prog 6(16) (0x10) | yes | combat: P94 table / location overlay slot |
-| 34 | Double | 20 | prog 6(16) (0x10) |  | combat: P94 table / location overlay slot |
-| 35 | Timestop | 20 | prog 6(16) (0x10) |  | combat: P94 table / location overlay slot |
-| 36 | Acidball | 20 | prog 6(16) (0x10) | yes | combat: P94 table / location overlay slot |
-| 37 | Forget | 30 | prog 6(16) (0x10) | yes | combat: P94 table / location overlay slot |
-| 38 | Courage | 25 | prog 6(16) (0x10) | yes | combat: P94 table / location overlay slot |
-| 39 | Sense | 25 | town(2), town-dungeon(4) (0x06) |  | combat: P94 table / location overlay slot |
-| 40 | Restsoul | 20 | prog 6(16), bit64 (0x50) |  | combat: P94 table / location overlay slot |
-| 41 | Soulspeak | 20 | bit64 (0x40) |  | combat: P94 table / location overlay slot |
+| 30 | Betray | 70 | prog 6(16) (0x10) | yes | combat: V06 `INT61_0f` (see below) |
+| 31 | Summon | 80 | prog 6(16) (0x10) | yes | combat: V06 `INT61_0a` (see below) |
+| 32 | Destroy | 60 | prog 6(16) (0x10) | yes | combat: V06 `INT61_1a` (see below) |
+| 33 | Terrify | 75 | prog 6(16) (0x10) | yes | combat: V06 `INT61_19` (see below) |
+| 34 | Double | 20 | prog 6(16) (0x10) |  | combat: V06 `INT61_09` (see below) |
+| 35 | Timestop | 20 | prog 6(16) (0x10) |  | combat: V06 `INT61_1b` (see below) |
+| 36 | Acidball | 20 | prog 6(16) (0x10) | yes | combat: V06 `INT61_12` (see below) |
+| 37 | Forget | 30 | prog 6(16) (0x10) | yes | combat: V06 `INT61_18` (see below) |
+| 38 | Courage | 25 | prog 6(16) (0x10) | yes | combat: V06 `INT61_40` (see below) |
+| 39 | Sense | 25 | town(2), town-dungeon(4) (0x06) |  | location overlay (not castable in combat) |
+| 40 | Restsoul | 20 | prog 6(16), bit64 (0x50) |  | combat: V06 `INT61_17` (see below) |
+| 41 | Soulspeak | 20 | bit64 (0x40) |  | location overlay (not castable in combat) |
 
 `_spellshere[program]` = [0, 1, 2, 0, 8, 8, 16, 8] — the bit a location program contributes: program 1 (wilderness) → 1, program 2 (town) → 2, plus 4 when `_InDungeon()`; programs 4, 5, 7 → 8; program 6 → 16. A spell is castable outside combat when `_splocs[spell] & _spellshere[__curmpg]` is non-zero. Bits 32/64 (Resurrect, Restsoul, Soulspeak) never match, so those are combat-only / scripted.
 
@@ -63,7 +63,7 @@ Evidence: `_Magic` (EXE, FF module, `out/decomp/MC2_all.c`), tables in the data 
 8. `_DecSta(hero, h_energy, cost)` subtracts the energy (floors at 0); `_IsHeTr` updates the "tired" flags: energy 0 → flag 0x10 in HERO+0xBD; energy < 15 → flag 0x20 in HERO+0xBE; `_SumStat` refreshes the status display.
 
 ## Casting in combat — P94 (`ovl_1721` → `ovl_1740`)
-A combatant record (`CMBTNT`, 33 bytes) may cast `G_curspl` when: state flags (`c_state` +5) & 0x98 == 0; `c_invis` (+14) == 0; it is a hero (`c_recno` +31 < 6); `_EneUsg(spell, hero) ≤ c_energy` (+13); and the hero has the spell memorised (`h_spells[spell] != 0`). The effect is then dispatched through P94's private table (`OV_0x189C`), not `SPLVECS`.
+A combatant record (`CMBTNT`, 33 bytes) may cast `G_curspl` when: state flags (`c_state` +5) & 0x98 == 0; `c_invis` (+14) == 0; it is a hero (`c_recno` +31 < 6); `_EneUsg(spell, hero) ≤ c_energy` (+13); and the hero has the spell memorised (`h_spells[spell] != 0`). The effect is then dispatched through P94's jump table (slot = `SPLVECS` offset / 3): each P94 spell entry is a 3-instruction stub `call prolog; mov ah,N; int 61h; jmp epilog`, and INT 61h is **V06.MCO** (see *Combat spell effects* below).
 
 ## Timed effects — `_DecSpells()` (called once per game hour/day tick, TODO confirm)
 - `_detectsw` (Detect) counts down; at 0 `_DetectOff()`.
@@ -83,5 +83,64 @@ All go through `ovl_3228`: pick a target (`EXE_SpelTarg`), play sound 10 and eff
 - **Disguise (29)**: `_indisguise = 1`.
 Failure (target dead, `HERO+0xBD & 0x80`) prints message 0x95.
 
+## Combat spell effects — `V06.MCO` via `INT 61h` (`decomp/overlays/V06.c`)
+
+How the call gets there: `_DoACmbt` loads `P06` at `0CA8:2000` (room half: `_Attack`, `_MDamage`…), `V06.MCO` into `_rvarbuf`, and `P96`/`P94`/`P95` in turn at `0CA8:0000`. `_InstVarVecs` points interrupt vectors 60h/61h/62h at `_lvarbuf`/`_rvarbuf`/`_farrtn`, so during combat **INT 61h = V06** (`ghidra/int61_v06.json` maps AH → handler; `docs/overlays.md`). V06's dispatcher (`ovl_050c`) compares AH against 59 cases and returns the handler's carry flag to the caller.
+
+Shared pieces (asm offsets in V06):
+- **Caster magic** `INT61_01` (0x0f10): `rec1.c_magskl`; if the caster is a hero whose `HERO+0xA5 & 8` is set, 99 is used instead and the flag is cleared (one-shot "perfect cast").
+- **Spell power** `INT61_43` (0x0ecf): `max(0, magic/8 − target.c_resist)`.
+- **Target pick** `_SpelTarg` (EXE/FFFAR) fills `G_rec2`, `G_curtar` (0x18 = none). `ovl_0e43` additionally fails with the "resists" message when power is 0.
+- **Damage delivery**: V06 computes a number, then calls room slot 0x4E = `P06 ovl_0fa9` (`_MDamage`, shield absorbs first, then `HP −= dmg`, see combat.md) and slot 0x51 = `P06 ovl_0828` (death/knockdown bookkeeping, `_MAttend`).
+- **Missiles**: room slot 0x4B = `P06 ovl_1144` flies a missile of type AX (1 fire, 2 acid, 6 shatter) along a Bresenham line from caster to target; `G_ARESULT` = 1 if it reached the target square (0 = blocked en route), `G_TILEXY` = where it stopped. `_Bang`/`_AcidBang`/`_Spef*` in FFFAR are pure tile animations.
+- **Race 32 (Doombeast) is immune** to Zapall/Zefoar/Zutyun (`ovl_13ee`: message 0x100, skip).
+
+| spell | AH | handler | effect (combatant record = `CMBTNT`, hero record = `HERO`) |
+|---|---|---|---|
+| Fireball (6) | 11 | 0x1b83 | missile 1; if it arrives: `dmg = magic/2 + 5` → MDamage |
+| Shatter (2) | 10 | 0x1b0d | missile 6; `dmg = RndCo(magic) + 5` |
+| Acidball (36) | 12 | 0x1bdd | missile 2; `dmg = max(0, magic − 4·c_resist)` (no +5) |
+| Zapall (19) | 03 | 0x1240 | room slot 0x6C (`P06 ovl_10a7`) marks every living, visible enemy with a clear line of fire; each marked target takes `((magic/2)+5)/2` |
+| Zefoar (22) | 04 | 0x12f9 | missile 1 to the target; `_BigBang` at the impact square; every living visible combatant (any side) within the 3×3 around the impact takes `magic/2` |
+| Zutyun (23) | 05 | 0x1405 | every living visible combatant with `c_alignmnt != 0` (non-party): `c_armor = 0`, `c_shield = 0` |
+| Weaken (9) | 13 | 0x1c3f | target `c_armor = 0`, `c_shield = 0` |
+| Fear (0) | 0d | 0x1994 | needs power > 0; `c_itspc1` high nibble = power (turns), `c_state |= 0x20` (feared), `c_removes = 0` |
+| Freeze (11) | 0e | 0x19fd | needs power > 0; `c_itspc1` low nibble = power/2 + 1 (turns), `c_health |= 0x20` (frozen) |
+| Zofir (18) | 06 | 0x248f | if target `c_health & 0x20` (frozen): clear it, `c_itspc1 = 0`, `c_removes = 1`; else "not frozen" |
+| Courage (38) | 40 | 0x18fc | target `c_bravery = min(12, c_bravery + 5)` (hero: `HERO+0xD` too); clears fear (`c_state &= 0x9F`, fear nibble cleared, `c_removes = 1` if it was feared) |
+| Terrify (33) | 19 | 0x21cd | for every living enemy: if `RndCo(12) < power(that target)` → `c_bravery = 0`, `c_state |= 0x40` (routed) |
+| Betray (30) | 0f | 0x1a82 | needs power > 0 and target `c_resist ≤ 8`; `c_qaspc2` low nibble = Spef7 result, **`c_alignmnt ^= 1`** (switches sides), `c_target = 0xFF` |
+| Forget (37) | 18 | 0x2149 | hero target: readied spell `h_rdyspl` → 0xFF and its memorised count → 0; monster: `c_spell1 = 0xFF` |
+| Drain (27) | 41 | 0x2584 | `n = magic/10` if the caster is on the party side, else 1; `c_wpnskl` and `c_magskl` each: if ≥ 16 → `max(15, skill − n)`. Hero targets get `h_magic` and the weapon-skill slot of their readied weapon (sword +0x17 / weapon ≥ 0x12 → +0x18 / ≥ 0x1A → +0x19 / unarmed → +0x1B) written back |
+| Disappear (14) | 14 | 0x1c95 | target `c_invis = magic/8`; tile hidden |
+| See (28) | 0b | 0x17c9 | radius 1 around the target square (+1 if magic > 49, +1 more if magic > 74): every invisible non-party combatant inside gets `c_invis = 0` |
+| Jump (24) | 16 | 0x1d96 | `_Target(…, 0x65)` picks a square; the target (hero or monster) is moved there (`c_xpos/ypos`, `_p1x/_p1y` for heroes) |
+| Double (34) | 09 | 0x14d7 | "Clone": target must be a hero; record 22 becomes a copy of the target with `c_spell1/2 = 0xFF`, `c_itspc1/qaspc2/magskl/magicused = 0`, `c_recno = 22`, `c_removes = 1`, placed next to the caster; combatant count +1; `_cloneno` = target |
+| Summon (31) | 0a | 0x14e1 | target must be a monster whose race entry in the V06 table at file 0x14AE is 0xFF (Sandgu, Slime, Skeleton, Zombie, Kurdazi, Barg, Zebani, Gragan, Mongor, Fermigon, Urgodot, Mizigu, Aciden, Flamebelly, Dreadknight); record 23 = copy of it with full HP (`_MAXHPTS[recno]`), `c_energy = 99`, `c_alignmnt = 0` (fights for the party), `c_recno = 23` |
+| Destroy (32) | 1a | 0x22a8 | target must be non-party; **the caster forgets all 42 memorised spells**; if the race is flagged 1 in the table at file 0x2466 (all monsters except Vankruh 28, Zakhad 30, Doombeast 32): target `c_state = 0x98`, position −1 (gone); else "resists" |
+| Restsoul (40) | 17 | 0x1f4d | target with `c_state & 0x82 == 0x82` (dead undead?): `c_state = (c_state & ~2) | 8`, position −1 — removed from the field |
+| Timestop (35) | 1b | 0x2530 | `_timestop = 1` (attacks auto-hit, see combat.md) |
+| Assess (5) | 0c | 0x102c | prints every living monster's name, HP (`c_hitptl/h`), armor, shield — no state change |
+| — | 15 | 0x1d6b | unreferenced stub: clears `c_health & 0x20` of the target (cure-freeze variant) |
+
+Heal (8), Energy (12), Shield (16), Zengrl (20), Zishoxe (21) are FFFAR (above) and are reached from P94 through `SPLVECS` as everywhere else. Confuse, Repel, Locate, Teleport, Vision, Pierce, Walkwater, Resurrect, Detect, Glamour, Sense, Soulspeak have no combat handler.
+
+### Spell AI — when the game casts for you (`P94 ovl_15f8`)
+`ovl_15f8(G_curspl)` finds a legal target: `G_curtar` if one is set, else the first of the 24 combatants that passes `ovl_1721`. A combatant passes when `c_state & 0x98 == 0`, `c_invis == 0`, the caster can pay (`_EneUsg ≤ c_energy`, hero must have the spell memorised), the sides match the spell's **target alignment** (`TALIGN` table, P94 file 0x1529: 0 = same side as caster, 1 = other side, 0xFF = not a combat spell), and the spell's **worth-it predicate** (jump table at P94 file 0x179C, entries +0x100) accepts:
+
+| spells | predicate (accept when) |
+|---|---|
+| Fear, Freeze | target not already feared/frozen and `INT 61h/43` power > 0 |
+| Fireball, Shatter, Acidball | a missile from the caster to the target would arrive (`_PATHBLK == 0`) |
+| Heal | `c_health & 1`, or HP ≤ max HP / 2 |
+| Weaken | `c_shield + c_armor ≥ 1` |
+| Energy | `c_energy ≤ racetable[c_race]` (DS:B86D) |
+| Disappear | `c_invis == 0` and nearest enemy within 2 squares (0 squares only if `c_strngth > 15`) |
+| Shield | `c_shield ≤ 30` |
+| Zofir | target is frozen (`c_state & 0x20`) |
+| Zengrl / Zishoxe / Zutyun / Zapall | group spells: at least **5** living visible combatants of the right side pass the Heal / Shield / Weaken / Fireball predicate respectively |
+| Forget | target has a readied spell (`h_rdyspl != 0xFF`, monster `c_spell1 != 0xFF`) |
+| everything else | target has `c_wpnskl > 15` or `c_strngth > 15` |
+
 ## Still to extract
-P94 combat spell effects (Fireball, Fear, Freeze, Zapall, Acidball …) and the location-overlay effects (Teleport, Locate, Walkwater …).
+Location-overlay spell effects outside combat (Teleport, Locate, Walkwater, Vision, Detect, Repel, Pierce, Sense, Soulspeak, Resurrect) live in `V02/V05` (INT 60h) and the `P0x` location programs; the combat text numbers (messages 0x59 Fear, 0x5A Freeze, …) come from the combat text file.

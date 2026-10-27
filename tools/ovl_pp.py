@@ -1,6 +1,6 @@
 """Post-process Ghidra decompiler output of a code overlay (P*.MCO loaded at 1CA8:0000) into readable form.
 Facts (see docs/overlays.md): SI = 0x4CF6 bias for DS globals, BX = EXE vector table (ghidra/vectors.json),
-CS:[DI+n] = overlay-private data (DI = 0x1F00 for location overlays), near calls are overlay-internal."""
+CS:[DI+n] = overlay-private data (DI = load offset - 0x100, so OV_0xNNN = file offset NNN-0x100), near calls are overlay-internal."""
 import re, sys, json, bisect, os
 HERE = os.path.dirname(os.path.abspath(__file__)); ROOT = os.path.dirname(HERE)
 SI_BIAS = 0x4CF6; OVL_SEG = int(os.environ.get('OVL_SEG', '1ca8'), 16)

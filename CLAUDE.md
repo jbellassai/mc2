@@ -20,7 +20,8 @@ Goal: fully document the game's rules/data formats, with an eye to a faithful po
 
 - Overlays (`P*.MCO`): mechanism in `docs/overlays.md`, API table `docs/overlay_api.md`, roles `docs/overlay_index.md`. Readable decompiles committed under `decomp/overlays/` (regenerate with `tools/ovl_batch.sh` + `tools/ovl_pp.py`). Full EXE decompile: run `DecompileAll.java` (10 MB, kept in `out/`, not committed).
 
-- Game rules: `docs/rules/*.md` (combat, spells), each citing the decompiled source. FFFAR INT 62h dispatch: `ghidra/fffar_dispatch.json`, `ghidra/int62.json`.
+- Game rules: `docs/rules/*.md` (combat, spells), each citing the decompiled source. FFFAR INT 62h dispatch: `ghidra/fffar_dispatch.json`, `ghidra/int62.json`; combat INT 61h = `V06.MCO`: `ghidra/int61_v06.json`, `decomp/overlays/V06.c`.
+- Gotchas: `OV_0xNNN` in decompiles = file offset NNN−0x100 (DI = load offset − 0x100). Ghidra's decompile drops register-passed args in overlay code; read the asm with `tools/dis.py` for formulas. `echo ====` breaks in zsh (`=word` expansion).
 
 ## Tooling plan
 - Ghidra 12.2 installed via `brew install ghidra` (formula, not cask): `ghidraRun`; headless at `$(brew --prefix ghidra)/libexec/support/analyzeHeadless`. No IDA on this machine.

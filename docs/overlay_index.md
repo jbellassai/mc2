@@ -20,15 +20,17 @@ Readable decompiles: `decomp/overlays/Pnn.c` (regenerate: `tools/ovl_batch.sh` t
 | P91 | 6 | town NPC small talk ("nice weather", The King) |
 | P92 | 2 | shopkeeper economy events ("not been a profitable week", `RndCo`) |
 | P93 | 1 | camp: sleep / learn / activities (`SetTxtSpell`, `ListSel`) |
-| P94 | 1 | combat UI half (mouse, `SearchInv`, `AutoPause`); loaded as 0x5E during combat |
+| P94 | 29 | combat spell program (location half, 0x5E): the `SPLVECS` offset-0 slots (`_Fear` 4 … `_Drain` 27) are stubs that `INT 61h` into V06; also the spell-AI target picker (`ovl_15f8`) and combat mouse UI |
 | P95 | 1 | resurrection & post-combat ("Mark the target", `SumStat`); overlay 0x5F |
-| P96 | 1 | combat core (`RndCo` random, `PlacePerson`, `Locate`); overlay 0x60 |
+| P96 | 1 | combat main loop (entry 0 = the fight) (`RndCo` random, `PlacePerson`, `Locate`); overlay 0x60 |
 | P97 | 3 | party management: hire / dismiss companions |
 | P98 | 1 | Quit / Save / Restart menu |
+
+| V06 | INT 61h, 59 fns | combat effects + monster AI: spell handlers (`docs/rules/spells.md`), target choice ("Closest / Low hp / Magic-user / Leader …"), truce/bribe, rally |
 
 Numbers 0x51/0x5E/0x5F/0x60 = decimal 81/94/95/96 match the file names. `FFFAR.MCO` (not in this table) is the always-resident far routine set: 75 strings incl. "Companion", "Hireling", "Learning %a".
 
 ## Open items
-- `INT 60h`/`61h` are used by overlays as function calls (`INT_0x60_handler` in the decompiles); the EXE installs them in assembler — handler identity TODO.
+- `INT 60h`/`61h` = the location/room V-files (`V02`, `V05`, `V06`), see `docs/overlays.md`. `V02`/`V05` handlers not yet mapped.
 - `_crossovlycall` (`EXE_crossovlycall(...)`) calls between the location and room halves.
 - Which `Pnn` each location uses is decided by overlay code / `PGM` records, not yet traced.
