@@ -6,7 +6,7 @@ Readable decompiles: `decomp/overlays/Pnn.c` (regenerate: `tools/ovl_batch.sh` t
 |---|---|---|
 | P01 | 1 | wilderness / world-map location program (calendar updates `CalUpd1`, `FindBit` event flags, loads room overlays) |
 | P02 | 5 | town program ("The door is locked", "Whom do you seek?", shop/door handling) |
-| P04 | 2 | small location program (yes/no prompts, `InitMap`) |
+| P04 | 2 | **mushroom patches** on the world map (`_mushsta` nibbles, regrowth every 8 days) — `docs/rules/locations.md`, *Mushroom patches* |
 | P05 | 2 | **service rooms**: inns, schools, jobs, libraries, wizards' lodges, taverns/stores, region camps — room id selects the tables (`docs/rules/services.md`) |
 | P06 | 26 | library of small routines, 26 entry points, uses `SkillUp`, `AutoPause` — probably the room-program half (`_RoomPgm`, offset 0x2000) for generic rooms |
 | P07 | 1 | dungeon program (prisoners, chests, traps) |

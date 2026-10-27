@@ -79,6 +79,7 @@ Sub-table `maps`: byte **before** the pointer target is the count *n* (0xFF = no
 | `gwrds` | NUL-separated strings | conversation keywords and NPC names |
 | `newsr`, `peopr` | 3-byte triples | News / People keyword → NPC (`peopr = {word,npc,x}`) |
 | `weathr` | 4 seasons × 4 × `{threshold%,weather,dur}` | only meaningful in **R** (region) records |
+| (R records) `roomptr`, `exitptr`, `locptr`, `gwrds`, `newsr` | features / town entrances / `LOCSPOT` 10-byte spots / 8 guard spots / guard groups | world map only — `docs/rules/locations.md`, *World map*; `tools/worldspots.py` |
 | `loctext` | NUL-separated strings | location texts (signs, messages) |
 | `spetbl`, `treasptr`, `spdoors`, `lkdata`, `hroomptr`, `locptr`, `locevptr` | | TODO |
 

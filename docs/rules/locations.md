@@ -54,5 +54,24 @@ At a `spetbl` spot of type 2/3: same pick formula as chests (`dex/2 + lockpick` 
 - **Lockpick on things** (`ovl_1044`): mark a square; it must be a `spetbl` type-2 spot ("%h can not use a lockpick on that!" otherwise); same pick roll as above, lockpick skill-up, then the spot's `treasptr` group ("Who will take the treasure?", `_chests` bit). *Search* (`ovl_1131/1198`) does the same on type-3 spots without a pick ("%h finds nothing." when there is none). A spot with `sub ≠ 0` first runs V02 service 0x15 (trapped chest, `spells.md`).
 - **Map flask** (`ovl_13c4`, locations with `pearlsw`): the *Map* command needs a Pearl (or asks to use a Blu Pearl); the pearl is dropped into the flask and the minimap is shown. With a plain Pearl there is a 1-in-10 roll where `h_dextrty ≤ RndCo(20)` shatters the flask ("The map flask shatters!", −1 Map Flask).
 
+## World map (`P01`, region records `R32`–`R47`)
+
+The world map is one 256×256 map; the party is always inside one of 16 **region records** (`_curreg`, `Rnn.MCV`, same 20-pointer `LOCTYPE` layout but several slots are reused — `tools/worldspots.py original` prints everything below):
+
+| slot | content |
+|---|---|
+| `roomptr` | **features** `{x, y, pgmidx, rmid, type}` until `x == 0` (`ovl_0c1e`): mushroom patches (program 4), temples (`P09 D59`, ids 192–206, type 3), dungeon gates (`P09 D14` "A Gate", ids 208–215, type 4/20), the Oolau shrine (`P08 D36`) |
+| `exitptr` | **town entrances** `{x, y, pgmidx, tx, ty}` until `x == 0`: stepping on it loads the town (`pgmidx` → PGM list → program 2 + D-file) at `(tx, ty)` |
+| `locptr` | **spots** `LOCSPOT{x, y, pgmidx, rmid, a, b, c, ev, tx, ty}` until `0xFF` (`ovl_0c28`): `ev == 0xFE` always, else index of a `locevptr` list of `{event, ?}` pairs — the spot exists once any listed event bit is set (`ovl_0c64`). Carries the 16 **strongholds** (`P05 D19`, ids 0x5C–0x6B, the Assign destinations; "secure from all threats while inside"), the hunt (0x59, N. Misor 60,27) and track (0x53, S. Misor 62,47) schools, piers (`P05 D36` ids 1–4, `[9,0,0]`), teleportals (`P09 D61` ids 0xA9–0xB6) and event-gated towns (Demonspine 88,36 after event 4 or 8; the Tundra nomad town at one of four places by events 12/33) |
+| `gwrds` | 8 **guard spots** `{x, y, ?}` (zero = none); `_grdsta` bit `region·8 + n` marks a cleared guard; `newsr` = the encounter group number for each of the 8 |
+| `weathr` | 4 seasons × 4 `{threshold, weather, duration}` (`time_weather.md`) |
+| `loctext` | 0 "A mushroom patch!", 1 "A port of ethereal travel!", 2–5 ship names |
+
+`ovl_1070/1098` handle ship captains (`_curcap`, `_capsta`, `_capdays`, `_boatx/y`) — TODO.
+
+### Mushroom patches (program `P04`, data `D04`, map `G00E00.MCM`)
+
+30 patches (feature ids 0–29) across 14 regions; the item grown at patch `id` is `D04.gwrds[id]` (0x33 Sermin, 0x34 Gonshi, 0x35 Nift, 0x36 Mirget, 0x37 Luffin, 0x3C Loka — Turpin is never grown). The patch map is variant `_curter` (terrain under the party) of the 16 11×9 maps in `G00E00.MCM`. State: `_mushsta` (DS:7067, 32 bytes, one **nibble per patch**: even id = high nibble) = mushrooms left, 0–15, all 15 in a new game; **regrowth** +1 every 8th day (`_juldate & 7 == 0`, `P92 ovl_02cb`). Entering draws `count` mushrooms at the first `count` of 15 fixed positions (P04 file 0x88/0x97: x `[3,3,4,6,7,7,8,8,8,7,6,3,2,2,1]`, y `[2,1,1,1,1,2,2,3,5,7,7,6,6,5,4]`, placed with `_PlacePerson` so occupied cells shift); stepping on one asks "%h may pick %b %as" and gives `amount[kind]` = Sermin 6, Gonshi 4, Nift 3, Mirget 2, Luffin 3, Turpin 2, Loka 2 (file 0x72) to the acting member (`_IncObj`; a full pack refuses and the mushroom stays), then `count−1` is written back. Empty patch: "No more mushrooms are growing here."
+
 ## Still to extract
 Town `spetbl` types other than 2/3 and the callers of `ovl_1926` (0x1082, 0x1105, 0x119E, 0x18CA); `spdoors` first/last bytes; lock types 2–5 and the `lkdata` 4-byte stride in P07; `P04`/`P05` (dungeon map programs: traps, pits, teleportals, mindstones); `P08` court scenes; `P09` engraved-word puzzles; the `notyet0` pointer.
