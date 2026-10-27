@@ -15,7 +15,7 @@ Goal: fully document the game's rules/data formats, with an eye to a faithful po
 - `MC2.idb` (IDA 6-era, June 2013) is auto-analysis only: 645 funcs, 0 user names/comments. No value; gitignored.
 - **`MC2.EXE` contains full Borland TDInfo debug symbols** (v3.16, appended after the load module): 29 modules, ~1000 named functions, ~2000 data labels, 246 typedef'd structs with member names. `tools/tdinfo.py` parses it; `tools/tdinfo_export.py` writes `docs/symbols.txt`, `docs/structs.h`, `ghidra/symbols.tsv`. Overlays (`*.MCO`) have no symbols.
 - Ghidra project: `ghidra/MC2.gpr` (gitignored, regenerate: import `original/MC2.EXE` with `x86:LE:16:Real Mode`, then run `ghidra/scripts/ApplyTdinfo.java ghidra/symbols.tsv` headless). TDInfo segment + 0x1000 = Ghidra segment.
-- Data formats: see `docs/formats.md` (single source of truth). Status 2026-10-27: VGA/EGA tilesets **done**; tile maps **150/170 render** (`.venv/bin/python -I tools/render_all.py original out/maps`); open: `E80` maps have no tileset, `G*` files are not maps.
+- Data formats: see `docs/formats.md` (single source of truth). Status 2026-10-27: VGA/EGA tilesets **done**; map blocks **150/170 render**; locations (`D` files) compose blocks into full maps (`tools/loc.py original out/locs`) — world map + all towns/dungeons render (`.venv/bin/python -I tools/render_all.py original out/maps`); open: `E80` maps have no tileset, `G*` files are not maps.
 - Render anything to check a hypothesis: `tools/render.py tileset|map ...`. Guess a grid width with `tools/rowwidth.py FILE:offset`.
 
 ## Tooling plan

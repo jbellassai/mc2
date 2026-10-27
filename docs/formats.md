@@ -25,25 +25,65 @@ File size = 774 + 256·N exactly (66,310 or 33,542). No per-tile metadata; passa
 
 Rendered with the standard 16-colour EGA palette the tiles look right. Not needed for the port (VGA is the target) but documents the 2.00 "VGA only" split: E files are leftover from the original release.
 
-## `*.MCM` — tile maps (partial, 170 files)
+## `*.MCM` — map blocks (confirmed)
 
-Naming: `M<map>E<set>.MCM` or `G<n>E00.MCM`. For `M` files the `E<set>` number selects the tileset `V<set>.MCT` — **verified by rendering** for sets 01, 02, 03, 23, 60–67, 92, 93 (148 maps render as coherent islands, towns, dungeons, strongholds).
+Loaded by `_LoadMap(num, set, letter)` into `struct MAPTYPE { u8 map_xl; u8 map_yl; u8 map_body[3636]; }` (filename template `M00E00.MCM`, letter and digits patched in; max 3638 bytes read). **The `**` marker is literally `map_xl = map_yl = 42 (0x2A)`.**
 
-Layouts:
+| file | header | body | count | role |
+|---|---|---|---|---|
+| `Mbb Ett.MCM` | `2A 2A` | 42×42 tile indices, row-major | 150 | block *bb* drawn with tileset `Vtt.MCT`; placed into a location by its `D` record (below) |
+| `Gnn E00.MCM` | per chunk `0B 09` | N consecutive chunks of 2 + 11×9 bytes | 13 | combat arenas: `_LoadMap` with letter `G` (only caller: `_DoACmbt`); the `E00` is never substituted |
+| `M07/11/14 E93.MCM` | `2A 2A` | 5040 bytes, autocorrelation says 84 wide | 3 | **unresolved**: engine would read only the first 3638 bytes; does not align with sibling blocks |
+| `M07E65.MCM` | `54 3C` = 84,60 | 84×60 + 78 junk bytes | 1 | **unresolved**, header honours the (xl,yl) convention |
+| `G04E00.MCM` | | 3 valid chunks then zeros, 1766 B | 1 | probably a stale file |
 
-| header | body | files | notes |
-|---|---|---|---|
-| `**` (0x2A2A) | 42×42 bytes | 150 | tile index per cell, row-major, top-left origin |
-| `**` | 84×60 bytes | 4 (`M01/07/11/14E93`) | strongholds; dims not in file, inferred from size |
-| `54 3C` (=84,60) | 84×60 bytes + 78 junk bytes | 1 (`M07E65`) | header is literal width,height; trailer looks like an uninitialised buffer |
+A block holds **no** flags or layers; walkability etc. come from the tileset's `B` table.
 
-Cell value = tile index into the tileset (0–127, or 0–255 for set 01). No layers, no flags in the file.
+### Locations are mosaics of blocks
 
-The repeated `**` marker is suspicious: 0x2A = 42. It may be a `(w,h)` header that happens to equal the map size, in which case the E93 files' header is wrong/ignored and the engine takes dims from a table. **To settle in Ghidra**: find the MCM loader and the per-map dimension source.
+A location record (`Dnn.MCV`, below) lists blocks with `(block, tileset, x, y)`. Blocks are placed on a **32×34 grid stride** but are 42×42, so neighbours overlap by 10 columns / 8 rows. Verified on every location: overlapping cells are identical (a handful of 1–25-cell differences in the world map, presumably late edits — later blocks win). `mapsizex/mapsizey` = `32·cols + 10` × `34·rows + 8`, e.g. Telermain = 3×2 blocks = 106×76.
 
-### Unresolved
-- **`MxxE80.MCM`** (6 files, 42×42, `**` header): no `V80`/`E80` tileset exists. Cells are dominated by tiles 121, 49, 104, 31, 70 with low spatial coherence; content is *not* a function of the matching `E01` map (conditional entropy barely drops). Rendering with every VGA tileset gives nothing clean (`V92` least bad). Hypotheses: a non-visual layer (encounters/objects), or a tileset selected by code. Needs the loader.
-- **`Gnn E00.MCM`** (14 files): N rows of `0x0B` + 100 bytes, no `**`; `G04E00` is 1766 B but has no `**` and row width 101 by autocorrelation. Rows have *no* vertical coherence → not a 2-D map. Possibly a table of prefab strips / world-map rows / something else. Unknown.
+The world map ("Nameless", `D01`, 19 blocks, tilesets 01 and 23) and Telermain (`D02`) composed by `tools/loc.py`:
+
+![world](img/world_gurtex.png) ![telermain](img/telermain.png)
+
+Six `MxxE80.MCM` blocks are referenced by **no** location record and no `V80` tileset exists; still unresolved (overlay code may reference them).
+
+## `Dnn.MCV` — location record (confirmed = `struct LOCTYPE`, 5062 B max)
+
+Loaded by `_LoadVar('D', n)` straight into `_loc`; the first 20 words are offsets relative to the start of the record and are relocated to pointers in place (loop runs 20 times when word 0 ≥ 0x1F). See `docs/structs.h` for the full struct. Fixed header:
+
+| off | field | notes |
+|---|---|---|
+| 0 | 20 × u16 | `roomptr genptr knpcptr resids maps loctext lkdata pgmptr exitptr gwrds newsr weathr peopr hroomptr spetbl treasptr spdoors locptr locevptr notyet0` |
+| 40 | `locnum` | |
+| 41 | `roomno` | |
+| 42 | `locname[11]` | e.g. `Telermain M`, `Oshcrun`, `Dorak 3   X` (trailing letter looks like a class code: M town, X dungeon) |
+| 53 | `lcharm` | |
+| 54,55 | `mapsizex, mapsizey` | 11×9 for single-room interiors (store, tavern, library …) |
+| 56–61 | `doorstn locdiff pearlsw greetmsgs[3]` | |
+| 62 | `thedata[5000]` | the sub-tables pointed to above |
+
+Sub-table `maps`: byte **before** the pointer target is the count *n* (0xFF = none); then four parallel arrays of *n* bytes: `block[]`, `tileset[]`, `x[]`, `y[]`. Other sub-tables are arrays of the small structs in `structs.h` (`ROOM`, `GEN`, `KNPC`, `RESID`, `PGM`, `EXIT`, `SPECIAL`, `NEXTLOC`, `HROOM`) — layouts known, semantics TODO.
+
+Some `D` files (`D06, D15–D18, D36, D55, D60`) are not `LOCTYPE` images (garbage names, size 0) — different record kind, TODO.
+
+## `Bnn.MCV` — per-tileset tile data (confirmed = `struct TDATATYPE`, 1012 B max)
+
+Loaded by `_LoadTiles(n)` right after `Vnn.MCT`; six leading u16 offsets are relocated. Tables for 128 tiles:
+
+| ptr | content |
+|---|---|
+| `txttbl` | NUL-separated name pool ("a bridge", "grassland", "a plant", "a door" …) |
+| `txtptr` | 128 bytes: name index per tile |
+| `walkptr` | list(s) of tile ids terminated by `FF` — walkability classes (exact semantics TODO) |
+| `aniptr` | animation sequences, `FF`-terminated groups |
+| `doorptr` | door tile pairs |
+| `colorptr` | 128 bytes: minimap colour per tile |
+
+## Filename templates in the EXE (DS = seg 15B5)
+
+`I00.MCT` tileset (first char → `V` VGA / `E` EGA; `I` = CGA/Tandy), `B00.MCV` tile data, `I00.MCI` + `.MCC` creature tiles via `_LoadFolks/_LoadCTile` (packed 129-byte tiles, index file of u16 offsets), `M00E00.MCM` map block, `P00.MCO` code overlay (`_LoadOvly`, loaded at 1CA8:0000 into a 16 KB buffer, entered via `_LocPgm`), `V00.MCO` variable overlay (`_LoadVvly`), `D00.MCV` location, `FFFAR.MCO` far code loaded once at startup (`_Hello`).
 
 ## Other extensions (unknown)
-`MCV` text with offset table (D=NPC names, B=object names, C, R), `MCO` code overlays, `MCE` screens, `MCC` (`E00`, `E01` large), `MCS`/`MCI` saves, `CMF`/`MID` music, `VOC` sfx.
+`Cnn.MCV`, `Rnn.MCV` text with offset tables (conversation / NPC names), `MCE` screens, `E00/E01.MCC` creature tile packs, `MCS`/`MCI` saves, `CMF`/`MID` music, `VOC` sfx.
