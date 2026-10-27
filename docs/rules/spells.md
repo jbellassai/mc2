@@ -142,5 +142,29 @@ Heal (8), Energy (12), Shield (16), Zengrl (20), Zishoxe (21) are FFFAR (above) 
 | Forget | target has a readied spell (`h_rdyspl != 0xFF`, monster `c_spell1 != 0xFF`) |
 | everything else | target has `c_wpnskl > 15` or `c_strngth > 15` |
 
+## Casting gate and cost (`_Magic`, EXE 1166:09E6)
+- Spell = caster's `h_rdyspl` (0xFF = none). Energy cost `_EneUsg` = `max(1, _enetbl[spell] − h_magic/4)` (the *cost* column above is `_enetbl`); refused if `h_energy` is lower.
+- Place gate: `_splocs[spell] & _spellshere[curmpg]` must be non-zero; `_spellshere` by program = `[0, 1 (P01 wilderness), 2 (P02 town), 0, 8, 8, 16 (P06 combat), 8]`, and inside a town program the dungeon bit 4 is OR-ed in when `_InDungeon()`. So in P04/P05/P07 (mask 8) only "anywhere" spells work. Disguise (29) only when `_indisguise == 2` (the town asked for it, V02 `INT60_10`). Spells 29–35 are also blocked while their `_magbits` bit is set.
+- Then `SPLVECS[spell]` runs (FFFAR stub → location overlay slot → V02/V06 service), `MABITON`, a skill-up roll if the spell is in `SKLSPLS` = {0,2,4,6,9,11,14,18,19,22,23,24,27,30,31,32,33,36,37,38}, and the hero's copy count `h_spells[spell]` is decremented (0 → ready spell cleared).
+
+## Non-combat spell effects — towns and town dungeons (`P02` slots → `V02.MCO` via `INT 60h`, `decomp/overlays/V02.c`, map `ghidra/int60_v02.json`)
+
+| spell | P02 slot | V02 service | effect |
+|---|---|---|---|
+| Vision (10) | 3 → `ovl_1a7a` | `INT60_00` | `_Target` a tile within 13; if it is a door in `loc.roomptr`: room types outside 6–9 → message by door-id band (thresholds V02 @0x8C → texts 220/221/222/223); types 6–9 (hire rooms) → `HROOM` lookup, message 0xE1–0xE6 by whether the room was visited (`_dunrms` bit) and its reward field. Not a door → 0xE0. |
+| Walkwater (15) | 7 → `ovl_1a6c` | `INT60_01` | dungeons only (`_InDungeon`), else message 0x95. `_wlkwcount = magic/20 + 2` water tiles may be crossed; message 0xC9 with the count. Reset to 0 on entering a town. |
+| Detect (25) | 1 → `ovl_1a2e` | `INT60_03` | `_detectsw += magic/16` (ticks of 5 min, decremented by `_DecSpells`); if it was 0 the map is re-initialised so hidden specials show; message 0xF6 with `detectsw·5` minutes. `INT60_0d` (slot 11) animates the hidden `SPECIAL` records of type 1 while it runs. |
+| Pierce (13) | 8 → `ovl_1a52` | `INT60_06` | `_Target` within 13; if the tile has a `B`-record of class **'C'** in the tileset's `aniptr` list (`{tile, newtile, class, …}`, 7 B), the tile becomes `newtile` and the change is logged in `_snakes/_snakelocs` (restored by `INT60_14` when the location is re-entered). Otherwise fail text. |
+| Repel (3) | 9 → `ovl_1a5f` | `INT60_07` | same as Pierce for class **'B'** records. |
+| Sense (39) | 6 → `ovl_1ad4` | `INT60_13` | nearest `SPECIAL` record of type 0 (traps / ambush spots not yet in `_ambush`): if `(magic/4)² ≥ dx²+dy²` its direction (16-way table) is reported, else fail. |
+
+Other V02 services are town helpers, not spells: 02/08 door and tile lookups, 09 trap explosion (`_bangstg`: energy −(10+RndCo(10)) or HP), 0A reset, 0B/0C flood-fill `_blobmap` pathing, 0E/0F/12 set event bits on entering listed locations, 10 **disguise gate** (towns 51, 52, 58 refuse entry unless Disguise is the ready spell and cast), 11 nearest exit, 15 **trapped chest**: `skill < RndCo(120)` → Poisoned (0x08) or Ill (0x02), energy and HP halved, 16 special-table reset. `V05.MCO` (dungeon programs) has only two services (exit letters, a name patch) — no spells.
+
+## Non-combat spell effects — wilderness (`P01` slots)
+- **Confuse (1)**, slot 13 `ovl_1ae3`: `_ptrleng[curreg] = 0` — the current region's monster patrol is scattered.
+- **Locate (4)**, slot 14 `ovl_1ac2`: for the next `magic/4` moves (`OV_0x1bb`) `ovl_076c` draws every live patrol (`_ptrlxy`, 128) and the region's 8 guard posts (`R` record +18) on the map.
+- **Teleport (7)**, slot 15 `ovl_1b02`: not while sailing or camping. Loads `P89` (the teleport picker): tier = highest of `[10,30,50,70,90]` ≤ magic; the player marks any tile inside the tier's window rectangle `x 4–6/3–7/2–8/1–10/0–10, y 3–5/2–6/1–7/0–8/0–8` (window is 11×9, party at 5,4) and the party is moved there.
+- Slot 17 is empty.
+
 ## Still to extract
-Location-overlay spell effects outside combat (Teleport, Locate, Walkwater, Vision, Detect, Repel, Pierce, Sense, Soulspeak, Resurrect) live in `V02/V05` (INT 60h) and the `P0x` location programs; the combat text numbers (messages 0x59 Fear, 0x5A Freeze, …) come from the combat text file.
+Resurrect (17), Soulspeak (41) and Glamour (26) handlers (location programs with masks 0x20/0x40 — find which overlays carry those bits); message texts for the V02 numbers (0x95, 0xC9, 0xE0–0xE6, 0xF6, 220–223) — which text file `_SetTxtWnd`/`PrtScrap` read in towns; the combat text numbers (messages 0x59 Fear, 0x5A Freeze, …) come from the combat text file.

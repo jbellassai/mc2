@@ -15,7 +15,7 @@ Readable decompiles: `decomp/overlays/Pnn.c` (regenerate: `tools/ovl_batch.sh` t
 | P70 | 1 | notepad (`NOTES000.MCN`) |
 | P81 | 4 | startup: title, intro story, character setup (`graphmode`, `VGAFadeIn`, `readfile`); loaded as overlay 0x51 (16 KB) at `_Hello` |
 | P88 | 1 | travel / destination menu ("Isle of Winds", "North Misor", "Wait Here") |
-| P89 | 0 | no jump table; a few tile/graphics routines (`OrTile`, `PageFlip`) — special effect |
+| P89 | 0 | **Teleport picker** (loaded by P01 Teleport): skill-tiered target rectangle, moves the party (`docs/rules/spells.md`) |
 | P90 | 3 | trade and gifts (Altesen's orb, buy/sell with gold check, `IncObj/DecObj`) |
 | P91 | 6 | town NPC small talk ("nice weather", The King) |
 | P92 | 2 | **hour tick**: clock/day/season, sunrise/sunset, weather per region, hunger, assignment updates, paydays (`docs/rules/time_weather.md`, `npcs.md`) |
