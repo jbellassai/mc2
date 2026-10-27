@@ -20,10 +20,7 @@ Rooms: `loc.resids` is indexed by **room id** (`RESID{name,num,appear,disapp,ife
 
 ## Assignments (`ASSIGNMENT`, 25 B; `_FindAss(n)` = `_assgn0[n−1]`)
 
-`as_npc, as_loc, as_room, as_x, as_y, as_task, as_done, as_gowildx, as_misc, as_race, as_tile, as_hroom, as_region, as_wildx, as_wildy, as_goreg, as_gowildy, as_gold(u16), as_date, as_daysleft, as_hour, as_goloc, as_goroom, as_godays`. Empty = `as_npc == 0xFF`. Written by `P05/P06/P07/P90` (task dispatch) and updated hourly by `P92 ovl_0561`: for each record whose `as_date != today` and `as_hour == now`:
-- task < 0x5A (90): `ovl_05b1` travel/countdown — `as_daysleft--`; task 8 = *travelling*; on reaching 0 the record becomes task 8 heading for `as_goloc/as_goroom` (`as_daysleft = as_godays`), or, if already there, arrives (`as_x,as_y = 5,2`, task 0xFF). Tasks 0x28–0x2E and 10–0x21 have extra handlers (`ovl_0828`, `ovl_07b0`, `ovl_07c4`).
-- task 0x5A–0x5D: a **job** — `as_date++`, `as_gold += as_misc` per day (cap 9999). 0x65 (`'e'`) = employed elsewhere.
-- Hungry assigned companions eat from a 1-food reserve (`ovl_0321`, `OV_0x130 = 1`).
+`as_npc, as_loc, as_room, as_x, as_y, as_task, as_done, as_gowildx, as_misc, as_race, as_tile, as_hroom, as_region, as_wildx, as_wildy, as_goreg, as_gowildy, as_gold(u16), as_date, as_daysleft, as_hour, as_goloc, as_goroom, as_godays`. Empty = `as_npc == 0xFF`. Created by the *Assign* command (`P88`) from a pending room task (`P05` schools/jobs/libraries/lodges) or as plain travel/wait; updated daily by `P92 ovl_0561`. Full rules, task codes, captures and morale: **`assignments.md`**; the rooms that create tasks: **`services.md`**.
 
 So a companion who is "missing" is either back home (npcsta bit cleared) or on an assignment record; both are findable from the save: `_npcsta` (DS:6E67), `_assgn0` (DS:70CB).
 

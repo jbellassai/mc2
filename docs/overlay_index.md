@@ -7,14 +7,14 @@ Readable decompiles: `decomp/overlays/Pnn.c` (regenerate: `tools/ovl_batch.sh` t
 | P01 | 1 | wilderness / world-map location program (calendar updates `CalUpd1`, `FindBit` event flags, loads room overlays) |
 | P02 | 5 | town program ("The door is locked", "Whom do you seek?", shop/door handling) |
 | P04 | 2 | small location program (yes/no prompts, `InitMap`) |
-| P05 | 2 | mindstone / teleport location (`UseMindstone` ×16) |
+| P05 | 2 | **service rooms**: inns, schools, jobs, libraries, wizards' lodges, taverns/stores, region camps — room id selects the tables (`docs/rules/services.md`) |
 | P06 | 26 | library of small routines, 26 entry points, uses `SkillUp`, `AutoPause` — probably the room-program half (`_RoomPgm`, offset 0x2000) for generic rooms |
 | P07 | 1 | dungeon program (prisoners, chests, traps) |
 | P08 | 2 | King Rebnard's court / main quest NPC scenes (`MultiFX` effects, crystal key) |
 | P09 | 1 | engraved-word / puzzle rooms (`PrtWrd`) |
 | P70 | 1 | notepad (`NOTES000.MCN`) |
 | P81 | 4 | startup: title, intro story, character setup (`graphmode`, `VGAFadeIn`, `readfile`); loaded as overlay 0x51 (16 KB) at `_Hello` |
-| P88 | 1 | travel / destination menu ("Isle of Winds", "North Misor", "Wait Here") |
+| P88 | 2 | **Assign** (0: send a companion travelling/waiting or commit a room task + destination) and **Recall** (1: Mindstone assignment report, redirect) — `docs/rules/assignments.md` |
 | P89 | 0 | **Teleport picker** (loaded by P01 Teleport): skill-tiered target rectangle, moves the party (`docs/rules/spells.md`) |
 | P90 | 3 | **trade and gifts**: 0 Buy, 1 Sell, 2 Give — haggling vs. `h_trade`, lots, gift lists (`docs/rules/economy.md`) |
 | P91 | 6 | town NPC small talk ("nice weather", The King) |
