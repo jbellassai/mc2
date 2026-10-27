@@ -73,12 +73,13 @@ Shield points (`c_shield`, +12) absorb first: `DAM = max(0, AX − shield)`, `sh
 idx   = weapon type − 1  (sword 0, axe 1, archery 2, magic 3 when casting, fist 4 when unarmed)
 skill = HERO[0x17 + idx]               (h_sword, h_axe, h_archry, h_magic, h_fist)
 only once per skill per combat (G_sklbits mask); only if skill < _MaxSkill(hero, idx)
-chance = base[idx]                     (FFFAR-local table, unverified: 20,25,20,20,10)
+chance = base[idx]                     (FFFAR file 0x372A: sword 30, axe 15, archery 25, magic 20, fist 25; 0 for every other skill)
          + (50 − skill)/4   if skill < 50
          − (skill − 50)/2   otherwise (min 1)
-if RndCo(100) < chance: skill += 1, message "skill improves", sound 0x0D
+if RndCo(100) < chance: skill += 1 (`_IncSta`, capped), message "skill improves", sound 0x0D
 ```
-`_MaxSkill` returns `_maxtbl[idx·6 + h_race]` (DS:2C7E, 36 bytes = 99,40,75,60,60,75 / 75,10,25,50,99,50 / 80,25,99,80,75,50 / 75,99,75,0,0,0 / 99,40,99,50,75,99 / 99,30,99,99,10,30) and 0 for magic when `h_magic == 0`. Row order = skill (sword, axe, archery, magic, fist, ?), column = race (Human, Wizard, Elf, Halfling, Dwarf, Orc) — e.g. only Wizards have magic cap 99; Dwarves cap axes at 99 and magic at 0.
+The same roll serves every non-combat skill through `_SkillUp0` (INT 62h AH=0x31) with `_zp_0A` = skill index (0x17+idx = the HERO field): base 0, so a skill below 50 improves with chance `(50−skill)/4` % per successful use and one at 50 or above with 1 %. The once-per-combat masks (file 0x3725: 0x80,0x40,0x20,0x10,0x08) apply only to the five combat skills.
+`_MaxSkill` returns `_maxtbl[idx·6 + h_race]` (DS:2C7E, 120 bytes = 20 skills × 6 races, full table in `skills.md`; first rows 99,40,75,60,60,75 / 75,10,25,50,99,50 / 80,25,99,80,75,50 / 75,99,75,0,0,0 / 99,40,99,50,75,99 / 99,30,99,99,10,30) and 0 for magic when `h_magic == 0`. Row order = skill index (sword, axe, archery, magic, fist, swim, trade, …, leadership), column = race (Human, Wizard, Elf, Halfling, Dwarf, Orc); see `skills.md` for the whole table.
 
 ## Energy and fatigue
 `_DecSta(hero, field, amount)` subtracts with floor 0. `_IsHeTr(hero)`: energy 0 → `HERO+0xBD |= 0x10` (exhausted); energy < 15 → `HERO+0xBE |= 0x20` (tired), else cleared.

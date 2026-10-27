@@ -13,7 +13,7 @@ Readable decompiles: `decomp/overlays/Pnn.c` (regenerate: `tools/ovl_batch.sh` t
 | P08 | 2 | **quest scenes**: King's court gifts, Maalaq's crystal key, Altesen Orb, Marked Ones / Blue Scroll, ghost, White Scroll disaster trigger, Oolau nest ending — `docs/rules/quest_scenes.md` |
 | P09 | 1 | **special rooms**: casinos (2d6), teleportals (3-piece combinations), temples (gods, demands, blessings), dungeon gates (passwords), meeting halls — `docs/rules/special_rooms.md` |
 | P70 | 1 | notepad (`NOTES000.MCN`) |
-| P81 | 4 | startup: title, intro story, character setup (`graphmode`, `VGAFadeIn`, `readfile`); loaded as overlay 0x51 (16 KB) at `_Hello` |
+| P81 | 4 | startup: title, intro story, hero profile selection and new-game init (`rules/new_game.md`); loaded as overlay 0x51 (16 KB) at `_Hello` |
 | P88 | 2 | **Assign** (0: send a companion travelling/waiting or commit a room task + destination) and **Recall** (1: Mindstone assignment report, redirect) — `docs/rules/assignments.md` |
 | P89 | 0 | **Teleport picker** (loaded by P01 Teleport): skill-tiered target rectangle, moves the party (`docs/rules/spells.md`) |
 | P90 | 3 | **trade and gifts**: 0 Buy, 1 Sell, 2 Give — haggling vs. `h_trade`, lots, gift lists (`docs/rules/economy.md`) |
