@@ -16,12 +16,12 @@ Readable decompiles: `decomp/overlays/Pnn.c` (regenerate: `tools/ovl_batch.sh` t
 | P81 | 4 | startup: title, intro story, character setup (`graphmode`, `VGAFadeIn`, `readfile`); loaded as overlay 0x51 (16 KB) at `_Hello` |
 | P88 | 1 | travel / destination menu ("Isle of Winds", "North Misor", "Wait Here") |
 | P89 | 0 | **Teleport picker** (loaded by P01 Teleport): skill-tiered target rectangle, moves the party (`docs/rules/spells.md`) |
-| P90 | 3 | trade and gifts (Altesen's orb, buy/sell with gold check, `IncObj/DecObj`) |
+| P90 | 3 | **trade and gifts**: 0 Buy, 1 Sell, 2 Give — haggling vs. `h_trade`, lots, gift lists (`docs/rules/economy.md`) |
 | P91 | 6 | town NPC small talk ("nice weather", The King) |
 | P92 | 2 | **hour tick**: clock/day/season, sunrise/sunset, weather per region, hunger, assignment updates, paydays (`docs/rules/time_weather.md`, `npcs.md`) |
 | P93 | 1 | camp: sleep / learn / activities (`SetTxtSpell`, `ListSel`) |
 | P94 | 29 | combat spell program (location half, 0x5E): the `SPLVECS` offset-0 slots (`_Fear` 4 … `_Drain` 27) are stubs that `INT 61h` into V06; also the spell-AI target picker (`ovl_15f8`) and combat mouse UI |
-| P95 | 1 | resurrection & post-combat ("Mark the target", `SumStat`); overlay 0x5F |
+| P95 | 1 | resurrection & post-combat ("Mark the target", `SumStat`, loot → `h_partybucks`, volunteer attitude/departure `ovl_0fc0`); overlay 0x5F |
 | P96 | 1 | combat main loop (entry 0 = the fight) (`RndCo` random, `PlacePerson`, `Locate`); overlay 0x60 |
 | P97 | 3 | party management: hire / dismiss companions |
 | P98 | 1 | Quit / Save / Restart menu |

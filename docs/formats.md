@@ -109,3 +109,18 @@ Same 20-pointer header as `LOCTYPE`; loaded by `_LoadVar('R', 0x20+region)` when
 
 ## Other extensions (unknown)
 `Cnn.MCV` text with offset tables (conversations), `MCE` screens, `E00/E01.MCC` creature tile packs, `CMF`/`MID` music, `VOC` sfx.
+
+## `Cnn.MCV` — conversation files (24 files, 8 NPCs each)
+Loaded by `_Tobo(npc)` into `_convbufptr` (12 KB): file `C(npc>>3)`, slot `_convix = npc & 7`. Header: 42 words of in-file offsets (`_FixPointers` adds the buffer base to words 0..0x52):
+
+| word | meaning |
+|---|---|
+| 0 | start of the text block: NUL-separated strings, indexed by message number (`%q` = quote, `%h`/`%o` names, `%rN` …) |
+| 1 | end of text / start of script data |
+| 2–9 | per-slot conversation script (bytecode mixing text indices; format TODO) |
+| 10–17 | per-slot byte-code lists (`03 01 02 FF` …, TODO) |
+| 18–25 | per-slot **gift list**: 5-byte `{item, min_qty, msg_if_fewer, msg_if_enough, event_bit}`, 0xFF-terminated (`docs/rules/economy.md`) |
+| 26–33 | per-slot **shop list**: 5-byte `{item, pays_hi, pays_lo, charges_hi, charges_lo}`, prices `hi·100+lo`, 0xFF-terminated |
+| 34–41 | per-slot pairs `{a, b}` 0xFF-terminated (keyword/topic links? TODO) |
+
+Then at 0x54: 8 bytes **trade skill** per slot, 0x5C: 8 bytes **no-buy** flag, 0x64: 8 bytes (0xFF or a companion number — C22 slots 0–7 = 5, 6, 10, 20, 24, 25, 26, 27; TODO), text from 0x6C. `tools/convdump.py original [Cnn …]` dumps skills, shops and gifts with the message texts. C04 slot 0's gift list is not 0xFF-terminated (runs into the next data).

@@ -15,7 +15,7 @@ Rooms: `loc.resids` is indexed by **room id** (`RESID{name,num,appear,disapp,ife
 ## Companions
 
 - The hero array `_member0` holds **37** `HERO` records (220 B): slot 0 = player (Lukas Al Dem), slots 1–5 unused, slots **6–36 = companions 1–31** (`h_orinum` 1–31). NPC number `num < 0x20` in KNPC/RESID is a companion: hero = `_member0[num+5]` (`_GreetKNPC`: `npcno*0xDC + _member5`). Save `FFSAVA.MCS`: 1 Sakar (Dwarf), 2 Rimfiztrik (Wizard), 3 Nehor (Elf), 4 Tuff (Halfling), 5 Ben Trimmon, 6 Q. Crystyn, 7 Ralle d'Bois, 8 Durin, 9 Eflun, 10 Eldai, 11 Gilondo, 12 Cmdr. Grolf, 13 Sir Gustron, 14 Jimbo Lim, 15 Kruga, 16 Lupi, 17 Strephonio, 18 Madir, 19 Perin, 20 Nimmo, 21 Buzbazgut (Orc), 22 Nazim, 23 Fr Orbonn, 24 Brother Polo, 25 Argas, 26 King Rebnard, 27 Lord Rexor, 28 Rogga, 29 Lady Subia, 30 Tamas, 31 Somona.
-- `h_relatn`: 1 = volunteer, 2 = hired (gets `h_paydays[4]`: hire day +29 mod 30 then every 7 days; paid at 17:00/18:00 by `P92 ovl_09ff`), 3 = King. `P97 ovl_02d6`: relation 2 asks a yes/no (wage), relation 3 needs `_events+8 & 2`.
+- `h_relatn`: 1 = volunteer, 2 = hired (gets `h_paydays[4]`: hire day +29 mod 30 then every 7 days; paid at 17:00/18:00 by `P92 ovl_09ff` — not a wage but a *fair share* check on loot vs. gifts, see `docs/rules/economy.md`; attitude ≤ 3 on payday → leaves), 3 = King. `P97 ovl_02d6`: relation 2 asks a yes/no (wage), relation 3 needs `_events+8 & 2`.
 - `h_attitude` (`+0xD2`): per-companion mood value (Sakar 180, Strephonio 20 …). **0xFF = wants to leave**: `_ChkDepartures` sees it on the next hour and P97 `ovl_05f7` dismisses: attitude reset to 5, party slot freed, record copied back to `_member0[orinum+5]`, `h_inhand=0xFF`, and the NPC's `_npcsta` bit is **cleared**, so the companion reappears wherever the location tables place them (their KNPC/RESID entries, hours permitting). Known homes from `out/locs/npcs.txt`: 1 Sakar in Cellars 1 (captive, type 4), 4 Tuff and 14 Jimbo in Ketrop, 7 Ralle in a tavern, 9 Eflun in Drakhelm, 11 Gilondo in Llendora, 13 Gustron in Oshcrun, 17 Strephonio in Shann 6, 27 Rexor / 29 Subia in Top Level, others are placed by assignments or scripts (P0x).
 
 ## Assignments (`ASSIGNMENT`, 25 B; `_FindAss(n)` = `_assgn0[n−1]`)
@@ -29,3 +29,8 @@ So a companion who is "missing" is either back home (npcsta bit cleared) or on a
 
 ## Captives
 `_capsta[6]` (DS:6D53) per captive, 3 = free; `_capdays`, `_capcost`, `_curcap`; KNPC type 0x1D rows are captives (`_CapAtLiberty`). Ship captains use `_boatx/_boaty/_sailsw` and the R-file captain names.
+
+## Attitude (0–200) and why companions leave
+- Hired (`h_relatn 2`): weekly fair-share settlement (`economy.md`, *Hirelings*): attitude scaled by what they were given vs. a quarter of the loot; ≤ 3 → `h_attitude = 0xFF`.
+- Volunteers (`h_relatn 1`): after every combat `attitude = max(0, attitude + h_loyalty − 20)` (`P95 ovl_0fc0`); at ≤ 40 they leave with probability `P(RndCo(80) ≥ attitude) · P(RndCo(12) ≥ loyalty)`.
+- Initial values per companion (from `FFSAVA.MCS`): e.g. Buzbazgut 200/loyalty 11, Nazim 150/11, King Rebnard 200/12, Somona 20/6, Strephonio 20/0, Argas 20/0 (hired).
