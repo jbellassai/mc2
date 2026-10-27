@@ -49,7 +49,7 @@ Evidence: `_Magic` (EXE, FF module, `out/decomp/MC2_all.c`), tables in the data 
 | 40 | Restsoul | 20 | prog 6(16), bit64 (0x50) |  | combat: V06 `INT61_17` (see below) |
 | 41 | Soulspeak | 20 | bit64 (0x40) |  | location overlay (not castable in combat) |
 
-`_spellshere[program]` = [0, 1, 2, 0, 8, 8, 16, 8] — the bit a location program contributes: program 1 (wilderness) → 1, program 2 (town) → 2, plus 4 when `_InDungeon()`; programs 4, 5, 7 → 8; program 6 → 16. A spell is castable outside combat when `_splocs[spell] & _spellshere[__curmpg]` is non-zero. Bits 32/64 (Resurrect, Restsoul, Soulspeak) never match, so those are combat-only / scripted.
+`_spellshere[program]` = [0, 1, 2, 0, 8, 8, 16, 8] — the bit a location program contributes: program 1 (wilderness) → 1, program 2 (town) → 2, plus 4 when `_InDungeon()`; programs 4, 5, 7 → 8; program 6 → 16. A spell is castable outside combat when `_splocs[spell] & _spellshere[__curmpg]` is non-zero. `_spellshere` is really indexed by the *program number* and extends past the 8 location programs: entry 0x5D (P93 camp) = 8, **0x5E (P94 fight) = 0x10, 0x5F (P95 aftermath) = 0x20**, 0x60 (P96) = 8 (DS:2C1A+n). So the combat spells (bit 0x10) are castable in the fight overlay and **Resurrect (bit 0x20) only on the post-combat screen**. Bit 0x40 is set nowhere: **Soulspeak (41) can never be cast** — its vector is P95 slot 1, which is an empty `00 00 00` entry — and Restsoul works only through its combat bit.
 
 ## Casting outside combat — `_Magic()` (invoked from the main menu, `_Main5` case 3)
 
@@ -166,5 +166,11 @@ Other V02 services are town helpers, not spells: 02/08 door and tile lookups, 09
 - **Teleport (7)**, slot 15 `ovl_1b02`: not while sailing or camping. Loads `P89` (the teleport picker): tier = highest of `[10,30,50,70,90]` ≤ magic; the player marks any tile inside the tier's window rectangle `x 4–6/3–7/2–8/1–10/0–10, y 3–5/2–6/1–7/0–8/0–8` (window is 11×9, party at 5,4) and the party is moved there.
 - Slot 17 is empty.
 
+## Resurrect (17) — `P95` entry 3 (`ovl_0ce0`, file 0xCFA), post-combat screen only
+`SPLVECS[17]` = `0CA8:0009` = the 4th 3-byte slot of whatever location program is loaded; only P95 fills it. Flow: if the party already looted (`[si-0x6752] == 1`) → "While you were looting that corpse… you lost your chance to cast resurrect" (P95 text 6). `_SpelTarg` picks a combat record (≥ 24 = cancelled). Not dead (`c_state & 0x80 == 0`) → "%a does not need resurrection."; record flagged removed → "%h decides not to resurrect the %l.". Otherwise **it always succeeds** (energy cost 90 − magic/4 is the only price): HP = 1, energy = 1, dead bits cleared, sound 12. A party member (index < 6) is re-tiled and gets `h_energy = h_hitpts = 1`, `cond1 &= ~Dead`, "Done.". A **monster** (index ≥ 6) is redrawn, then `ovl_0eaf`: "The %l thanks %h kindly, giving %d <its treasure>" (`IncObj` of the record's loot) and leaves (`c_state |= 0x10`) — resurrecting an enemy is a way to collect its loot peacefully.
+
+## Glamour (26) — FFFAR `ovl_3440`
+Target charm (`h_charm`) must be ≤ 11; `gain = min(charm, 12 − charm)`; `h_charm += gain`, `h_glamcnt += gain` (then decays one point per tick together with charm, see above). So Glamour doubles charm up to the cap of 12, temporarily.
+
 ## Still to extract
-Resurrect (17), Soulspeak (41) and Glamour (26) handlers (location programs with masks 0x20/0x40 — find which overlays carry those bits); message texts for the V02 numbers (0x95, 0xC9, 0xE0–0xE6, 0xF6, 220–223) — which text file `_SetTxtWnd`/`PrtScrap` read in towns; the combat text numbers (messages 0x59 Fear, 0x5A Freeze, …) come from the combat text file.
+message texts for the V02 numbers (0x95, 0xC9, 0xE0–0xE6, 0xF6, 220–223) — which text file `_SetTxtWnd`/`PrtScrap` read in towns; the combat text numbers (messages 0x59 Fear, 0x5A Freeze, …) come from the combat text file.
