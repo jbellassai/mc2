@@ -83,7 +83,57 @@ if RndCo(100) < chance: skill += 1, message "skill improves", sound 0x0D
 ## Energy and fatigue
 `_DecSta(hero, field, amount)` subtracts with floor 0. `_IsHeTr(hero)`: energy 0 → `HERO+0xBD |= 0x10` (exhausted); energy < 15 → `HERO+0xBE |= 0x20` (tired), else cleared.
 
+## Combat flow (`_DoACmbt` → P96 setup → P94 fight → P95 aftermath)
+1. `_DoACmbt` loads P06 at 0CA8:2000 (room half), V06 into `_rvarbuf` (INT 61h), then runs **P96** at 0CA8:0000: builds the 24 `CMBTNT` records (`ovl_020a`: party slots 0–5 from the heroes via `ovl_0f2a`, monsters from the encounter group `_grpsptr[grpno−60]` or `_monstlist`, count = `D06 ptr8[7·diff + RndCo]` when the group gives none), places them on the 11×9 arena, and shows the pre-fight parley menu (`ovl_06e7`: *rally* = `RndCo(2)` then a `RndCo(100)` roll gives every other party member `bravery += RndCo(3)+1` and `agility += 4`, both capped at 12; *hail the leader* = truce / bribe dialogue; `_ambflg` = ambush).
+2. If `_endcmbt == 0`, **P94** runs the fight (`ovl_00b4` → `ovl_02e8`, rounds until `_endcmbt != 0`), then **P95** handles the aftermath (loot, resurrection prompts).
+3. INT 61h/08 (`V06 INT61_08`) sets `_endcmbt` after every action: 1 = no living monster left (win), 2 = every party member dead, 3 = every party member fled/removed.
+
+### A round (`P94 ovl_02e8`)
+- `_curphase = 1`, `_timestop` cleared at the end of each round.
+- **Party phase first** unless ambushed (`_ambflg`): then the monster phase runs first.
+- `ovl_04a6` recomputes **actions for this round** for all 24 records into `c_removes` (really "moves left"):
+  - 0 if the record is removed/fled (`c_state & 0x18`), dead or feared (`c_state & 0xA0`), frozen (`c_health & 0x20`), or is a Doombeast (race 32) whose `_curdoombst` entry is not active.
+  - A dead record with `c_state & 2` **rises again** here with 1 HP (`c_state &= 0x7F`, `c_health &= 0x7F`, HP = 1).
+  - Otherwise 1 action, plus from dexterity: `n = c_dext·8 + 4`; if `n ≥ 50` one extra action and `n −= 50`; one more if `RndCo(100) < n`. So dext 0 → 1 action, dext 6 → 2 (52), dext 12 → 3 (100). A hero with `HERO+0xA5 & 0x80` gets 4 actions flat.
+- **Party phase** (`ovl_05ad`): heroes 0–5 in order; a hero may act when `ovl_05ea` passes (not `c_state & 0x99`, `c_removes > 0`, `c_itspc1 == 0` i.e. not feared/frozen). Each menu command (`ovl_015e`) consumes one action (`ovl_0613`); auto-combat (`_swauto`) runs the same AI as monsters.
+- **End-of-side bookkeeping** (`ovl_0655(side)`): for every record of that side `c_invis−−` (reappears at 0); freeze turns (`c_itspc1` low nibble) −1, at 0 `c_health &= ~0x20`; fear turns (high nibble) −1, at 0 `c_state &= ~0x20`; heroes lose the 4-action flag and the fatigue flag `HERO+0xBD & 0x20` when unfrozen.
+- **Monster phase** (`ovl_0b4b`): records 6–23 in order; a record keeps acting while `c_removes > 0`. Timestop (`_timestop`) makes side 1 (monsters) unable to act. The phase is run **twice** per round (`_ROUND1` 0 → 1): the second pass gives records with actions left their remaining moves.
+
+### Monster (and auto-hero) decision each action (`ovl_0b4b` → `ovl_0db1` …)
+1. `ovl_143d`: find the side's **leader** (`c_state & 4`; Doombeasts use their own record), `_LDRACE` = leader's race (own race if no leader). Terrified records (`c_state & 0x40`) go straight to *flee* (below).
+2. Target: keep `c_target` unless it is now on our side. Otherwise pick one with `ovl_124a(criterion)`; the criterion comes from the combat AI record **`D06.MCV`** (loaded into `_loc` by P96 `_LoadVar('D',6)`): `ptr1[3·LDRACE] = {critA, chance%, critB}` → `critA` if `RndCo(100) < chance` else `critB`; if that finds nobody, `ptr2[...]`'s `critB` is tried; still nobody → a hero casts a spell (`ovl_157b`), a monster takes a random move.
+3. Target criteria (`P94` table at file 0x122A; candidates must be alive, visible, on the other side — `+10` selects the same-side variants used for friendly spells). Ties are broken by `RndCo(count)` over all candidates that satisfy the criterion:
+
+| id | name (V06 text) | accept / keep the best |
+|---|---|---|
+| 0 | Random target | anyone |
+| 1 | Closest | minimum path distance (`_blobmap` flood-fill from the mover, `ovl_0118`) |
+| 2 | Low hp | minimum `c_hitpt` |
+| 3 | Low agi | minimum `c_agility` |
+| 4 | Magic-user | `c_magicused != 0` (has cast this fight) |
+| 5 | Archer | target's readied weapon is a bow (type 3) |
+| 6 | By race | `c_race == D06 ptr3[LDRACE]` (prey race, 0xFF = none) |
+| 7 | Leader | `c_state & 4` |
+| 8 | Prot leader | target is attacking our leader (`c_target == OWNLDR`) |
+| 9 | Attacker | target is attacking me (`c_target == c_recno`), lowest HP among those |
+| 10–15 | friendly list | anyone / lowest HP / highest `c_strngth` / self / magic-user / leader |
+
+4. **Spell or weapon**: `RndCo(100) < D06 ptr0[LDRACE]` (per-race casting chance, e.g. Wizard 90, Elf 40, Orc 20) → cast (`ovl_1553`: a monster's two known spells `c_spell1/2`, or Restsoul vs undead; the target search is the *Spell AI* in spells.md). Otherwise: unarmed/bow holders (weapon type 0 or 3 without arrows, item 0x51) re-equip from the per-race weapon preference list `D06 ptr12[22·race]` (first listed weapon in inventory with `wp_minst ≤ c_strngth`; bows only when the target is not adjacent).
+5. **Move or attack**: with a bow (type ≥ 3) and a clear line of fire (`ovl_1af1` → `_PATHBLK == 0`) the record shoots; otherwise if the target is within Chebyshev distance 1 it attacks (`_Attack`), else it steps toward the target (`ovl_0ea6`: among the 8 neighbours keep those whose `_blobmap` distance is lower; pick one at random, `RndCo(count)`), or, when no path exists (`_blobmap == 0x7E`), moves at random (message "Random move").
+6. **Flee** (`ovl_0f32`, `c_state & 0x40` set by Terrify or by `_fleetbl` squares): if the record stands on a flee square (`_fleetbl`, −1-terminated list of positions) it is removed (`c_state |= 0x10`, position −1, "flees"); else it heads for the arena exit opposite the enemies' centroid (quadrant table), and a fleeing leader hands leadership to another monster of its race (`ovl_1089`, `c_state |= 4`), after which, on a `RndCo(2)` roll, every other monster of that side with bravery < 12 has `c_bravery` set to 0 (panic spreads).
+7. **Globe traps** (`INT61_1f/42`): a hero can drop item 0x39 (globe) on a square within 13; the first record to step on it takes `40 + RndCo(30)` (60 if the roll ≥ 25) through `_MDamage`.
+
+### Combat AI record `D06.MCV` (743 bytes, same 20-pointer header as the location records)
+| ptr | contents (indexed by race) |
+|---|---|
+| 0 (0x28) | spell-cast chance % per leader race: Human 50, Wizard 90, Elf 40, Halfling 70, Dwarf 25, Orc 20, Zorlim 60, … |
+| 1 (0x52) | target criterion triples `{critA, chance%, critB}` |
+| 2 (0xD0) | fallback criterion triples |
+| 3 (0x14E) | prey race for *By race* (0xFF none): Dwarf→Orc, Orc→Dwarf, Zorlim→Wizard, Tekhir→Elf, Troll→Human … |
+| 8 (0x22B) | monster count table (7 bytes per location difficulty) |
+| 12 (0x263) | weapon preference per race, 22 item numbers each (item − 9 = weapon index) |
+
 ## Open items
 - `ovl_0a2b/ovl_0394`: weapon → type lookup table is built at run time (P06 private data).
-- P96 loop: initiative/turn order, monster AI (`ovl_05fd`, `ovl_020a`), fleeing, bribes (`G_BRIBEAMT`).
-- INT 61h calls from P06 (`ovl_09df`) reach the location-half overlay; handler not yet identified.
+- Parley details: truce/bribe amounts (`G_BRIBEAMT`, V06 strings 0x337/0x3CB), song effects on monsters (`INT61_1d`, HERO+0x23 music skill).
+- INT 61h = V06 (see spells.md / overlays.md); P06's own INT 61h uses (0x00, 0x2B, 0x25, 0x23, 0x27–0x2A, 0x22, 0x2C, 0x24) are the arena/blob-map helpers, not yet described.

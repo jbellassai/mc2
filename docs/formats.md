@@ -64,6 +64,8 @@ Loaded by `_LoadVar('D', n)` straight into `_loc`; the first 20 words are offset
 | 56–61 | `doorstn locdiff pearlsw greetmsgs[3]` | |
 | 62 | `thedata[5000]` | the sub-tables pointed to above |
 
+`D06.MCV` is not a location: it is the **combat AI record** (same 20-pointer header, 743 bytes) read by P94 — per-race spell chance, target criteria, prey race, monster counts, weapon preferences; see `docs/rules/combat.md`.
+
 Sub-table `maps`: byte **before** the pointer target is the count *n* (0xFF = none); then four parallel arrays of *n* bytes: `block[]`, `tileset[]`, `x[]`, `y[]`. Other sub-tables are arrays of the small structs in `structs.h` (`ROOM`, `GEN`, `KNPC`, `RESID`, `PGM`, `EXIT`, `SPECIAL`, `NEXTLOC`, `HROOM`) — layouts known, semantics TODO.
 
 Some `D` files (`D06, D15–D18, D36, D55, D60`) are not `LOCTYPE` images (garbage names, size 0) — different record kind, TODO.
