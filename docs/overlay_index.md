@@ -4,7 +4,7 @@ Readable decompiles: `decomp/overlays/Pnn.c` (regenerate: `tools/ovl_batch.sh` t
 
 | overlay | entries | role (evidence) |
 |---|---|---|
-| P01 | 1 | wilderness / world-map location program (calendar updates `CalUpd1`, `FindBit` event flags, loads room overlays) |
+| P01 | 1 | wilderness / world-map location program (calendar updates `CalUpd1`, `FindBit` event flags, loads room overlays; ships and captains `rules/ships.md`, swimming `rules/skills.md`) |
 | P02 | 5 | town program ("The door is locked", "Whom do you seek?", shop/door handling) |
 | P04 | 2 | **mushroom patches** on the world map (`_mushsta` nibbles, regrowth every 8 days) — `docs/rules/locations.md`, *Mushroom patches* |
 | P05 | 2 | **service rooms**: inns, schools, jobs, libraries, wizards' lodges, taverns/stores, region camps — room id selects the tables (`docs/rules/services.md`) |

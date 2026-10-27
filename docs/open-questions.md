@@ -16,7 +16,7 @@ Status key: **answered** (with evidence), **partial**, **open**.
 Resolved today: companion assignments and captures (`rules/assignments.md`), service rooms (`rules/services.md`), world-map features and mushroom patches (`rules/locations.md`, `tools/worldspots.py`), special rooms incl. teleportal combinations, temples and gate passwords (`rules/special_rooms.md`), quest scenes (`rules/quest_scenes.md`), monsters/groups/patrols/loot/songs (`rules/encounters.md`), `ROOM.pgm` = PGM-list index, `GnnE00.MCM` mini-map sets, camp Put/Off garment classes.
 
 Still open, roughly by value for a port:
-1. Ships and captains (`P01 ovl_1070/1098`, `_capsta/_capdays/_boatx`, pier rooms P05 D36 ids 1–4) and sea travel.
+1. ~~Ships and captains~~ → `rules/ships.md` (D36 ids 1–4 are huts/camps, not piers).
 2. Character creation (`P81`) and the skill-up base-chance table (`FAR_SKILLUP`).
 3. Monster row bytes 16–18 and P96 arena placement rectangles (file 0x19/0x29); song charm duration.
 4. P08 details: ghost spell check, Marked Ones `Offer1` branches, ending sequence; P07 room programs (`P06` 26 entries) beyond chests/prisoners.

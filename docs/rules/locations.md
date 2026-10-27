@@ -62,12 +62,12 @@ The world map is one 256×256 map; the party is always inside one of 16 **region
 |---|---|
 | `roomptr` | **features** `{x, y, pgmidx, rmid, type}` until `x == 0` (`ovl_0c1e`): mushroom patches (program 4), temples (`P09 D59`, ids 192–206, type 3), dungeon gates (`P09 D14` "A Gate", ids 208–215, type 4/20), the Oolau shrine (`P08 D36`) |
 | `exitptr` | **town entrances** `{x, y, pgmidx, tx, ty}` until `x == 0`: stepping on it loads the town (`pgmidx` → PGM list → program 2 + D-file) at `(tx, ty)` |
-| `locptr` | **spots** `LOCSPOT{x, y, pgmidx, rmid, a, b, c, ev, tx, ty}` until `0xFF` (`ovl_0c28`): `ev == 0xFE` always, else index of a `locevptr` list of `{event, ?}` pairs — the spot exists once any listed event bit is set (`ovl_0c64`). Carries the 16 **strongholds** (`P05 D19`, ids 0x5C–0x6B, the Assign destinations; "secure from all threats while inside"), the hunt (0x59, N. Misor 60,27) and track (0x53, S. Misor 62,47) schools, piers (`P05 D36` ids 1–4, `[9,0,0]`), teleportals (`P09 D61` ids 0xA9–0xB6) and event-gated towns (Demonspine 88,36 after event 4 or 8; the Tundra nomad town at one of four places by events 12/33) |
+| `locptr` | **spots** `LOCSPOT{x, y, pgmidx, rmid, a, b, c, ev, tx, ty}` until `0xFF` (`ovl_0c28`): `ev == 0xFE` always, else index of a `locevptr` list of `{event, ?}` pairs — the spot exists once any listed event bit is set (`ovl_0c64`). Carries the 16 **strongholds** (`P05 D19`, ids 0x5C–0x6B, the Assign destinations; "secure from all threats while inside"), the hunt (0x59, N. Misor 60,27) and track (0x53, S. Misor 62,47) schools, huts/camps (`P05 D36` ids 1–4, `[9,0,0]`: Ziyx's hut in Demonspine, camps in The Throat and S. Misor — not piers), teleportals (`P09 D61` ids 0xA9–0xB6) and event-gated towns (Demonspine 88,36 after event 4 or 8; the Tundra nomad town at one of four places by events 12/33) |
 | `gwrds` | 8 **guard spots** `{x, y, ?}` (zero = none); `_grdsta` bit `region·8 + n` marks a cleared guard; `newsr` = the encounter group number for each of the 8 |
 | `weathr` | 4 seasons × 4 `{threshold, weather, duration}` (`time_weather.md`) |
-| `loctext` | 0 "A mushroom patch!", 1 "A port of ethereal travel!", 2–5 ship names |
+| `loctext` | 0 "A mushroom patch!", 1 "A port of ethereal travel!", 2–7 ship names, 9–14 captain names, 0x0F–0x2C sailing/world-map messages (identical in all 16 regions) |
 
-`ovl_1070/1098` handle ship captains (`_curcap`, `_capsta`, `_capdays`, `_boatx/y`) — TODO.
+Ships and captains: `ships.md`.
 
 ### Mushroom patches (program `P04`, data `D04`, map `G00E00.MCM`)
 

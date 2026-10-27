@@ -88,4 +88,4 @@ Only wizards (`h_race == 1`, else text 15). Menu *Own* / *Rent*: *Own* lists the
 
 ## Taverns and stores
 
-Also run by P05 (ids 0x84+, < 0x40) but their behaviour is ordinary NPC dialogue/trade (`dialogue.md`, `economy.md`); nothing in P05's tables applies to them beyond the greeting switch. TODO: pier/ship rooms (P05 `UseMindstone` paths, `_beenflg` for sea destinations).
+Also run by P05 (ids 0x84+, < 0x40) but their behaviour is ordinary NPC dialogue/trade (`dialogue.md`, `economy.md`); nothing in P05's tables applies to them beyond the greeting switch. The world-map `P05 D36` spots (ids 1–4) are huts/camps with ordinary NPCs, not piers; ships are hired on the water (`ships.md`).

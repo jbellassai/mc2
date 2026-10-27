@@ -20,7 +20,7 @@ Every 5-minute `CalUpd` tick, for each party member (`h_actvty`):
 - **3 hunt** (`Hunt`): on the hour and half hour, `RndCo(100)`; success if `terrain[curter] + weather[weather] + h_hunt/2 ≥ roll` → `+1 Food`, then a hunt skill-up roll (`_SkillUp0`, skill index 0x11 = h_hunt). Tables (P93 @0x003 / @0x00D, −1 = hunting impossible): terrain `[–, –, +18, +5, 0, +25, −25, −35, −15, +10]`; weather `Clear +10, Overcast 0, Fog −40, Rain −30, Thunderstorm −60, Snow −20, Blizzard –, Freezing 0, Gale –, Sweltering +10, Sandstorm –, Hurricane –`. Not while seasick.
 - **6 fix** (`Fix`): each tick `RndCo(100) ≤ h_smith` repairs one point: scan party members round-robin for an inventory amount byte `> 0x80` (**damaged flag** in `h_invamt`: high bit + damage count) and decrement it.
 - **9 watch** (`Watch`): no effect except preventing the ambush above.
-- Any condition (`cond1 ≠ 0`) or seasickness stops learn/hunt/fix with "%o can't continue the current activity" (`ovl_1061`, actvty = 0xFF).
+- Any condition (`cond1 ≠ 0`) or seasickness (a Dwarf aboard a ship, `P93 ovl_1027`, `ships.md`) stops learn/hunt/fix with "%o can't continue the current activity" (`ovl_1061`, actvty = 0xFF).
 Camping ends on a key/mouse press, when the rented room expires, or when combat starts; all activities reset to 0xFF.
 
 ## Other camp commands
