@@ -27,6 +27,20 @@ public class DumpOverlay extends GhidraScript {
     }
     w.println("ENTRIES " + entries.size() + ": " + entries);
     for (Address t : entries) if (L.getFunctionAt(t) == null) new CreateFunctionCmd(t).applyTo(currentProgram);
+    // iterative discovery: any CALL target inside memory without a function becomes one
+    boolean grew = true;
+    while (grew) {
+      grew = false;
+      for (Instruction in : L.getInstructions(true)) {
+        if (!in.getMnemonicString().startsWith("CALL")) continue;
+        for (Address t : in.getFlows())
+          if (currentProgram.getMemory().contains(t) && L.getFunctionContaining(t) == null) {
+            if (L.getInstructionAt(t) == null) disassemble(t);
+            if (new CreateFunctionCmd(t).applyTo(currentProgram)) grew = true;
+          }
+      }
+    }
+    w.println("FUNCTIONS " + currentProgram.getFunctionManager().getFunctionCount());
     // outgoing call summary
     Map<String,Integer> ext = new TreeMap<>();
     for (Instruction in : L.getInstructions(true)) {

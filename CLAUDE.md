@@ -18,6 +18,8 @@ Goal: fully document the game's rules/data formats, with an eye to a faithful po
 - Data formats: see `docs/formats.md` (single source of truth). Status 2026-10-27: VGA/EGA tilesets **done**; map blocks **150/170 render**; locations (`D` files) compose blocks into full maps (`tools/loc.py original out/locs`) — world map + all towns/dungeons render (`.venv/bin/python -I tools/render_all.py original out/maps`); open: `E80` maps have no tileset, `G*` files are not maps.
 - Render anything to check a hypothesis: `tools/render.py tileset|map ...`. Guess a grid width with `tools/rowwidth.py FILE:offset`.
 
+- Overlays (`P*.MCO`): mechanism in `docs/overlays.md`, API table `docs/overlay_api.md`, roles `docs/overlay_index.md`. Readable decompiles committed under `decomp/overlays/` (regenerate with `tools/ovl_batch.sh` + `tools/ovl_pp.py`). Full EXE decompile: run `DecompileAll.java` (10 MB, kept in `out/`, not committed).
+
 ## Tooling plan
 - Ghidra 12.2 installed via `brew install ghidra` (formula, not cask): `ghidraRun`; headless at `$(brew --prefix ghidra)/libexec/support/analyzeHeadless`. No IDA on this machine.
 - Boxer gamebox for runtime; DOSBox-X (`brew install --cask dosbox-x-app`) if we need a debugger.
