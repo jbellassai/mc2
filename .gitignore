@@ -6,4 +6,5 @@ ghidra/MC2.rep/
 ghidra/MC2.gpr
 ghidra/*.lock*
 .idea/
-*.iml
+*.iml*.swp
+*.swo

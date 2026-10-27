@@ -3,7 +3,7 @@
 Goal: fully document the game's rules/data formats, with an eye to a faithful port (web/TS/WASM or native).
 
 ## Layout
-- `original/` — pristine, read-only copy of the game dir from `~/DOS Games/Mc 2.boxer/C.harddisk/mc2/` (Boxer gamebox; run the game by opening that gamebox). Never edit; copy elsewhere to experiment.
+- `original/` — pristine, read-only copy of the installed game directory (v2.00 patch, see below). Never edit; copy elsewhere to experiment. Run the game in DOSBox or a Boxer gamebox.
 - `tools/` — analysis scripts. Python via `.venv/bin/python -I` (python-idb installed).
 - `docs/` — findings: file formats, game rules, decisions, handoffs.
 
@@ -25,6 +25,6 @@ Goal: fully document the game's rules/data formats, with an eye to a faithful po
 - Gotchas: `ROOM.pgm` is an index into the location's PGM list, not an overlay number; room D-files (D05–D18…) are not towns, `locdump` mis-parses their room/pgm rows but their `loctext` is right. `OV_0xNNN` in decompiles = file offset NNN−0x100 (DI = load offset − 0x100). Ghidra's decompile drops register-passed args in overlay code; read the asm with `tools/dis.py` for formulas. `echo ====` breaks in zsh (`=word` expansion).
 
 ## Tooling plan
-- Ghidra 12.2 installed via `brew install ghidra` (formula, not cask): `ghidraRun`; headless at `$(brew --prefix ghidra)/libexec/support/analyzeHeadless`. No IDA on this machine.
-- Boxer gamebox for runtime; DOSBox-X (`brew install --cask dosbox-x-app`) if we need a debugger.
+- Ghidra 12.2 installed via `brew install ghidra` (formula, not cask): `ghidraRun`; headless via `analyzeHeadless` (under Ghidra's `support/`). No IDA.
+- DOSBox/Boxer for runtime; DOSBox-X if we need a debugger.
 - Python scripts in `tools/` for data-format parsing; validate every format guess by rendering/round-tripping real files.
