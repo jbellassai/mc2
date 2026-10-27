@@ -51,7 +51,10 @@ def dump(path, out):
     if p['weathr']:
         w(f"weathr: {list(d[p['weathr']:end('weathr')])}\n")
     for k in ('lkdata', 'spetbl', 'treasptr', 'spdoors', 'hroomptr', 'locptr', 'locevptr', 'notyet0'):
-        if p[k] and end(k) - p[k] > 1: w(f"{k}: {list(d[p[k]:end(k)])}\n")
+        if p[k] and p[k] != p['roomptr'] and end(k) - p[k] > 1: w(f"{k}: {list(d[p[k]:end(k)])}\n")
+    if p['hroomptr'] and p['hroomptr'] != p['roomptr']:
+        w("hrooms (id grp reward amt map xy*4):\n")
+        for r in recs(d, p['hroomptr'], 13, (end('hroomptr') - p['hroomptr']) // 13): w(f"  {r}\n")
     texts = cstrings(d, p['loctext'], end('loctext')) if p['loctext'] else []
     w(f"loctext ({len(texts)}):\n")
     for i, s in enumerate(texts): w(f"  {i}: {s}\n")
