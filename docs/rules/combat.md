@@ -135,5 +135,5 @@ if RndCo(100) < chance: skill += 1, message "skill improves", sound 0x0D
 
 ## Open items
 - `ovl_0a2b/ovl_0394`: weapon → type lookup table is built at run time (P06 private data).
-- Parley details: truce/bribe amounts (`G_BRIBEAMT`, V06 strings 0x337/0x3CB), song effects on monsters (`INT61_1d`, HERO+0x23 music skill).
+- Parley details: truce/bribe amounts (`G_BRIBEAMT`, V06 strings 0x337/0x3CB). Song effects: `encounters.md`. Monster stats, groups, loot: `encounters.md`.
 - INT 61h = V06 (see spells.md / overlays.md); P06's own INT 61h uses (0x00, 0x2B, 0x25, 0x23, 0x27–0x2A, 0x22, 0x2C, 0x24) are the arena/blob-map helpers, not yet described.

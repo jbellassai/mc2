@@ -31,7 +31,7 @@ Names: `_w_objects` DS:3BB7, index = item code (hero inventory `h_invitem[40]` h
 
 `h_invamt` entries above 0x80 mark a **damaged** item (high bit + damage count; repaired one point at a time by the camp *Fix* activity, `camp.md`); on the four Scrolls (0x4C–0x4F) the same bit means **deciphered** by library research (`services.md`). TODO: what sets it.
 
-Teleportal pieces 0x3A Cylinder, 0x3B Cone, 0x41 Cube, 0x42 Sphere, 0x43 Pyramid and spell books 0x53–0x59 (one per spell group) are consumed/used by the special rooms (`special_rooms.md`, `services.md`).
+Instruments 0x44 Lyre, 0x45 Lute, 0x48 Flute, 0x5B Bandore each carry two combat songs (`encounters.md`). Teleportal pieces 0x3A Cylinder, 0x3B Cone, 0x41 Cube, 0x42 Sphere, 0x43 Pyramid and spell books 0x53–0x59 (one per spell group) are consumed/used by the special rooms (`special_rooms.md`, `services.md`).
 
 Every item has a base **value** in `_lootvalues` (DS:2E72, `docs/rules/economy.md`) used for loot accounting and hireling shares; shop prices come from the merchant's conversation record instead.
 

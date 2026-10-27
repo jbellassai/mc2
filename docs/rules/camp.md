@@ -25,6 +25,6 @@ Camping ends on a key/mouse press, when the rented room expires, or when combat 
 
 ## Other camp commands
 - `Magic`: cast a spell from camp (`_Magic`, the usual gate in `spells.md`).
-- `Put`/`Off`: wear/remove armour, clothing (0x1F–0x30; `ovl_0f21` finds the slot, `_GARBLIST` groups) — the only place equipment is changed. TODO: slot conflict rules.
+- `Put`/`Off`: wear/remove armour and clothing (0x1F–0x30) — the only place equipment is changed. Six `h_wears` slots; each item has a **garment class** (`ovl_0d25`): 1 = body armour 0x1F–0x27, 2 = helmet 0x28–0x2A, 4 = clothing 0x2B–0x30. Putting on an item whose class is already worn replaces that item (text 0x11); otherwise it takes the first free slot (text 0x0E). No race or class restriction is checked.
 - `Use`: `_UseItem` → FFFAR `ovl_173e`: Rope, Orb, Horn, Conch, the four Scrolls, Pick, Arrow and Flute only **show the item's picture** here (window set-up + `_StartGraf`); scripted effects live in location programs.
 - `Assign`: give a companion a job/task (assignment records, `npcs.md`).
