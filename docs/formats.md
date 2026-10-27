@@ -74,7 +74,7 @@ Sub-table `maps`: byte **before** the pointer target is the count *n* (0xFF = no
 | `genptr` | `GEN{x,y,type,tile,num}` ×5, FF-term. | generic townsfolk; `num` 0xFA night-only, 0xFB day-only, ≥0xFC always |
 | `knpcptr` | `KNPC{x,y,type,tile,num,name,appear,disapp,ifevent,ifnevent}` ×10, FF-term. | named NPCs; `name` indexes `gwrds`; `num<0x20` = companion |
 | `resids` | `RESID{name,num,appear,disapp,ifevent,ifnevent}` ×6, **indexed by room id** | resident of each room (`num` 0xFE = none) |
-| `pgmptr` | `PGM{pgmnum,tilefile,datafile,diskside}` ×4 | overlay/tileset/D-file per room program |
+| `pgmptr` | `PGM{pgmnum,tilefile,datafile,diskside}` ×n (bounded by the next pointer) | one record per sub-map/level of the location: `pgmnum` = program overlay (1 wilderness P01, 2 town P02, 4 P04, 5 P05 mindstone/teleport, 6 P06, 8 P08 court, 9 P09 puzzles; dungeon rooms always P07), tileset number, map (`E`/`D` data file) number, disk side. `_curmpg` = pgmnum of the current sub-map |
 | `exitptr` | `EXIT{x,y,pgm,tx,ty}` ×5, FF-term. | map exits |
 | `gwrds` | NUL-separated strings | conversation keywords and NPC names |
 | `newsr`, `peopr` | 3-byte triples | News / People keyword → NPC (`peopr = {word,npc,x}`) |
