@@ -9,3 +9,4 @@ ghidra/*.lock*
 *.iml
 *.swp
 *.swo
+original/
