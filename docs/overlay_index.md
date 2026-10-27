@@ -18,7 +18,7 @@ Readable decompiles: `decomp/overlays/Pnn.c` (regenerate: `tools/ovl_batch.sh` t
 | P89 | 0 | no jump table; a few tile/graphics routines (`OrTile`, `PageFlip`) — special effect |
 | P90 | 3 | trade and gifts (Altesen's orb, buy/sell with gold check, `IncObj/DecObj`) |
 | P91 | 6 | town NPC small talk ("nice weather", The King) |
-| P92 | 2 | shopkeeper economy events ("not been a profitable week", `RndCo`) |
+| P92 | 2 | **hour tick**: clock/day/season, sunrise/sunset, weather per region, hunger, assignment updates, paydays (`docs/rules/time_weather.md`, `npcs.md`) |
 | P93 | 1 | camp: sleep / learn / activities (`SetTxtSpell`, `ListSel`) |
 | P94 | 29 | combat spell program (location half, 0x5E): the `SPLVECS` offset-0 slots (`_Fear` 4 … `_Drain` 27) are stubs that `INT 61h` into V06; also the spell-AI target picker (`ovl_15f8`) and combat mouse UI |
 | P95 | 1 | resurrection & post-combat ("Mark the target", `SumStat`); overlay 0x5F |
