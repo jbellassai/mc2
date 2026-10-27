@@ -20,4 +20,6 @@ Still open, roughly by value for a port:
 2. ~~Character creation and the skill-up base table~~ → `rules/new_game.md`, `combat.md` (bases 30/15/25/20/25, FFFAR data = address − 4), `skills.md` (full `_maxtbl`).
 3. ~~Monster bytes 16–18 (unused by code), arena placement, song charm duration~~ → `combat.md` *Arena placement*, `encounters.md`.
 4. ~~P08 ghost / Wanasol Hall / ending; P07 room types~~ → `quest_scenes.md`, `locations.md` *Dark Candle rooms* (`_hroomtype` from V02 service 0x12). P06 is the dungeon level program, not a library.
-5. `E80` maps without tileset; `_ChkDepartures`; inn "wait here" (`_capdays`) semantics; `C` file regions 10–17 and the +0x64 bytes.
+5. ~~E80 maps, `_ChkDepartures`, inn wait, C-file unknowns~~ → E80 = unreferenced cut content (`formats.md`); `_ChkDepartures` = any companion with attitude 0xFF (`npcs.md`); there is no inn "wait here" option (`_capdays` belongs to ships); C-file words 10–17 are unread, +0x64 = unknown-keyword reply text (`formats.md`).
+
+Still open after this pass (lower value): `locations.md` *Still to extract* (town `spetbl` types other than 2/3, `spdoors` record ends, P06 dungeon-level mechanics — traps, pits, mindstones, roaming monsters — P09 engraved-word puzzles, `notyet0`); MC1/Keys import field mapping (`new_game.md`); ship quirks list (`ships.md`).

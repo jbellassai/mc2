@@ -47,7 +47,7 @@ The world map ("Nameless", `D01`, 19 blocks, tilesets 01 and 23) and Telermain (
 
 ![world](img/world_gurtex.png) ![telermain](img/telermain.png)
 
-Six `MxxE80.MCM` blocks are referenced by **no** location record and no `V80` tileset exists; still unresolved (overlay code may reference them).
+Six `MxxE80.MCM` blocks are referenced by **no** location record, no `V80` tileset exists and no EXE/overlay code loads map letter 80 (`_LoadMap` callers checked): cut content, ignore for a port.
 
 ## `Dnn.MCV` — location record (confirmed = `struct LOCTYPE`, 5062 B max)
 
@@ -119,9 +119,9 @@ Loaded by `_Tobo(npc)` into `_convbufptr` (12 KB): file `C(npc>>3)`, slot `_conv
 | 0 | start of the text block: NUL-separated strings, indexed by message number (`%q` = quote, `%h`/`%o` names, `%rN` …) |
 | 1 | **word list** (NUL strings, 0xFF-terminated): `...`, `Other`, `End`, `Advice`, `Rumors`, then the file's quest keywords; typed words are matched against this list |
 | 2–9 | per-slot **conversation script**: entries `word resp [E ev alt \| C need alt \| S song]* 0`, 0xFF ends (`docs/rules/dialogue.md`) |
-| 10–17 | per-slot byte-code lists (`03 01 02 FF` …, TODO — not read by P90/P91) |
+| 10–17 | per-slot byte lists (`03 01 02 FF` …) — **read by nothing** (P91 uses words 2–9 and 34–41, P90 18–33; the EXE only 34–41): leftover data |
 | 18–25 | per-slot **gift list**: 5-byte `{item, min_qty, msg_if_fewer, msg_if_enough, event_bit}`, 0xFF-terminated (`docs/rules/economy.md`) |
 | 26–33 | per-slot **shop list**: 5-byte `{item, pays_hi, pays_lo, charges_hi, charges_lo}`, prices `hi·100+lo`, 0xFF-terminated |
 | 34–41 | per-slot `{greet, bye}` text indices, 0xFF = use the location defaults (`loc+60`/`loc+61`) |
 
-Then at 0x54: 8 bytes **trade skill** per slot, 0x5C: 8 bytes **no-buy** flag, 0x64: 8 bytes (0xFF or a companion number — C22 slots 0–7 = 5, 6, 10, 20, 24, 25, 26, 27; TODO), text from 0x6C. `tools/convdump.py original [Cnn …]` dumps skills, shops and gifts with the message texts; `tools/talkdump.py original out/talk` decodes every script. C04 slot 0's gift list is not 0xFF-terminated (runs into the next data).
+Then at 0x54: 8 bytes **trade skill** per slot, 0x5C: 8 bytes **no-buy** flag, 0x64: 8 bytes = per-slot **text number of the NPC's reply to an unknown keyword** (`P91 ovl_0a08`: 0xFF → the generic common-text line, else that string of the file's text block, e.g. C22 "I got no time for questions!", "Go to hell!", C20 "I have no clue, mighty %h!"), text from 0x6C. `tools/convdump.py original [Cnn …]` dumps skills, shops and gifts with the message texts; `tools/talkdump.py original out/talk` decodes every script. C04 slot 0's gift list is not 0xFF-terminated (runs into the next data).
