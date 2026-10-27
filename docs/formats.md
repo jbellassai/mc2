@@ -116,11 +116,11 @@ Loaded by `_Tobo(npc)` into `_convbufptr` (12 KB): file `C(npc>>3)`, slot `_conv
 | word | meaning |
 |---|---|
 | 0 | start of the text block: NUL-separated strings, indexed by message number (`%q` = quote, `%h`/`%o` names, `%rN` …) |
-| 1 | end of text / start of script data |
-| 2–9 | per-slot conversation script (bytecode mixing text indices; format TODO) |
-| 10–17 | per-slot byte-code lists (`03 01 02 FF` …, TODO) |
+| 1 | **word list** (NUL strings, 0xFF-terminated): `...`, `Other`, `End`, `Advice`, `Rumors`, then the file's quest keywords; typed words are matched against this list |
+| 2–9 | per-slot **conversation script**: entries `word resp [E ev alt \| C need alt \| S song]* 0`, 0xFF ends (`docs/rules/dialogue.md`) |
+| 10–17 | per-slot byte-code lists (`03 01 02 FF` …, TODO — not read by P90/P91) |
 | 18–25 | per-slot **gift list**: 5-byte `{item, min_qty, msg_if_fewer, msg_if_enough, event_bit}`, 0xFF-terminated (`docs/rules/economy.md`) |
 | 26–33 | per-slot **shop list**: 5-byte `{item, pays_hi, pays_lo, charges_hi, charges_lo}`, prices `hi·100+lo`, 0xFF-terminated |
-| 34–41 | per-slot pairs `{a, b}` 0xFF-terminated (keyword/topic links? TODO) |
+| 34–41 | per-slot `{greet, bye}` text indices, 0xFF = use the location defaults (`loc+60`/`loc+61`) |
 
-Then at 0x54: 8 bytes **trade skill** per slot, 0x5C: 8 bytes **no-buy** flag, 0x64: 8 bytes (0xFF or a companion number — C22 slots 0–7 = 5, 6, 10, 20, 24, 25, 26, 27; TODO), text from 0x6C. `tools/convdump.py original [Cnn …]` dumps skills, shops and gifts with the message texts. C04 slot 0's gift list is not 0xFF-terminated (runs into the next data).
+Then at 0x54: 8 bytes **trade skill** per slot, 0x5C: 8 bytes **no-buy** flag, 0x64: 8 bytes (0xFF or a companion number — C22 slots 0–7 = 5, 6, 10, 20, 24, 25, 26, 27; TODO), text from 0x6C. `tools/convdump.py original [Cnn …]` dumps skills, shops and gifts with the message texts; `tools/talkdump.py original out/talk` decodes every script. C04 slot 0's gift list is not 0xFF-terminated (runs into the next data).
