@@ -10,8 +10,8 @@ Readable decompiles: `decomp/overlays/Pnn.c` (regenerate: `tools/ovl_batch.sh` t
 | P05 | 2 | **service rooms**: inns, schools, jobs, libraries, wizards' lodges, taverns/stores, region camps — room id selects the tables (`docs/rules/services.md`) |
 | P06 | 26 | library of small routines, 26 entry points, uses `SkillUp`, `AutoPause` — probably the room-program half (`_RoomPgm`, offset 0x2000) for generic rooms |
 | P07 | 1 | dungeon program (prisoners, chests, traps) |
-| P08 | 2 | King Rebnard's court / main quest NPC scenes (`MultiFX` effects, crystal key) |
-| P09 | 1 | engraved-word / puzzle rooms (`PrtWrd`) |
+| P08 | 2 | **quest scenes**: King's court gifts, Maalaq's crystal key, Altesen Orb, Marked Ones / Blue Scroll, ghost, White Scroll disaster trigger, Oolau nest ending — `docs/rules/quest_scenes.md` |
+| P09 | 1 | **special rooms**: casinos (2d6), teleportals (3-piece combinations), temples (gods, demands, blessings), dungeon gates (passwords), meeting halls — `docs/rules/special_rooms.md` |
 | P70 | 1 | notepad (`NOTES000.MCN`) |
 | P81 | 4 | startup: title, intro story, character setup (`graphmode`, `VGAFadeIn`, `readfile`); loaded as overlay 0x51 (16 KB) at `_Hello` |
 | P88 | 2 | **Assign** (0: send a companion travelling/waiting or commit a room task + destination) and **Recall** (1: Mindstone assignment report, redirect) — `docs/rules/assignments.md` |
