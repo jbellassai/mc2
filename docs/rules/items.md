@@ -29,6 +29,8 @@ Names: `_w_objects` DS:3BB7, index = item code (hero inventory `h_invitem[40]` h
 | 16 | Greataxe | 2E | Silk robe | 46 | Shovel | | |
 | 17 | Nalanduir | 2F | Wool outfit | 47 | Rope | | |
 
+`h_invamt` entries above 0x80 mark a **damaged** item (high bit + damage count; repaired one point at a time by the camp *Fix* activity, `camp.md`). TODO: what sets it.
+
 Every item has a base **value** in `_lootvalues` (DS:2E72, `docs/rules/economy.md`) used for loot accounting and hireling shares; shop prices come from the merchant's conversation record instead.
 
 Weapons 09–1E map to `WEAPDATA` rows `code − 9` (table in `combat.md`). `_GetWpnSkl`: in-hand item < 0x12 → sword skill, < 0x1A → axe, < 0x1F → archery, else fist.

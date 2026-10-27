@@ -32,9 +32,9 @@ def dump(path, out):
         w("rooms (x y pgm id type):\n")
         for r in recs(d, p['roomptr'], 5): w(f"  {r}\n")
     if p['pgmptr']:
-        w("pgms (pgmnum tilefile datafile diskside): " + ' '.join(str(r) for r in recs(d, p['pgmptr'], 4)) + "\n")
+        w("pgms (pgmnum tilefile datafile diskside): " + ' '.join(str(r) for r in recs(d, p['pgmptr'], 4, (end('pgmptr') - p['pgmptr']) // 4)) + "\n")
     if p['exitptr']:
-        w("exits (x y pgm tx ty): " + ' '.join(str(r) for r in recs(d, p['exitptr'], 5)) + "\n")
+        w("exits (x y pgm tx ty): " + ' '.join(str(r) for r in recs(d, p['exitptr'], 5, (end('exitptr') - p['exitptr']) // 5)) + "\n")
     if p['genptr']:
         w("gen (x y type tile num):\n")
         for r in recs(d, p['genptr'], 5): w(f"  {r}\n")
