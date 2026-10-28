@@ -4,7 +4,7 @@ import type { Figure } from './level';
 
 interface Cmd { op: 'E' | 'C' | 'S'; arg?: number; alt?: number; song?: number }
 interface Entry { word: number; resp: number; cmds: Cmd[] }
-interface Slot { script: Entry[]; greet: number; bye: number; unknown: number }
+interface Slot { script: Entry[]; greet: number; bye: number; unknown: number; skill: number; nobuy: number; shop: { item: number; pays: number; charges: number }[] }
 interface Conversation { texts: string[]; words: string[]; slots: Slot[] }
 interface SmallTalk { lines: string[]; weather: [number, number][] }
 
@@ -47,6 +47,10 @@ export class Talk {
   }
 
   get name(): string { return this.who.name ?? ''; }
+  /** Merchant data (economy.md): shop list, trade skill, no-buy flag. Empty for townsfolk. */
+  get shop() { return this.slot?.shop ?? []; }
+  get skill() { return this.slot?.skill ?? 0; }
+  get nobuy() { return (this.slot?.nobuy ?? 0) !== 0; }
   private get slot(): Slot | null { return this.conv ? this.conv.slots[this.who.num & 7] : null; }
   private say(s: string): string { return format(s, this.hero, this.name); }
 

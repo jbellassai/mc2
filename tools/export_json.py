@@ -1,7 +1,7 @@
 """Build the web port's data pack from the original files (decision 1). Never commit or publish the output.
 usage: export_json.py ORIGDIR OUTDIR -> OUTDIR/locations/*.json, tiledata/Bnn.json, tilesets/Vnn.png, sprites/E0n.png, conversations/Cnn.json,
        blocks.json, rooms.json, sprites.json, comtxt.json, items.json, heroes.json,
-       commands.json, npctypes.json, p02text.json, p91text.json
+       commands.json, npctypes.json, p90.json, p02text.json, p91text.json
 Schema: docs/data_schema.md. Byte strings are lowercase hex; every list is in file order."""
 import json, os, struct, sys
 sys.path.insert(0, os.path.dirname(__file__))
@@ -216,6 +216,10 @@ def main(src, dst):
     dump(f'{dst}/heroes.json', [decode_struct(p81[0x82D + 220 * i:], hero) for i in range(5)])   # new-game profiles A-E
     dump(f'{dst}/npctypes.json', [x.decode('latin1') for x in exe[ds + 0x2296:ds + 0x2471].split(b'\0')[:60]])   # Look names by type
     dump(f'{dst}/commands.json', [x.decode('latin1') for x in exe[ds + 0x2471:ds + 0x2800].split(b'\0')[:51]])   # _menucommands
+    p90 = open(f'{src}/P90.MCO', 'rb').read()   # trade: {step, div} per item at 0x038, {item, lot} pairs at 0x0F2 (economy.md)
+    lots = p90[0xF2:p90.index(0xFF, 0xF2)]
+    dump(f'{dst}/p90.json', {'haggle': [[p90[0x38 + 2 * i], p90[0x39 + 2 * i]] for i in range(0x5D)],
+                             'lots': {str(lots[i]): lots[i + 1] for i in range(0, len(lots) - 1, 2)}})
     p02 = open(f'{src}/P02.MCO', 'rb').read()
     dump(f'{dst}/p02text.json', [x.decode('latin1') for x in p02[0x67:0x28A].split(b'\0')[:17]])   # town program's own texts
     p91 = open(f'{src}/P91.MCO', 'rb').read()   # small talk: {weather, line} pairs at 0x48, 0xFF, then the lines

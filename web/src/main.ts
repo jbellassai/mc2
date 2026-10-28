@@ -6,7 +6,8 @@ import { resolveRoom } from './room';
 import { json, type Door, type Exit } from './pack';
 import { Talk, format, wmatch } from './talk';
 import { Hero, PICK, STATS, SKILLS } from './hero';
-import { panel } from './panel';
+import { panel, type Button } from './panel';
+import { loadTrade, lot, single, prices, incObj, sellable } from './shop';
 
 const status = document.getElementById('status')!;
 const START = { level: 'D02', x: 98, y: 18 };   // mutable for the ?at= dev aid     // new_game.md: window (93,14), leader at window cell (5,4)
@@ -49,16 +50,86 @@ async function main() {
     const t = await Talk.open(level.loc, who, hero, events);
     const speak = (s: string) => panel.line(`${who.name ? who.name + ': ' : ''}${s}`);
     const end = () => { const bye = t.farewell(); close(bye ? `${who.name}: ${bye}` : ''); };
-    panel.show();
-    speak(t.greeting());
-    panel.set([{ label: 'News', act: () => { panel.line('> News', 'you'); speak(t.news() ?? t.ask('').text); } },
-               { label: 'Weather', act: () => { panel.line('> Weather', 'you'); speak(t.weather(clock.weather) ?? t.ask('').text); } },
-               { label: 'End', act: end }],
-      word => {
+    const items = await json<string[]>('items.json');
+    await loadTrade();
+    const coins = (n: number) => `${n} ${comtxt[0xb1]}`;
+    const pouch = (item: number) => lot(item) > 1 ? comtxt[0xb2].replace('%b', String(lot(item))) : '';
+    const fill = (s: string, n: number) => say(s.replace('%i', String(n)), who.name);
+    const yesNo = (yes: () => void, no: () => void) => panel.set([{ label: cmd[3], act: yes }, { label: cmd[4], act: no }]);
+    // The order the original assembles these common texts in is not traced; this follows the economy.md flow.
+    const ask = (q: string, max: number, then: (n: number) => void) => {
+      speak(say(q, who.name));
+      panel.set([{ label: cmd[0], act: menu }], w => {
+        const n = Number(w);
+        panel.line(`> ${w}`, 'you');
+        if (!Number.isInteger(n) || n < 0 || n > max) return ask(q, max, then);
+        if (n === 0) return menu();
+        then(n);
+      }, `0–${max}`);
+    };
+    const buy = () => {
+      speak(say(comtxt[0xac].trim(), who.name));
+      panel.set([...t.shop.map(s => ({ label: `${items[s.item]} — ${coins(prices(s, hero.rec.h_trade as number, t.skill).charges)}${pouch(s.item)}`,
+        act: () => buyOne(s) })), { label: cmd[0], act: menu }]);
+    };
+    const buyOne = (s: { item: number; pays: number; charges: number }) => {
+      const each = prices(s, hero.rec.h_trade as number, t.skill).charges, n = lot(s.item);
+      panel.line(`> ${items[s.item]}`, 'you');
+      speak(comtxt[0xb0] + coins(each) + pouch(s.item) + '.');
+      const deal = (count: number) => {
+        if (n * count >= 100) { speak(comtxt[0xbf]); return menu(); }
+        const total = each * count;
+        speak(fill(comtxt[0xc0], total) + comtxt[0xc4]);
+        yesNo(() => {
+          if (hero.rec.h_gold < total) speak(say(comtxt[0x25]));                   // "%h doesn't have that much!"
+          else if (incObj(hero, s.item, n * count)) { hero.rec.h_gold -= total; speak(say(comtxt[0xc1])); }
+          menu();
+        }, () => { speak(comtxt[0xc2]); menu(); });
+      };
+      if (single(s.item)) { speak(comtxt[0xb3].trim() + ' ' + comtxt[0xb4] + comtxt[0xb7]); yesNo(() => deal(1), () => { speak(comtxt[0xc2]); menu(); }); }
+      else ask(comtxt[0xb6].trim() + ' ' + comtxt[0xb4] + comtxt[0xbe], 99, deal);
+    };
+    const sell = () => {
+      if (t.nobuy) { speak(comtxt[0xc7].trim()); return menu(); }
+      const wanted = t.shop.filter(s => sellable(hero, s.item).length);
+      if (!wanted.length) { speak(say(comtxt[0xb8], who.name)); return menu(); }
+      speak(comtxt[0xbd].trim());
+      panel.set([...wanted.map(s => ({ label: `${items[s.item]} — ${coins(prices(s, hero.rec.h_trade as number, t.skill).pays)}${pouch(s.item)}`,
+        act: () => sellOne(s) })), { label: cmd[0], act: menu }]);
+    };
+    const sellOne = (s: { item: number; pays: number; charges: number }) => {
+      const each = prices(s, hero.rec.h_trade as number, t.skill).pays, n = lot(s.item), slots = sellable(hero, s.item);
+      const have = single(s.item) && s.item <= 0x30 ? slots.length : hero.rec.h_invamt[slots[0]];
+      const max = Math.floor(have / n);
+      panel.line(`> ${items[s.item]}`, 'you');
+      if (!max) { speak(say(comtxt[0xb8], who.name)); return menu(); }
+      const deal = (count: number) => {
+        const total = each * count;
+        speak(comtxt[0xc3] + coins(total) + '.' + comtxt[0xc5]);
+        yesNo(() => {
+          hero.rec.h_gold += total;
+          for (let k = 0; k < n * count; k++) hero.dec(sellable(hero, s.item)[0]);
+          speak(say(comtxt[0xc1])); menu();
+        }, () => { speak(comtxt[0xc2]); menu(); });
+      };
+      speak(comtxt[0xc3] + coins(each) + pouch(s.item) + '.');
+      if (max === 1) deal(1); else ask(comtxt[0xb6].trim() + ' ' + comtxt[0xb5] + comtxt[0xbe], max, deal);
+    };
+    const talkButtons = (): Button[] => [
+      { label: 'News', act: () => { panel.line('> News', 'you'); speak(t.news() ?? t.ask('').text); } },
+      { label: 'Weather', act: () => { panel.line('> Weather', 'you'); speak(t.weather(clock.weather) ?? t.ask('').text); } },
+      ...(t.shop.length ? [{ label: cmd[9], act: buy }, { label: comtxt[0x17b], act: sell }] : []),   // Buy, Sell
+      { label: cmd[0], act: end }];
+    function menu() {
+      panel.set(talkButtons(), word => {
         panel.line(`> ${word}`, 'you');
         const r = t.ask(word);
         if (r.end) end(); else speak(r.text);
       }, 'Ask about… (type a word, Enter)');
+    }
+    panel.show();
+    speak(t.greeting());
+    menu();
   };
 
   // ---- doors (rules/locations.md, Towns; P02 ovl_196b) ----
@@ -162,12 +233,13 @@ async function main() {
     message = text;
     render();
   };
+  const chunks = <T,>(a: T[], n: number) => Array.from({ length: Math.ceil(a.length / n) }, (_, i) => a.slice(i * n, i * n + n));
   /** Character sheet (the original's Inven): attributes, skills, coins, pack. */
   const sheet = () => {
     const r = hero.rec;
     const table = (title: string, rows: [string, string][]) => {
       const t = document.createElement('table'); t.className = 'sheet';
-      t.innerHTML = `<caption>${title}</caption>`;
+      t.createCaption().textContent = title || '\u00a0';
       for (const [k, v] of rows) { const tr = t.insertRow(); tr.insertCell().textContent = k; tr.insertCell().textContent = v; }
       return t;
     };
@@ -176,7 +248,8 @@ async function main() {
       table(`${r.h_fullnm}`, [['Hit points', `${r.h_hitpts} / ${r.h_hpmax}`], ['Energy', String(r.h_energy)], ['Coins', String(r.h_gold)],
                               ...STATS.map(([f, l]) => [l, String(r[f])] as [string, string])]),
       table('Skills', SKILLS.map(([f, l]) => [l, String(r[f])] as [string, string])),
-      table('Pack', hero.pack().map(p => [p.name + (p.worn ? ' (worn)' : p.hand ? ' (in hand)' : ''), p.count] as [string, string])));
+      ...chunks(hero.pack().map(p => [p.name + (p.worn ? ' (worn)' : p.hand ? ' (in hand)' : ''), p.count] as [string, string]), 12)
+        .map((rows, i) => table(i ? '' : 'Pack', rows)));
     panel.show(); panel.add(wrap);
     panel.set([{ label: cmd[0], act: () => close(message) }]);   // End
   };

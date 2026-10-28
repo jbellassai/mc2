@@ -16,6 +16,7 @@ Built by `.venv/bin/python -I tools/export_json.py original out/pack`; never com
 | `heroes.json` | the five new-game profiles A–E as `HERO` records (field names from `structs.h`; `h_gold` is `{hundreds, units}` here) |
 | `npctypes.json` | what *Look* calls a person, by GEN/KNPC `type` (DS:2296: man, woman, wizard, …) |
 | `commands.json` | command words (`_menucommands`: End, Quit, None, Yes, No, … Knock, … Pick …) |
+| `p90.json` | trade tables: `haggle[item] = [step, div]`, `lots[item] = lot size` (`rules/economy.md`) |
 | `p91text.json` | small talk: `lines` (P91 file 0x7F) and `weather` `[weather, line]` pairs (`rules/dialogue.md`) |
 | `p02text.json` | the town program's own texts (P02 file 0x67: locked doors, map flask, scrolls) |
 | `sprites.json` | `columns`, `counts` per sheet, `npc[tile] = {start, frames}` — the E02 frames of NPC sprite id `tile` (the `tile` byte of GEN/KNPC records) |
