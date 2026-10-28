@@ -1,7 +1,7 @@
 """Build the web port's data pack from the original files (decision 1). Never commit or publish the output.
 usage: export_json.py ORIGDIR OUTDIR -> OUTDIR/locations/*.json, tiledata/Bnn.json, tilesets/Vnn.png, sprites/E0n.png, conversations/Cnn.json,
        blocks.json, rooms.json, sprites.json, comtxt.json, items.json, heroes.json,
-       commands.json, npctypes.json, p90.json, p02text.json, p91text.json, p05.json, p92text.json, p97.json, p93text.json, conds.json, companions.json, exetables.json
+       commands.json, npctypes.json, p90.json, p02text.json, p91text.json, p01.json, p05.json, p92text.json, p97.json, p93text.json, conds.json, companions.json, exetables.json
 Schema: docs/data_schema.md. Byte strings are lowercase hex; every list is in file order."""
 import json, os, struct, sys
 sys.path.insert(0, os.path.dirname(__file__))
@@ -197,7 +197,7 @@ def main(src, dst):
     for f in sorted(os.listdir(src)):
         if f[0] == 'M' and f.endswith('.MCM'):
             d = open(f'{src}/{f}', 'rb').read()
-            if d[:2] == b'**' and len(d) == 2 + 42 * 42: blocks[f[:6]] = d[2:].hex()
+            if d[:2] == b'**' and len(d) >= 2 + 42 * 42: blocks[f[:6]] = d[2:2 + 42 * 42].hex()   # a block is always the first 42×42
     dump(f'{dst}/blocks.json', blocks)
     rooms = {}
     for f in sorted(os.listdir(src)):
@@ -236,6 +236,11 @@ def main(src, dst):
     end = p91.index(0xFF, 0x48); pairs = p91[0x48:end]
     dump(f'{dst}/p91text.json', {'lines': [x.decode('latin1') for x in p91[end + 1:0x2E0].split(b'\0')[:16]],
                                   'weather': [[pairs[i], pairs[i + 1]] for i in range(0, len(pairs) - 1, 2)]})
+    p01 = open(f'{src}/P01.MCO', 'rb').read()   # world map (rules/time_weather.md, World-map step cost; locations.md, World map)
+    s8 = lambda o, n: [b - 256 if b > 127 else b for b in p01[o:o + n]]
+    dump(f'{dst}/p01.json', {'terraintime': list(p01[0x276:0x280]), 'weathertime': s8(0x280, 12), 'terrainenergy': list(p01[0x298:0x2A4]),
+                             'clothing': [list(p01[0x2A2 + 12 * k:0x2AE + 12 * k]) for k in range(7)],   # rows 0x2B-0x30, then none
+                             'regions': [list(p01[0x236 + 4 * k:0x23A + 4 * k]) for k in range(16)]})    # {x0,y0,x1,y1}, first match
     p05 = open(f'{src}/P05.MCO', 'rb').read()   # service rooms (rules/services.md); lists indexed by room id − kind base
     u8 = lambda o, n: list(p05[o:o + n])
     v05 = open(f'{src}/V05.MCO', 'rb').read()    # library books: AddScrap counts NUL-terminated strings from V05 offset 7
@@ -252,6 +257,7 @@ def main(src, dst):
     dump(f'{dst}/exetables.json', {   # small EXE rule tables (rules/items.md, time_weather.md)
         'hungerhours': list(exe[ds + 0x3AA8:ds + 0x3AAE]),                                      # HUNGERHOURS by race
         'nousetext': list(exe[ds + 0x2D9A:ds + 0x2D9A + 0x5C]),                                # _NoUse comtxt per item
+        'weathers': [x.decode('latin1') for x in exe[ds + 0x424E:ds + 0x4300].split(b'\0')[:12]],   # _w_weather
         'lootvalues': list(struct.unpack_from('<93H', exe, ds + 0x2E72)),                      # item values (economy.md)
         'useall': [i + 0x31 for i in range(32) if struct.unpack_from('<H', exe, ds + 0x8AE + 2 * i)[0]]})   # _AllDoit asks
     ct = ds + 0x9F8   # common text, message n = n-th string

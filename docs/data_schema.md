@@ -15,7 +15,7 @@ Built by `.venv/bin/python -I tools/export_json.py original out/pack`; never com
 | `items.json` | item names by code (`_w_objects`, 0x00–0x5C) |
 | `companions.json` | the 31 companions' starting `HERO` records from `R90.MCV` (index = `h_orinum` − 1, plain gold) |
 | `p93text.json` | camp texts (P93 file 0x3D): 0 "Is everyone going to sleep?", 1 "%o will sleep.", … 8 "Camp activities are in progress." (`rules/camp.md`) |
-| `exetables.json` | small EXE tables: `hungerhours[race]` (DS:3AA8), `nousetext[item]` (`_NoUse` comtxt number, DS:2D9A), `lootvalues[item]` (DS:2E72, `economy.md`), `useall` (items whose *Use* asks "Is this order for everyone?", DS:8AE) |
+| `exetables.json` | small EXE tables: `hungerhours[race]` (DS:3AA8), `nousetext[item]` (`_NoUse` comtxt number, DS:2D9A), `weathers` (names, `_w_weather` DS:424E), `lootvalues[item]` (DS:2E72, `economy.md`), `useall` (items whose *Use* asks "Is this order for everyone?", DS:8AE) |
 | `conds.json` | `_w_conds`: 0 "OK", then names for bits 15…5 of `h_cond1<<8 \| h_cond2` (Dead … Tired); `_SumStat` shows the highest set bit |
 | `p92text.json` | hireling payday texts: 0 "This has not been a profitable week…" (17:00 warning), 1 "Farewell, %o…" (leaving) |
 | `p97.json` | P97: `texts` (file 0x17: 0 the King's refusal, 1 the hireling's offer, 2 " Dismiss %d anyway?", 3–6 dismissal replies), `events[npc]` = the event bit set on joining and cleared on dismissal (file 0x68E/0x69D) |
@@ -23,6 +23,7 @@ Built by `.venv/bin/python -I tools/export_json.py original out/pack`; never com
 | `npctypes.json` | what *Look* calls a person, by GEN/KNPC `type` (DS:2296: man, woman, wizard, …) |
 | `commands.json` | command words (`_menucommands`: End, Quit, None, Yes, No, … Knock, … Pick …) |
 | `p90.json` | trade tables: `haggle[item] = [step, div]`, `lots[item] = lot size` (`rules/economy.md`) |
+| `p01.json` | world map: `terraintime[curter]`, `weathertime[weather]` (signed: Clear/Overcast −1), `terrainenergy[curter]`, `clothing[row][weather]` (rows Elvenspun…Furs, then none), `regions[16]` `{x0,y0,x1,y1}` (first containing rectangle = `_curreg`) |
 | `p05.json` | service rooms (`rules/services.md`), lists indexed by room id − kind base: `leave[_rmtyp]` (room text asked on leaving with a pupil, 255 = comtxt 0x23); `inn.price` (0x40–0x47); `school` `skill`/`cost`/`days` (0x48–0x5A), `gain`/`cap[skill][race]` by skill; `job.trade` (0x6C–); `library` `subjects[lib]` (word indexes), `research`/`days`/`task` per subject, `lists[task]` (book string numbers), `texts` (the V05 book strings); `lodge` `mask`, `cost` |
 | `p91text.json` | small talk: `lines` (P91 file 0x7F) and `weather` `[weather, line]` pairs (`rules/dialogue.md`) |
 | `p02text.json` | the town program's own texts (P02 file 0x67: locked doors, map flask, scrolls) |

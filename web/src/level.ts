@@ -15,7 +15,9 @@ export class Level {
 
   private constructor(readonly id: string, readonly loc: Location, readonly tileset: number,
                       readonly tiles: HTMLImageElement, readonly data: TileData) {
-    [this.w, this.h] = loc.mapsize;
+    // The world map (D01) is larger than its header's mapsize: size by the block extent when that is bigger.
+    const ext = (k: 'x' | 'y') => Math.max(0, ...loc.blocks.map(b => b[k] + 42));
+    [this.w, this.h] = loc.kind === 'room' ? loc.mapsize : [Math.max(loc.mapsize[0], ext('x')), Math.max(loc.mapsize[1], ext('y'))];
     this.cells = new Uint8Array(this.w * this.h).fill(0xff);
     this.walk = new Set(data.walkable);
     const a = hex(data.anim);
@@ -76,6 +78,7 @@ export class Level {
   /** _SetNPCs: townsfolk by day/night, named NPCs by hours and event conditions (npcs.md). */
   figures(clock: Clock, events: Set<number>, away: Set<number> = new Set()): Figure[] {
     const out: Figure[] = [];
+    if (!this.loc.townsfolk) return out;                 // world map and regions: nobody standing about
     const light = clock.daylight();
     for (const g of this.loc.townsfolk)
       if (g.num >= 0xfc || (g.num === 0xfa && light) || (g.num === 0xfb && !light)) out.push(g);

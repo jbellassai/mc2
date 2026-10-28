@@ -3,7 +3,7 @@ import { Level, type Figure } from './level';
 import { Clock } from './clock';
 import { View } from './view';
 import { resolveRoom, BASE_X, BASE_Y } from './room';
-import { json, type Door, type Exit } from './pack';
+import { json, two, type Door, type Exit } from './pack';
 import { Talk, format, wmatch } from './talk';
 import { Hero, PICK, STATS, SKILLS } from './hero';
 import { panel, type Button } from './panel';
@@ -11,6 +11,7 @@ import { loadTrade, lot, single, prices, incObj, sellable } from './shop';
 import { ServiceRoom, noon, rent, INN } from './service';
 import { camp } from './camp';
 import { Party, type Member } from './party';
+import { World } from './world';
 
 const status = document.getElementById('status')!;
 const START = { level: 'D02', x: 97, y: 17 };   // new_game.md: window (93,14) + (4,3), formation cell 0; mutable for ?at=
@@ -22,7 +23,8 @@ async function main() {
   const [cmd, p02, comtxt, npctypes, items, p93, conds] = await Promise.all(['commands', 'p02text', 'comtxt', 'npctypes',
     'items', 'p93text', 'conds'].map(n => json<string[]>(`${n}.json`)));
   const p97 = await json<{ texts: string[]; events: Record<string, number> }>('p97.json');
-  const tables = await json<{ hungerhours: number[]; nousetext: number[]; useall: number[]; lootvalues: number[] }>('exetables.json');
+  const tables = await json<{ hungerhours: number[]; nousetext: number[]; useall: number[]; lootvalues: number[]; weathers: string[] }>('exetables.json');
+  const world = await World.create();
   const p92 = await json<string[]>('p92text.json');
   const hero = await Hero.profile(0);                        // profile A until character creation exists
   const clock = Clock.newGame();
@@ -44,9 +46,10 @@ async function main() {
   let phase = 0;   // animation step; 300 ms is a guess (the original's timer unit is not traced)
   setInterval(() => { phase++; render(); }, 300);
   const render = () => {
-    const room = level.loc.kind === 'room';
-    view.draw(level, room ? 5 : lead.x, room ? 4 : lead.y, figures, party.members, phase);
-    status.textContent = `${clock}  —  ${place()}${message ? '  —  ' + message : ''}`;
+    const room = level.loc.kind === 'room', wild = level.loc.kind === 'world';
+    view.draw(level, room ? 5 : lead.x, room ? 4 : lead.y, figures, wild ? [lead] : party.members, phase);   // world: the leader alone
+    const where = wild ? `${world.rec?.name.replace(/\s+[MX]$/, '') ?? ''}, ${tables.weathers[clock.weather]}` : place();
+    status.textContent = `${clock}  —  ${where}${message ? '  —  ' + message : ''}`;
   };
   /** School and job D-files have no location name: show the town's. */
   const place = () => (level.loc.name.trim() || outside?.level.loc.name || '').replace(/\s+[MX]$/, '');
@@ -60,6 +63,7 @@ async function main() {
   const hourly = () => {
     figures = level.figures(clock, events, party.away);
     party.hunger(tables.hungerhours);
+    world.hour(clock);
     // Hirelings' payday (P92 ovl_09ff): 17:00 warning when the week earns under 6, 18:00 settlement; then departures.
     const speak = (m: Member, s: string) => { const t = `${m.hero.name}: ${format(s, m.hero, hero.name)}`; if (panel.open) panel.line(t); else message = t; };
     if (clock.minute === 0 && (clock.hour === 17 || clock.hour === 18))
@@ -283,7 +287,35 @@ async function main() {
   const figureAt = (x: number, y: number) => figures.find(f => f.x === x && f.y === y);
   /** A step (rules/locations.md, A step). Town: the whole formation moves, members tested in slot order 5…0, and
    *  one blocked member holds everyone. Rooms: only the acting member moves (_RMove moves `_p1x/_p1y[_curpla]`). */
+  /** A town exit with a world-map PGM (program 1): the window goes to (tx, ty), the leader to window + (5,4) (FFSAVB/D). */
+  const toWorld = async (exit: Exit) => {
+    const pgm = level.loc.pgms[exit.pgm];
+    if (pgm?.program !== 1) { message = 'This way leads somewhere not built yet.'; return; }
+    go(await Level.load('D01'), exit.tx + 5, exit.ty + 4);
+    await world.at(lead.x, lead.y, clock);
+    outside = null; service = null; message = '';
+  };
+  /** A world-map step (P01): a town entrance of the current region (`exitptr`) loads that town with the window at
+   *  (tx, ty); features and spots are later milestones; otherwise walkable tiles only. A step costs ticks and energy. */
+  const worldStep = async (dx: number, dy: number) => {
+    const x = lead.x + dx, y = lead.y + dy, rec = world.rec!;
+    const entrance = rec.exits.find(e => e.x === x && e.y === y);
+    if (entrance) {
+      const pgm = rec.pgms[entrance.pgm];
+      if (pgm.program === 2) { go(await Level.load(`D${two(pgm.datafile)}`), entrance.tx + 4, entrance.ty + 3); message = ''; return; }
+      message = `${level.tileName(x, y)}: not built yet.`; return;
+    }
+    if (rec.doors.some(d => d.x === x && d.y === y)) { message = `${level.tileName(x, y)}: not built yet.`; return; }
+    if (!level.walkable(x, y)) { message = `Blocked by ${level.tileName(x, y)}.`; return; }
+    party.shift(dx, dy);
+    message = '';
+    const ter = level.data.nameindex[level.tile(x, y)];
+    for (let n = world.stepTicks(ter, clock, party); n > 0; n--) tick();
+    world.fatigue(ter, clock, party);
+    await world.at(x, y, clock);
+  };
   const step = async (dx: number, dy: number) => {
+    if (level.loc.kind === 'world') { await worldStep(dx, dy); return render(); }
     const room = level.loc.kind === 'room';
     const who = figureAt(lead.x + dx, lead.y + dy);
     if (who) {   // walking into someone talks to them (the original uses a Talk command)
@@ -308,7 +340,8 @@ async function main() {
       const d = level.loc.doors.find(e => e.x === x && e.y === y);
       if (d && !mate) { await door(d); return render(); }
       if (room && service?.kind === INN && x === 8 && y === 4) { innArch(); return render(); }
-      message = exit ? 'The way out of town. The world map comes later.' : `Blocked by ${mate ? mate.hero.name : level.tileName(x, y)}.`;
+      if (exit && !mate) { await toWorld(exit); return render(); }
+      message = `Blocked by ${mate ? mate.hero.name : level.tileName(x, y)}.`;
       return render();
     }
     for (const m of movers) { m.x += dx; m.y += dy; }

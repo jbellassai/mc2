@@ -9,6 +9,7 @@ export interface Block { block: number; tileset: number; x: number; y: number }
 
 export interface Location {
   locnum: number;      // the location number, used as `_locspec` (assumption: equal for towns)
+  tables: Record<string, string>;   // each LOCTYPE sub-table's raw bytes as hex (data_schema.md)
   kind: 'level' | 'room' | 'region' | 'world';
   name: string;
   mapsize: [number, number];
