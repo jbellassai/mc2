@@ -25,4 +25,26 @@ Example (C10 slot 0, Tomak's tribute collector): `tribute → "All visitors are 
 - Player's own lines: `_PlaSays`/`_TypSays`/`_KNPCSays` are the room-program entries 0–2 of P91 (text output helpers).
 
 ## Text format codes
-`%q` toggles quotes, `%h` current hero, `%o` the NPC, `%y`/`%w` other party names, `%f` song/item name, `%l` item in hand, `%a`/`%b`/`%i`/`%d`/`%p` numeric or pronoun parameters from `_deftxtparms`, `%rN` = newline/pause. (Exact table: `_PrtWrd`, EXE 0681:0147 — TODO.)
+Expanded at print time by `FAR_PRTAWRD` (FFFAR file 0xE8C; jump table file 0xEF9, entries are runtime addresses = file + 4). Parameters come from `_deftxtparms` (DS:B77D), filled by `_SetTxtObj`/`_SetTxtSpell`/`_SetTxtMonst` etc. before printing. "Hero" = `heroptr[_curpla]`; "female" = `h_sex == 1`.
+
+| code | prints |
+|---|---|
+| `%a` | the near string at `_deftxtparms+4` (item/spell/monster name) |
+| `%l` | the same string with its first letter lower-cased |
+| `%f` | the far string at `_deftxtparms+6` |
+| `%b` | the byte `_deftxtparms+2` as a decimal number |
+| `%i` | the word `_deftxtparms+0` as a signed decimal number |
+| `%u` | the word `_deftxtparms+0` as an unsigned decimal number |
+| `%c` | the byte `_deftxtparms+3` as a character |
+| `%h` | the hero's name |
+| `%o` | `_othername` (the NPC or other member being dealt with) |
+| `%d` | her / him (hero's sex) |
+| `%p` | her / his |
+| `%w` | She / He |
+| `%y` | ma'am / sir |
+| `%n` | line break (when printing to the screen: new line, page pause when the window is full) |
+| `%q` | character 5 (the font's quotation-mark glyph) |
+| `%k` | wait for a key or mouse click, with a blinking prompt |
+| `%rNN` | "[Read Paragraph NN.]" — a reference to the printed paragraph booklet |
+
+Any other letter is not a code (its jump-table slot prints a stray glyph); a `%` before a non-letter prints that character. A carriage return (0x0D) in the text is a line break. If a message starts with a letter, or with a code, its first letter (upper-cased) is stored in `_firstletter`.
