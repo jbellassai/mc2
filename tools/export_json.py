@@ -1,7 +1,7 @@
 """Build the web port's data pack from the original files (decision 1). Never commit or publish the output.
 usage: export_json.py ORIGDIR OUTDIR -> OUTDIR/locations/*.json, tiledata/Bnn.json, tilesets/Vnn.png, sprites/E0n.png, conversations/Cnn.json,
        blocks.json, rooms.json, sprites.json, comtxt.json, items.json, heroes.json,
-       commands.json, npctypes.json, p90.json, p02text.json, p91text.json, p01.json, p05.json, p92text.json, p97.json, p93text.json, conds.json, companions.json, exetables.json, combat.json
+       commands.json, npctypes.json, p90.json, p02text.json, p91text.json, p01.json, p05.json, p09.json, p92text.json, p97.json, p93text.json, conds.json, companions.json, exetables.json, combat.json
 Schema: docs/data_schema.md. Byte strings are lowercase hex; every list is in file order."""
 import json, os, struct, sys
 sys.path.insert(0, os.path.dirname(__file__))
@@ -254,6 +254,12 @@ def main(src, dst):
                              # ships (ships.md): sailing ticks by weather (+4), the six captains' daily rates and home ports
                              'ships': {'weather': s8(0x28C, 12), 'rate': list(p01[0x34A:0x350]),
                                        'homex': list(p01[0x350:0x356]), 'homey': list(p01[0x356:0x35C])}})
+    p09 = open(f'{src}/P09.MCO', 'rb').read()   # special rooms (rules/special_rooms.md)
+    dump(f'{dst}/p09.json', {'altars': list(p09[0x3A:0x3D]),      # altar tiles (world temples, ovl_1413)
+                             'icons': list(p09[0x3D:0x45]),       # icon name indexes, by god (statue look)
+                             'wake': list(p09[0xC86:0xC8E]),      # members checked for a missing blessing, by god
+                             'offer': [x.decode('latin1') for x in p09[0x92:0xA1].split(b'\0')[:2]],   # %o for Balene / Fronnoxx
+                             'texts': [x.decode('latin1') for x in p09[0xFB:0x1FB].split(b'\0')[:6]]})
     p81 = open(f'{src}/P81.MCO', 'rb').read()   # new game (rules/new_game.md): string table from 0x15, string 40 = intro scenes
     parts = p81[0x15:0x7B1].split(b'\0')
     scenes = [list(x) for x in parts[40].split(b'\xff')[:5]]
@@ -288,6 +294,7 @@ def main(src, dst):
         'lootvalues': list(struct.unpack_from('<93H', exe, ds + 0x2E72)),                      # item values (economy.md)
         'useall': [i + 0x31 for i in range(32) if struct.unpack_from('<H', exe, ds + 0x8AE + 2 * i)[0]],   # _AllDoit asks
         # _SetTxtToD: the time-of-day words (morning … night) and TODWORDS, the word by hour
+        'attribs': [x.decode('latin1') for x in exe[ds + 0x3AAE:ds + 0x3C00].split(b'\0')[:29]],   # _w_attrib + _w_skills, by HERO offset − 13
         'tod': {'words': [x.decode('latin1') for x in exe[ds + 0x41E0:ds + 0x4204].split(b'\0')[:5]], 'hour': list(exe[ds + 0x38F2:ds + 0x390A])}})
     # Combat (rules/combat.md, encounters.md): monsters by code − 5, groups by number − 60, weapons by item − 9.
     p96 = open(f'{src}/P96.MCO', 'rb').read()

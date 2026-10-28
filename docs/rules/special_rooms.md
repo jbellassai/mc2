@@ -36,8 +36,8 @@ Three pedestals at `(4,3) (5,3) (6,3)`. *Use* one of the five pieces — Cylinde
 
 ## Temples (D59; gods 0–7 Nerelnes, Oraniana, Marior, Rhokan, Balene, Fronnoxx, Senvara, Ghartel)
 
-- Temple `id − 0xC0` / `id − 0xC8` = god `g`. **World temples** (`_rmtyp 12`, ids 192–199 on the world map: Tundra, Sariss, Oshcrun, Demonspine, Krum, Mandarg, Altesia, The Throat): *Look* at the altar tiles (0x39/0x3C/0x47) from an adjacent cell → "There is a tiny word engraved on it. The word on it is: <secret name>" (D59 `gwrds[g]`: Asharim, Kirrak, Ranalamma, Shadguram, Kimyabin, Azavaz, Urumaen, Banishahbat); from afar "%o suggests that %h move closer". Looking at the statues (tiles file 0x3D) names the god and its domain (texts 24–32: Opportunity, the Forests, the Sea, Wealth, Furious Vengeance, Jubilant Destruction, the Altesens, Glorious Death).
-- **Awakening** (`_rmtyp 13`, ids 200–207: Maratul 4, Sariss, Cellars 2, Dorak 7, Isle of Winds, Mt Mandarg, Altesia, Ruz 2): *Whisper* the secret name whose index equals `g`. The god's demand (handler table P09 file 0xFCB):
+- Temple `id − 0xC0` / `id − 0xC8` = god `g`. **World temples** (`_rmtyp 12`, ids 192–199 on the world map: Tundra, Sariss, Oshcrun, Demonspine, Krum, Mandarg, Altesia, The Throat): *Look* at the altar tiles (0x39/0x3C/0x47) from an adjacent cell → "There is a tiny word engraved on it. The word on it is: <secret name>" (D59 `gwrds[g]`: Asharim, Kirrak, Ranalamma, Shadguram, Kimyabin, Azavaz, Urumaen, Banishahbat); from afar only the first sentence, then `_Advice(intelligence)`: `RndCo(12)` ≤ the party's best intelligence → " %w considers moving closer to it." (the best is the acting member) or " %o suggests that %h move closer to it." (P09 strings at file 0xFB; `ovl_1413`). These texts are appended to the normal look line. Looking at a god icon (tile name index in P09 file 0x3D, by god: Pointing Finger, Tree, Seahorse, Jewel, Cloak and Dagger, Flaming Sword, Shield, Bleeding Heart) in a world or dungeon temple appends " %w recognizes the symbol of %f, %lof <domain>" (text 24 + 25+g: Opportunity, the Forests, the Sea, Wealth, Furious Vengeance, Jubilant Destruction, the Altesens, Glorious Death) — always **this temple's** god (`ovl_14a0` uses `OV_0x181`, not the icon), `%l` = "The god "/"The goddess " (texts 9/10, by D59 `resids` byte 0).
+- **Awakening** (`_rmtyp 13`, ids 200–207: Maratul 4, Sariss, Cellars 2, Dorak 7, Isle of Winds, Mt Mandarg, Altesia, Ruz 2): *Whisper* the secret name whose index equals `g`. The god wakes only while a member still lacks bit `g` of `h_godseen` — any of the six for gods 0–3 and 6, only party slot 0 (the hero) for Balene, Fronnoxx and Ghartel (P09 file 0xC86 `[6,6,6,6,1,1,6,1]`); otherwise the word does nothing. "The god "/"The goddess " (D59 `resids`: 5 bytes per god, byte 0 = 1 for Oraniana, Balene, Senvara; bytes 1–4 = the statue's awakening tiles and square) + name + " awakens!". The god's demand (handler table P09 file 0xFCB; carry = unmet, 0 = blessing only, 0xFF = an item, else a party slot):
 
 | g | god | demand | effect |
 |---|---|---|---|
@@ -48,9 +48,9 @@ Three pedestals at `(4,3) (5,3) (6,3)`. *Use* one of the five pieces — Cylinde
 | 4 | Balene | **Brennix** (0x11) in anyone's pack | the sword is taken ("my long-lost Brennix!") |
 | 5 | Fronnoxx | **Somona** (NPC 31) in the party | she leaves into the god's service (assignment task 100, event 96) |
 | 6 | Senvara | none | blessing only |
-| 7 | Ghartel | the strongest member (`_HighStat(strngth)`) with strength ≥ 8, "a mighty warrior" | that member leaves into the god's service (task 100) |
+| 7 | Ghartel | the strongest **volunteer** (`_HighStat(strngth)` over members with `h_relatn == 1`: never the hero or a hireling) with strength ≥ 8, "a mighty warrior" | that member leaves into the god's service (task 100) |
 
-Unmet demand → "You dare to waken me without offering <X>! 'Begone, mortals!' With a great clap of thunder" every member's HP and energy drop to 1 (`ovl_123e`). Met: "Welcome, mortals. I demand the sacrifice of <X>. Your companion %o would suit me. Do you agree?" — *No* → the same thunder; *Yes* → the sacrifice is made (`ovl_1290` builds the assignment record, drops the member's Mindstone, runs P97 with `_swass = 2`), then every party member **without** bit `g` of `h_godseen` gets the god's **blessing** (D59 `hroomptr`, lists `8+g` of `{stat offset, amount}` pairs; amount `|0x80` = only if the stat is non-zero; endurance also adds `8 × amount` to `h_hpmax`) and the bit is set:
+Unmet demand: gods 0–3 say "I see no %a in your assemblage." (text 13, %a = Halfling, Elf or Dwarf from `_w_kins`) — no thunder; gods 4, 5, 7 say "You dare to waken me without offering <X>" (16 + 10+g) and then "'Begone, mortals!' With a great clap of thunder, <god> returns to slumber." while every member's HP and energy drop to 1 (`ovl_123e`). Met with an offering: "Welcome, mortals. I demand the sacrifice of <X>" + (Ghartel only) " Your companion %o would suit me." + " Do you agree?" — *No* → the same thunder; *Yes* → the sacrifice is made (`ovl_1290` builds the assignment record, drops the member's Mindstone, runs P97 with `_swass = 2`), then every party member **without** bit `g` of `h_godseen` gets the god's **blessing** (D59 `hroomptr`, lists `8+g` of `{stat offset, amount}` pairs; amount `|0x80` = only if the stat is non-zero; endurance also adds `8 × amount` to `h_hpmax`) and then bit `g` is set on **every** member (unmet demands and thunder set nothing):
 
 | god | blessing |
 |---|---|
@@ -63,7 +63,7 @@ Unmet demand → "You dare to waken me without offering <X>! 'Begone, mortals!' 
 | Senvara | endurance +1, agility +1, intelligence +2, resist +1 |
 | Ghartel | bravery +1, strength +2, endurance +2 |
 
-"%o's %a increases (+%b) to %i." then "<god> returns to slumber." Gods 4, 5 and 7 add "But beware, puny mortals! %o is now in my service! Begone!".
+"%o's %a increases (+%b) to %i." then "<god> returns to slumber." Gods 4, 5 and 7 add "But beware, puny mortals! %o is now in my service! Begone!" (`%o` = "Brennix" / "Somona" from P09 file 0x92, or Ghartel's chosen member). The blessing goes to the members still in the party after the sacrifice; each pair is applied through `_IncSta`, which refuses a total of 100 or more (no message then).
 
 ## Gates (`_rmtyp 14`, D14 "A Gate", ids 0xD0–0xD7 on the world map)
 
@@ -88,7 +88,7 @@ Rumour rooms: ordinary NPC dialogue from the hall's text block (D74 texts 1–13
 
 ## Port notes
 
-Built in the web port (`web/src/special.ts`): entering from town doors and world features, placement, leaving, the casino (with the monthly refill) and the gates (Whisper is the port's H key). Talk in a casino starts the game unless it is aimed at one of the gamblers, who keep their rumours (an assumption: where the original's Talk goes is not traced). A whispered word nothing answers prints "Nothing happens." (comtxt 0x83; P09 prints `_comtxtptr`, value not traced). Not yet: teleportals, temples, the elven prince.
+Built in the web port (`web/src/special.ts`): entering from town doors and world features, placement, leaving, the casino (with the monthly refill), the gates (Whisper is the port's H key) and the temples (looks, awakening, offerings, blessings; a member taken into a god's service is removed and kept out of the location tables, standing in for the task-100 assignment record). Talk in a casino starts the game unless it is aimed at one of the gamblers, who keep their rumours (an assumption: where the original's Talk goes is not traced). A whispered word nothing answers prints "Nothing happens." (comtxt 0x83; P09 prints `_comtxtptr`, value not traced). Not yet: teleportals, the elven prince, the awakening's tile animation.
 
 ## Elven prince (NPC 113, `ovl_0611`)
 

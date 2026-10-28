@@ -30,7 +30,7 @@ async function main() {
   const [cmd, p02, comtxt, npctypes, items, p93, conds] = await Promise.all(['commands', 'p02text', 'comtxt', 'npctypes',
     'items', 'p93text', 'conds'].map(n => json<string[]>(`${n}.json`)));
   const p97 = await json<{ texts: string[]; events: Record<string, number> }>('p97.json');
-  const tables = await json<{ hungerhours: number[]; nousetext: number[]; useall: number[]; lootvalues: number[]; weathers: string[];
+  const tables = await json<{ hungerhours: number[]; nousetext: number[]; useall: number[]; lootvalues: number[]; weathers: string[]; attribs: string[];
     tod: { words: string[]; hour: number[] } }>('exetables.json');
   const world = await World.create();
   const p92 = await json<string[]>('p92text.json');
@@ -247,8 +247,18 @@ async function main() {
     message = level.loc.name.trim() ? `${hero.name} enters ${level.loc.name}.` : '';   // which of D08/D09's room names applies is not traced
     service = ref.pgm.program === 5 ? await ServiceRoom.open(ctx, ref.room, ref.kind, level.loc.texts, level.loc.words) : null;
     service?.greet();
-    special = ref.pgm.program === 9 ? new Special({ hero, clock, cmd, comtxt, tod: tables.tod, close }, ref.kind,
-      ref.kind === 13 ? ref.index - 8 : ref.index, level) : null;
+    special = ref.pgm.program === 9 ? await Special.open({ hero, clock, cmd, comtxt, party, tod: tables.tod, attribs: tables.attribs,
+      kins: cdata.parley.kins, serve, close }, ref.kind, ref.kind === 13 ? ref.index - 8 : ref.index, level) : null;
+  };
+
+  /** A member leaves into a god's service (P09 ovl_1290): the leaving events, the Mindstone (0x40) stays behind, and
+   *  the companion is kept out of the location tables (assignment task 100); Somona sets event 96. */
+  const serve = (m: Member) => {
+    party.partyEvents(events, p97.events, m.num, false);
+    if (m.hero.slot(0x40) >= 0) m.hero.dec(m.hero.slot(0x40));
+    party.remove(m);
+    party.away.add(m.num);
+    if (m.num === 31) events.add(96);
   };
 
   const lockedDoor = (door: Door) => {
@@ -1106,6 +1116,7 @@ async function main() {
     let text = say(comtxt[0x08]) + what + comtxt[0x10];
     const spot = (level.loc.look ?? []).find(l => l.x === x && l.y === y);
     if (spot && (!(spot.text & 0x80) || (who && who.num >= 0x20))) text += say(level.loc.texts[spot.text & 0x7f] ?? '');
+    if (special) text += special.look(x, y, lead);
     message = text;
     render();
   };

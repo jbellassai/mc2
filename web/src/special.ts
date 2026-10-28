@@ -1,20 +1,34 @@
-// Special rooms run by P09 (rules/special_rooms.md): casinos and gates so far. The room kind is P09's `_rmtyp` (7
-// casino, 10 teleportal, 11 meeting hall, 12/13 temple, 14 gate) and `index` its OV_0x181 (`id − base`).
+// Special rooms run by P09 (rules/special_rooms.md): casinos, temples and gates so far. The room kind is P09's `_rmtyp`
+// (7 casino, 10 teleportal, 11 meeting hall, 12 world temple, 13 dungeon temple, 14 gate) and `index` its OV_0x181
+// (`id − base`; for a temple, the god).
 import { format, wmatch } from './talk';
 import { panel } from './panel';
+import { json, hex } from './pack';
 import type { Hero } from './hero';
 import type { Clock } from './clock';
 import type { Level } from './level';
 import type { Exit } from './pack';
+import type { Party, Member } from './party';
 
-export const CASINO = 7, GATE = 14;
+export const CASINO = 7, TEMPLE = 12, SHRINE = 13, GATE = 14;
 
 export interface SpecialCtx {
-  hero: Hero; clock: Clock; cmd: string[]; comtxt: string[];
+  hero: Hero; clock: Clock; cmd: string[]; comtxt: string[]; party: Party;
   /** `_w_tod` (EXE DS:0x41E0) and TODWORDS (DS:0x38F2, by hour) for `_SetTxtToD`. */
   tod: { words: string[]; hour: number[] };
+  /** `_w_attrib` + `_w_skills` by HERO offset − 13, and `_w_kins` (races 0-4). */
+  attribs: string[]; kins: string[];
+  /** A member leaves into a god's service (ovl_1290: assignment task 100, the Mindstone left behind, P97 `_swass` 2). */
+  serve(m: Member): void;
   close(msg?: string): void;
 }
+
+interface P09 { altars: number[]; icons: number[]; wake: number[]; offer: string[]; texts: string[] }
+let p09: P09;
+/** HERO fields from offset 13 (structs.h), the order of `attribs`. */
+const FIELDS = ['h_bravery', 'h_strngth', 'h_dextrty', 'h_endur', 'h_agility', 'h_loyalty', 'h_charm', 'h_intellg', 'h_resist',
+  'h_helped', 'h_sword', 'h_axe', 'h_archry', 'h_magic', 'h_fist', 'h_swim', 'h_trade', 'h_stealth', 'h_research', 'h_soulrd',
+  'h_lockpck', 'h_track', 'h_music', 'h_carpent', 'h_smith', 'h_gemcut', 'h_tailor', 'h_hunt', 'h_ldrshp'];
 
 /** `_casino`: the eight house banks, 1000 in a new game; +200 a month up to 1000 (P92 ovl_02ac). */
 export const casino = new Array(8).fill(1000);
@@ -25,8 +39,13 @@ export const gates = new Set<number>();
 const rnd = (n: number) => Math.floor(Math.random() * n);
 
 export class Special {
-  constructor(private ctx: SpecialCtx, readonly kind: number, readonly index: number, private level: Level) {
+  private constructor(private ctx: SpecialCtx, readonly kind: number, readonly index: number, private level: Level) {
     if (kind === GATE && gates.has(index)) this.openGate();       // ovl_15ee: an opened gate stays open
+  }
+
+  static async open(ctx: SpecialCtx, kind: number, index: number, level: Level): Promise<Special> {
+    p09 ??= await json<P09>('p09.json');
+    return new Special(ctx, kind, index, level);
   }
 
   private get texts() { return this.level.loc.texts; }
@@ -46,6 +65,7 @@ export class Special {
    *  `_whspnum == index`); false = nothing here answers. */
   whisper(word: string): boolean {
     const n = wmatch(word, this.level.loc.words);
+    if (this.kind === SHRINE && n === this.index) return this.awaken();
     if (this.kind !== GATE || n !== this.index || gates.has(n)) return false;
     gates.add(n);
     this.openGate();
@@ -103,6 +123,108 @@ export class Special {
       }, `0–${max}`);
     };
     this.yesNo(() => { t(3); bet(); }, () => this.ctx.close());     // "The rules are simple. …"
+  }
+
+  /** Look (P09 @0x0480): text appended to the normal look line. World temple altar tiles (P09 0x3A): "There is a tiny
+   *  word engraved on it." and, from an adjacent square (`_ChkRng` 1), "The word on it is: <gwrds[god]>"; from afar
+   *  `_Advice` (intelligence): the party's most intelligent member may suggest moving closer (ovl_1413). Any temple's
+   *  god icons (name indexes P09 0x3D) name this temple's god and domain (ovl_14a0, texts 24 and 25 + god). */
+  look(x: number, y: number, from: Member): string {
+    if (this.kind !== TEMPLE && this.kind !== SHRINE) return '';
+    const T = this.texts, g = this.index, h = from.hero, tile = this.level.tile(x, y);
+    if (this.kind === TEMPLE && p09.altars.includes(tile)) {
+      if (Math.max(Math.abs(from.x - x), Math.abs(from.y - y)) <= 1) return this.say(p09.texts[0] + p09.texts[1]) + this.level.loc.words[g];
+      return this.say(p09.texts[0]) + this.advice(p09.texts[3], p09.texts[2], 'h_intellg', h);
+    }
+    if (!p09.icons.includes(this.level.data.nameindex[tile])) return '';
+    return format(T[24] + T[25 + g], h, h.name, { f: T[g], l: T[9 + this.record[0]] });   // " %w recognizes the symbol of %f, %lof …"
+  }
+
+  /** `_Advice(self, other, stat)`: RndCo(12) (an attribute) against the party's best; that member speaks, `self` when
+   *  it is the acting member. */
+  private advice(self: string, other: string, stat: string, actor: Hero): string {
+    const best = this.ctx.party.members.reduce((a, m) => (m.hero.rec[stat] as number) > (a.hero.rec[stat] as number) ? m : a);
+    if ((best.hero.rec[stat] as number) < rnd(12)) return '';
+    return best.hero === actor ? format(self, actor, actor.name) : format(other, actor, best.hero.name);
+  }
+
+  /** D59 `resids`, 5 bytes per god (ovl_1777): 0 god / 1 goddess, then the statue's awakening tiles and square. */
+  private get record(): Uint8Array { return hex(this.level.loc.tables.resids).slice(5 * this.index, 5 * this.index + 5); }
+
+  /** Whispering a dungeon temple's own god name (P09 @0x0C9F). The god wakes only if a member still lacks its
+   *  blessing (`h_godseen` bit g; Balene, Fronnoxx and Ghartel only look at slot 0, P09 0xC86); otherwise the word
+   *  does nothing. "The god/goddess <name> awakens!", then the god's demand (handler table P09 0xFCB). */
+  private awaken(): boolean {
+    const g = this.index, bit = 1 << g, T = this.texts, ms = this.ctx.party.members;
+    if (!ms.slice(0, p09.wake[g]).some(m => !((m.hero.rec.h_godseen as number) & bit))) return false;
+    const h = this.ctx.hero, line = (s: string, v: Record<string, string | number> = {}, o = h.name) => panel.line(format(s, h, o, v));
+    const slumber = (s = '') => { line(s + T[g] + T[12]); this.done(); };   // "<god> returns to slumber."
+    const thunder = () => {                                                  // ovl_123e: every member HP 1, energy 1
+      for (const { hero } of ms) { hero.rec.h_hitpts = 1; hero.rec.h_energy = 1; hero.isHeTr(); }
+      slumber(T[18]);                                                        // "'Begone, mortals!' With a great clap of thunder, "
+    };
+    panel.show();
+    line(T[9 + this.record[0]] + T[g] + T[8]);
+    const d = this.demand(g);
+    if (d === null && g < 4) { line(T[13], { a: this.ctx.kins[[3, 2, 0, 4][g]] }); return slumber(), true; }   // "I see no %a in your assemblage."
+    if (d === null) { line(T[16] + T[10 + g]); return thunder(), true; }   // "You dare to waken me without offering …"
+    const bless = () => {
+      line(T[11]);                                                           // "I am well pleased, and bestow upon you my blessing!"
+      this.bless(g);
+      if (g >= 4 && g !== 6) line(T[23], {}, d.name);                        // "…%o is now in my service! Begone!"
+      for (const { hero } of this.ctx.party.members) hero.rec.h_godseen = (hero.rec.h_godseen as number) | bit;
+      slumber();
+    };
+    if (!d.take) return bless(), true;
+    line(T[19] + T[10 + g] + (g === 7 ? T[20] : '') + T[21], {}, d.name);   // "Welcome, mortals. I demand the sacrifice of …"
+    this.yesNo(() => { d.take!(); bless(); }, thunder);
+    return true;
+  }
+
+  /** The god's demand: null = not met; `take` = the offering, taken on Yes; `name` = %o of text 23. */
+  private demand(g: number): { name: string; take?: () => void } | null {
+    const ms = this.ctx.party.members, race = (r: number) => ms.some(m => m.hero.rec.h_race === r);
+    switch (g) {
+      case 0: if (ms.some(m => ((m.hero.rec.h_godseen as number) & 0x0e) === 0x0e)) return { name: '' };   // blessed by 1-3
+        return race(3) ? { name: '' } : null;                                // a Halfling
+      case 1: return race(2) ? { name: '' } : null;                          // an Elf
+      case 3: return race(4) ? { name: '' } : null;                          // a Dwarf
+      case 4: {                                                              // Brennix (0x11) in anyone's pack
+        const m = ms.find(m => m.hero.slot(0x11) >= 0);
+        return m ? { name: p09.offer[0], take: () => m.hero.dec(m.hero.slot(0x11)) } : null;
+      }
+      case 5: {                                                              // Somona (companion 31) in the party
+        const m = ms.find(m => m.num === 31);
+        return m ? { name: p09.offer[1], take: () => this.ctx.serve(m) } : null;
+      }
+      case 7: {                                                              // _HighStat(strength) of the volunteers, ≥ 8
+        const vs = ms.filter(m => m.hero.rec.h_relatn === 1);
+        const m = vs.reduce<Member | null>((a, v) => !a || v.hero.rec.h_strngth > a.hero.rec.h_strngth ? v : a, null);
+        return m && m.hero.rec.h_strngth >= 8 ? { name: m.hero.name, take: () => this.ctx.serve(m) } : null;
+      }
+    }
+    return { name: '' };                                                     // Marior, Senvara: no demand
+  }
+
+  /** P09 0x1108: every member without the god's bit gets D59 `hroomptr` list 8 + g, pairs {HERO offset, amount}
+   *  (amount | 0x80 = only if the stat is non-zero); endurance also adds 8 × amount to `h_hpmax`. `_IncSta` refuses a
+   *  total of 100 or more. "%o's %a increases (+%b) to %i." for each gain. */
+  private bless(g: number) {
+    const lists: number[][] = [[]];
+    for (const b of hex(this.level.loc.tables.hroomptr)) if (b === 0xff) lists.push([]); else lists[lists.length - 1].push(b);
+    const pairs = lists[8 + g] ?? [];
+    for (const { hero } of this.ctx.party.members) {
+      const r = hero.rec as Record<string, number>;
+      if (r.h_godseen & (1 << g)) continue;
+      for (let k = 0; k + 1 < pairs.length; k += 2) {
+        const f = FIELDS[pairs[k] - 13], n = pairs[k + 1] & 0x7f, old = r[f];
+        if (pairs[k + 1] & 0x80 && !old) continue;
+        if (pairs[k] === 0x10 && r.h_hpmax + 8 * n < 100) r.h_hpmax += 8 * n;
+        if (old + n >= 100) continue;
+        r[f] = old + n;
+        panel.line(format(this.texts[22], hero, hero.name, { a: this.ctx.attribs[pairs[k] - 13], b: n, i: old + n }));
+      }
+    }
   }
 
   private done() { panel.set([{ label: this.ctx.cmd[0], act: () => this.ctx.close() }]); }

@@ -15,7 +15,7 @@ Built by `.venv/bin/python -I tools/export_json.py original out/pack`; never com
 | `items.json` | item names by code (`_w_objects`, 0x00–0x5C) |
 | `companions.json` | the 31 companions' starting `HERO` records from `R90.MCV` (index = `h_orinum` − 1, plain gold) |
 | `p93text.json` | camp texts (P93 file 0x3D): 0 "Is everyone going to sleep?", 1 "%o will sleep.", … 8 "Camp activities are in progress." (`rules/camp.md`) |
-| `exetables.json` | small EXE tables: `hungerhours[race]` (DS:3AA8), `nousetext[item]` (`_NoUse` comtxt number, DS:2D9A), `weathers` (names, `_w_weather` DS:424E), `lootvalues[item]` (DS:2E72, `economy.md`), `useall` (items whose *Use* asks "Is this order for everyone?", DS:8AE), `tod` = `words` (`_SetTxtToD` list, DS:41E0: morning … night) and `hour[24]` (TODWORDS, DS:38F2) |
+| `exetables.json` | small EXE tables: `hungerhours[race]` (DS:3AA8), `nousetext[item]` (`_NoUse` comtxt number, DS:2D9A), `weathers` (names, `_w_weather` DS:424E), `lootvalues[item]` (DS:2E72, `economy.md`), `useall` (items whose *Use* asks "Is this order for everyone?", DS:8AE), `tod` = `words` (`_SetTxtToD` list, DS:41E0: morning … night) and `hour[24]` (TODWORDS, DS:38F2), `attribs[29]` (`_w_attrib` + `_w_skills`, DS:3AAE, by HERO offset − 13) |
 | `conds.json` | `_w_conds`: 0 "OK", then names for bits 15…5 of `h_cond1<<8 \| h_cond2` (Dead … Tired); `_SumStat` shows the highest set bit |
 | `p92text.json` | hireling payday texts: 0 "This has not been a profitable week…" (17:00 warning), 1 "Farewell, %o…" (leaving) |
 | `p97.json` | P97: `texts` (file 0x17: 0 the King's refusal, 1 the hireling's offer, 2 " Dismiss %d anyway?", 3–6 dismissal replies), `events[npc]` = the event bit set on joining and cleared on dismissal (file 0x68E/0x69D) |
@@ -30,6 +30,7 @@ Built by `.venv/bin/python -I tools/export_json.py original out/pack`; never com
 | `spots.json` | `ambush` ids/events (P02 0x1743/0x1749), `remarks` ids/events/locspecs (V02 0xBDB) |
 | `p04.json` | mushroom patches, by kind = item − 0x33: `amount` picked per mushroom, `icon` (E00 frame); `x`/`y` the 15 growing places (`rules/locations.md`) |
 | `p05.json` | service rooms (`rules/services.md`), lists indexed by room id − kind base: `leave[_rmtyp]` (room text asked on leaving with a pupil, 255 = comtxt 0x23); `inn.price` (0x40–0x47); `school` `skill`/`cost`/`days` (0x48–0x5A), `gain`/`cap[skill][race]` by skill; `job.trade` (0x6C–); `library` `subjects[lib]` (word indexes), `research`/`days`/`task` per subject, `lists[task]` (book string numbers), `texts` (the V05 book strings); `lodge` `mask`, `cost` |
+| `p09.json` | special rooms (`rules/special_rooms.md`): `altars[3]` world-temple altar tiles (0x3A), `icons[8]` god-icon name indexes by god (0x3D), `wake[8]` members checked for a missing blessing (0xC86), `offer[2]` Brennix / Somona (0x92), `texts[6]` P09's own strings (0xFB: altar, advice, elven prince) |
 | `p91text.json` | small talk: `lines` (P91 file 0x7F) and `weather` `[weather, line]` pairs (`rules/dialogue.md`) |
 | `p02text.json` | the town program's own texts (P02 file 0x67: locked doors, map flask, scrolls) |
 | `sprites.json` | `columns`, `counts` per sheet, `npc[tile] = {start, frames}` — the E02 frames of NPC sprite id `tile` (the `tile` byte of GEN/KNPC records) |
