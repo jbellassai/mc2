@@ -33,14 +33,14 @@ export class Level {
     return new Level(id, loc, ts, await image(`tilesets/V${two(ts)}.png`), await json<TileData>(`tiledata/B${two(ts)}.json`));
   }
 
-  /** A town or dungeon level composed from its map blocks. */
-  static async load(id: string): Promise<Level> {
+  /** A town or dungeon level composed from its map blocks, drawn with tileset `ts` (the PGM record's), else the one its
+   *  blocks share (formats.md, Locations are mosaics; the most common one). */
+  static async load(id: string, ts?: number): Promise<Level> {
     const loc = await json<Location>(`locations/${id}.json`);
     const blocks = await json<Record<string, string>>('blocks.json');
-    // Blocks of one location share a tileset (formats.md, Locations are mosaics); use the most common one.
     const counts = new Map<number, number>();
     for (const b of loc.blocks) counts.set(b.tileset, (counts.get(b.tileset) ?? 0) + 1);
-    const ts = [...counts].sort((a, b) => b[1] - a[1])[0][0];
+    ts ??= [...counts].sort((a, b) => b[1] - a[1])[0][0];
     const lv = await Level.make(id, loc, ts);
     for (const b of loc.blocks) {
       if (b.block === 0) continue;
@@ -64,13 +64,19 @@ export class Level {
 
   /** A mushroom patch (P04) or wilderness arena (P96 `_cmbtyp` 1): G00 chunk `chunk` drawn with tileset `ts`
    *  (formats.md, Room maps). */
-  static async wild(ts: number, chunk: number): Promise<Level> {
+  static async wild(ts: number, chunk: number): Promise<Level> { return Level.chunk(0, ts, chunk); }
+
+  /** Chunk `chunk` of G-file `g` as an 11×9 map with tileset `ts` (G05: dungeon rooms and their arenas, P07/P96). */
+  static async chunk(g: number, ts: number, chunk: number): Promise<Level> {
     const rec = await json<Location>('locations/D04.json');
     const rooms = await json<Record<string, string[]>>('rooms.json');
-    const lv = await Level.make('D04', { ...rec, exits: [], townsfolk: [], npcs: [] }, ts);
-    lv.cells.set(hex(rooms.G00[chunk]));
+    const lv = await Level.make(`G${two(g)}`, { ...rec, name: '', exits: [], townsfolk: [], npcs: [] }, ts);
+    lv.cells.set(hex(rooms[`G${two(g)}`][chunk]));
     return lv;
   }
+
+  /** Overwrite one map square (room features: chest, fountain, doors). */
+  set(x: number, y: number, tile: number) { this.cells[y * this.w + x] = tile; }
 
   /** _PlacePerson: (x, y) if free (walkable, on the map, not `taken`), else the first free square on diamonds of
    *  growing radius, each walked clockwise from its west corner (direction tables DS:0995/0999). */

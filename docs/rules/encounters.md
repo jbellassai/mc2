@@ -53,7 +53,7 @@ Leader rank (P96 file 0x39 + code, so Orc at 0x3E): Orc 5, Zorlim 40, Tekhir 10,
 
 ## Encounter groups (`_grps`, group numbers 60–222)
 
-`_grpno < 60` means "n monsters of code `_grpno`" (`_monstlist = {g,g,g,g}`). Otherwise row `grpno − 60` = `{count, m0, m1, m2, m3}`; count 0 → the number comes from `D06.ptr8[7·diff + _semiranseed % 7]` (D06 counts by difficulty 0–7: `3 6 0 0 0 0 0 | 4 6 0 3 0 4 5 | 4 7 1 5 1 7 6 | 5 7 1 7 1 8 9 | 5 8 1 9 2 10 10 | 6 8 2 12 2 11 12 | 7 10 2 16 2 13 13 | 8 12 2 20 3 15 15`). Each monster drawn picks one of the four entries at random (`ovl_1323`) until its quota (`OV_0x19b` counters) is spent. A fourth entry marked `*` (bit 0x80) adds **one extra monster of that code** on top of the count (six if it is a Doombeast) and makes it the group's leader (`ovl_06b8/06c7`).
+`_grpno < 60` means "n monsters of code `_grpno`" (`_monstlist = {g,g,g,g}`). Otherwise row `grpno − 60` = `{count, m0, m1, m2, m3}`; count 0 → the number is `row[0] + _semiranseed % (row[1] − row[0])` where row = `D06.ptr8[7·diff …]` (P96 0x334–0x370; correction: earlier read as `ptr8[7·diff + seed % 7]`), so `row[0] … row[1] − 1` monsters; the other five bytes of a row are not used here (D06 rows by difficulty 0–7: `3 6 0 0 0 0 0 | 4 6 0 3 0 4 5 | 4 7 1 5 1 7 6 | 5 7 1 7 1 8 9 | 5 8 1 9 2 10 10 | 6 8 2 12 2 11 12 | 7 10 2 16 2 13 13 | 8 12 2 20 3 15 15`). Each monster drawn picks one of the four entries at random (`ovl_1323`) until its quota (`OV_0x19b` counters) is spent. A fourth entry marked `*` (bit 0x80) adds **one extra monster of that code** on top of the count (six if it is a Doombeast) and makes it the group's leader (`ovl_06b8/06c7`).
 
 | group | count | monsters |
 |---|---|---|

@@ -91,7 +91,7 @@ The same roll serves every non-combat skill through `_SkillUp0` (INT 62h AH=0x31
 `_DecSta(hero, field, amount)` subtracts with floor 0. `_IsHeTr(hero)`: energy 0 → `HERO+0xBD |= 0x10` (exhausted); energy < 15 → `HERO+0xBE |= 0x20` (tired), else cleared.
 
 ## Combat flow (`_DoACmbt` → P96 setup → P94 fight → P95 aftermath)
-1. `_DoACmbt` loads P06 at 0CA8:2000 (room half), V06 into `_rvarbuf` (INT 61h), then runs **P96** at 0CA8:0000: builds the 24 `CMBTNT` records (`ovl_020a`: party slots 0–5 from the heroes via `ovl_0f2a`, monsters from the encounter group `_grpsptr[grpno−60]` or `_monstlist`, count = `D06 ptr8[7·diff + RndCo]` when the group gives none), places them on the 11×9 arena (*Arena placement* below), and shows the pre-fight parley menu (`ovl_06e7`: *rally* = `RndCo(100) < h_ldrshp` of the acting leader (P96 0x789) gives every other party member `bravery += RndCo(3)+1` and `agility += 4`, both capped at 12; *hail the leader* = truce / bribe dialogue; `_ambflg` = ambush).
+1. `_DoACmbt` loads P06 at 0CA8:2000 (room half), V06 into `_rvarbuf` (INT 61h), then runs **P96** at 0CA8:0000: builds the 24 `CMBTNT` records (`ovl_020a`: party slots 0–5 from the heroes via `ovl_0f2a`, monsters from the encounter group `_grpsptr[grpno−60]` or `_monstlist`, count = `ptr8[7·diff] + seed mod (ptr8[7·diff+1] − ptr8[7·diff])` when the group gives none (`encounters.md`)), places them on the 11×9 arena (*Arena placement* below), and shows the pre-fight parley menu (`ovl_06e7`: *rally* = `RndCo(100) < h_ldrshp` of the acting leader (P96 0x789) gives every other party member `bravery += RndCo(3)+1` and `agility += 4`, both capped at 12; *hail the leader* = truce / bribe dialogue; `_ambflg` = ambush).
 2. If `_endcmbt == 0`, **P94** runs the fight (`ovl_00b4` → `ovl_02e8`, rounds until `_endcmbt != 0`), then **P95** handles the aftermath (loot, resurrection prompts).
 3. INT 61h/08 (`V06 INT61_08`) sets `_endcmbt` after every action: 1 = no living monster left (win), 2 = every party member dead, 3 = every party member fled/removed.
 
@@ -179,7 +179,7 @@ A hero's attack costs **2 energy** (`h_energy −= 2`, floor 0, `_IsHeTr`). A ta
 | 4 (0x1A2) | auto-hero (P94 `ovl_0a98`, indexed by the side leader's race `_LDRACE`, so the party leader's race decides for everyone): chance % to eat a **Gonshi** each action when not already under it: `[45, 60, 30, 25, 40, 25]`; the checks run Gonshi, then Potion, then Sermin, each only when the item is carried (`ovl_148f`), and use one action |
 | 5 (0x1A8) | auto-hero eats a **Sermin** when `h_energy <` this: `[20, 30, 20, 10, 5, 5]` |
 | 6 (0x1AE) | auto-hero drinks a **Potion** when HP `≤` this: `[20, 25, 15, 35, 10, 10]` |
-| 8 (0x22B) | monster count table (7 bytes per location difficulty) |
+| 8 (0x22B) | monster count table (7 bytes per location difficulty; bytes 0/1 = min/max+1 of a group without its own count) |
 | 9 (0x1BA) | armour values for items 0x1F–0x2A (`items.md`) |
 | 10 (0x1C6) | dodge-step directions by attack direction (P06 `ovl_0fcf`, entry `CURDIR·2 + n`, tried in turn) |
 | 12 (0x263) | weapon preference per race, 22 item numbers each (item − 9 = weapon index) |

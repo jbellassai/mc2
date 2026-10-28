@@ -5,6 +5,8 @@ export interface Pgm { program: number; tileset: number; datafile: number; disk:
 export interface Exit { x: number; y: number; pgm: number; tx: number; ty: number; datafile?: number }
 export interface Townsfolk { x: number; y: number; type: number; tile: number; num: number }
 export interface Npc extends Townsfolk { name: number; appear: number; disappear: number; ifevent: number; ifnevent: number }
+/** A dungeon room (`HROOM`, rules/locations.md): guards, chest/fountain reward, map chunk, the four doors' windows. */
+export interface HRoom { id: number; group: number; reward: number; amount: number; map: number; xy: number[] }
 export interface Block { block: number; tileset: number; x: number; y: number }
 
 export interface Location {
@@ -27,6 +29,8 @@ export interface Location {
   look?: { x: number; y: number; text: number }[];
   residents: { name: number; num: number; appear: number; disappear: number; ifevent: number; ifnevent: number }[];
   roommap?: { g: number; chunks: number[] } | null;
+  hrooms?: HRoom[];
+  locdiff: number;
 }
 
 /** A room record as exported: exits, townsfolk and NPCs are one list per room index (formats.md, Room maps). */
@@ -36,7 +40,7 @@ export interface RoomRecord extends Omit<Location, 'exits' | 'townsfolk' | 'npcs
   npcs: Npc[][];
 }
 
-export interface TileData { names: string[]; nameindex: number[]; walkable: number[]; walkable_los: number[]; anim: string }
+export interface TileData { names: string[]; nameindex: number[]; walkable: number[]; walkable_los: number[]; anim: string; doors: string }
 export interface Sprites { columns: number; npc: { start: number; frames: number }[] }
 
 const BASE = './pack/';

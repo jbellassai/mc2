@@ -14,6 +14,7 @@ import { Party, type Member } from './party';
 import { World } from './world';
 import { Patches, type Patch } from './patch';
 import { Fight, type Rec } from './combat';
+import { Chamber } from './chamber';
 import { aim as spellAim, BUILT, cost as spellCost, effect } from './spells';
 import type { Icon } from './view';
 
@@ -38,6 +39,7 @@ async function main() {
   const q = new URLSearchParams(location.search);
   if (import.meta.env.DEV && q.has('hour')) clock.hour = Math.min(23, Math.max(0, Number(q.get('hour')) || 0));
   if (import.meta.env.DEV && q.has('at')) [START.x, START.y] = q.get('at')!.split(',').map(Number);
+  if (import.meta.env.DEV && /^D\d\d$/.test(q.get('level') ?? '')) START.level = q.get('level')!;   // ?level=D23
   const events = new Set(NEW_GAME_EVENTS);
   const party = new Party(hero, START.x, START.y);
   const lead = party.leader;                                 // the acting member (_curpla) is always the leader for now
@@ -59,11 +61,11 @@ async function main() {
       : wild ? world.guards().map(g => ({ ...g, frame: 0x0f })) : patch?.icons() ?? [];
     const people = fight ? fight.recs.filter(r => !r.side && fight!.alive(r)) : wild ? [lead] : party.members;   // world: the leader alone
     view.draw(level, room ? 5 : lead.x, room ? 4 : lead.y, figures, people, phase, icons);
-    const where = wild || patch || fight ? `${world.rec?.name.replace(/\s*[MX]$/, '') ?? ''}, ${tables.weathers[clock.weather]}` : place();
+    const where = wild || patch || (fight && outside?.level.loc.kind === 'world') ? `${world.rec?.name.replace(/\s*[MX]$/, '') ?? ''}, ${tables.weathers[clock.weather]}` : place();
     status.textContent = `${clock}  —  ${where}${message ? '  —  ' + message : ''}`;
   };
   /** School and job D-files have no location name: show the town's. */
-  const place = () => (level.loc.name.trim() || outside?.level.loc.name || '').replace(/\s*[MX]$/, '');
+  const place = () => (level.loc.name.trim() || outside?.level.loc.name || chamberBack?.level.loc.name || '').replace(/\s*[MX]$/, '').trim();
   /** To a level with the formation origin at (x, y). */
   const go = (lv: Level, x: number, y: number) => {
     level = lv; party.place(x, y);
@@ -274,8 +276,20 @@ async function main() {
 
   const door = async (d: Door) => {
     if (d.type & 0x80) return void (message = 'The door is magically locked.');   // key doors: rules/locations.md, Keys
+    if (d.type === 2 && (d.pgm === 0x78 || d.pgm === 0x79)) return passThrough(d);
+    if (d.type >= 6 && d.type <= 9) return guardedRoom(d);
     if (d.type === 0 || d.type === 3) return enterRoom(d);
     lockedDoor(d);
+  };
+
+  /** P02 pass-through door (type 2, `pgm` 'x'/'y', `id` '+'/'−'): the whole party jumps its formation's extent along
+   *  that axis + 1 squares (`_PartyWH`) and the step is tested again from there; blocked → it stays. */
+  const passThrough = (d: Door) => {
+    const horiz = d.pgm === 0x78, sign = d.id === 0x2b ? 1 : -1;
+    const cells = party.members.map(m => horiz ? m.cell % 3 : Math.floor(m.cell / 3));
+    const n = (Math.max(...cells) - Math.min(...cells) + 2) * sign, dx = horiz ? n : 0, dy = horiz ? 0 : n;
+    if (party.members.every(m => level.walkable(m.x + dx, m.y + dy) && !figureAt(m.x + dx, m.y + dy))) { party.shift(dx, dy); message = ''; }
+    else message = `Blocked by ${level.tileName(d.x, d.y)}.`;
   };
 
   /** Room exits {x,y,pgm,tx,ty,datafile}: back to town `datafile` with the window at (tx,ty), formation at window + (4,3). */
@@ -302,6 +316,10 @@ async function main() {
   /** A town exit with a world-map PGM (program 1): the window goes to (tx, ty), the leader to window + (5,4) (FFSAVB/D). */
   const toWorld = async (exit: Exit) => {
     const pgm = level.loc.pgms[exit.pgm];
+    if (pgm?.program === 2) {                                   // another level (stairs): window (tx, ty), formation at +(4,3)
+      go(await Level.load(`D${two(pgm.datafile)}`, pgm.tileset), exit.tx + 4, exit.ty + 3);
+      message = level.loc.name.replace(/\s*[MX]$/, '').trim(); return;
+    }
     if (pgm?.program !== 1) { message = 'This way leads somewhere not built yet.'; return; }
     go(await Level.load('D01'), exit.tx + 5, exit.ty + 4);
     await world.at(lead.x, lead.y, clock);
@@ -328,7 +346,10 @@ async function main() {
     world.fatigue(ter, clock, party);
     await world.at(x, y, clock);
     const guard = world.guards().find(g => g.x === x && g.y === y);
-    if (guard) await startFight(guard.group, world.diff(cdata.guarddiff), ter, () => world.cleared.add(guard.bit));
+    if (guard) {
+      const lv = await Level.wild(world.patchTileset(ter), ter), diff = world.diff(cdata.guarddiff);
+      startFight(lv, Fight.wild(cdata, lv, party.members, guard.group, diff), diff, () => world.cleared.add(guard.bit));
+    }
   };
 
   // ---- combat (rules/combat.md; combat.ts) ----
@@ -337,11 +358,12 @@ async function main() {
   let actor: Rec | null = null;
   /** P01 ovl_0846 → _DoACmbt: a wilderness fight on G00 chunk `ter`; `won` runs on victory (e.g. the guard is cleared).
    *  "COMBAT!" (comtxt 0x44), then rounds: the party phase, hero by hero, then the monster phase (P94 ovl_02e8). */
-  const startFight = async (group: number, diff: number, ter: number, won: () => void) => {
+  const startFight = (lv: Level, f: Fight, diff: number, won: () => void, after: (() => void) | null = null) => {
     outside = { level, x: lead.x, y: lead.y };
-    level = await Level.wild(world.patchTileset(ter), ter);
+    level = lv;
     figures = [];
-    fight = Fight.wild(cdata, level, party.members, group, diff);
+    fight = f;
+    afterWin = after;
     autoHeroes.clear(); heading = false;
     if (import.meta.env.DEV) Object.assign(window, { dbg: { fight } });   // for scripts/shot.mjs eval:
     panel.show();
@@ -350,7 +372,7 @@ async function main() {
     onWin = won; fightDiff = diff;
     partyTurn();
   };
-  let onWin = () => {}, fightDiff = 0;
+  let onWin = () => {}, fightDiff = 0, afterWin: (() => void) | null = null;
   /** The next hero with actions left acts; when none is left, the monsters' phase. */
   const partyTurn = () => {
     if (finished()) return;
@@ -517,7 +539,124 @@ async function main() {
     render();
     return true;
   };
-  const endFight = () => { level = outside!.level; party.place(outside!.x, outside!.y); outside = null; fight = null; close(); };
+  /** After the fight: a won room fight goes on into the room (P95 → P07, `_p07flg`), anything else back to where the
+   *  fight started. */
+  const endFight = () => {
+    const won = fight!.outcome() === 1, next = afterWin;
+    afterWin = null;
+    if (won && next) { next(); fight = null; close(); return; }
+    level = outside!.level; party.place(outside!.x, outside!.y); outside = null; fight = null; close();
+  };
+
+  // ---- dungeon rooms (rules/locations.md, Doors into dungeon rooms; P07) ----
+  const dunrms = new Set<string>(), duntre = new Set<string>();   // _dunrms (guards beaten), _duntre (reward taken)
+  let chamber: Chamber | null = null;
+  /** A door of type 6-9: the room's HROOM record; its guards fight first (`_cmbtyp` 5, `_diff` = locdiff − 1) unless
+   *  beaten before, then the room (P07). Group 0xCA's swap for 0xDE before event 31/32 is not modelled. */
+  const guardedRoom = async (d: Door) => {
+    const hr = level.loc.hrooms?.find(h => h.id === d.id), pgm = level.loc.pgms[d.pgm];
+    if (!hr || !pgm) return void (message = 'This door leads somewhere not built yet.');
+    const key = `${level.id}:${hr.id}`, ch = await Chamber.build(hr, pgm.tileset, key), diff = Math.max(0, level.loc.locdiff - 1);
+    const back = { level, x: lead.x, y: lead.y };
+    if (dunrms.has(key)) return enterChamber(ch, d.type, back, false);
+    startFight(ch.level, Fight.room(cdata, ch.level, party.members, hr.group, diff, d.type, ch.doors()), diff,
+      () => dunrms.add(key), () => enterChamber(ch, d.type, back, true));
+  };
+  /** P07 entry: from the fight the members keep their squares (`_p07flg`), else formation `side − 6` of `_setupxy`. */
+  let chamberBack: { level: Level; x: number; y: number } | null = null;
+  const enterChamber = (ch: Chamber, side: number, back: { level: Level; x: number; y: number }, fromFight: boolean) => {
+    const recs = fight?.recs;
+    level = ch.level; chamber = ch; chamberBack = back; figures = []; outside = null;
+    const taken: Member[] = [];
+    party.members.forEach((m, i) => {
+      const r = recs?.[i];
+      const at = fromFight && r && r.x >= 0 ? { x: r.x, y: r.y }
+        : level.place(cdata.setupxy[6 * (side - 6) + i], cdata.setupxy[24 + 6 * (side - 6) + i], (x, y) => taken.some(t => t.x === x && t.y === y));
+      m.x = at.x; m.y = at.y; taken.push(m);
+    });
+    message = '';
+  };
+  /** The chest and fountain need the acting member next to them (`_ChkRng` 1); otherwise " %w considers moving closer
+   *  to it." (text 8; text 7 when another member makes the suggestion — `_Advice` chooses). */
+  const near = (x: number, y: number) => Math.max(Math.abs(lead.x - x), Math.abs(lead.y - y)) <= 1;
+  const ptext = (n: number, h: Hero, v: Record<string, string | number> = {}) => format(chamber!.texts[n], h, h.name, v).trim();
+  /** P07 ovl_0969, using a Pick on the chest: already emptied → texts 0 + 1; the first opening this visit rolls
+   *  min(99, dex/2 + lockpick) against RndCo(100) (a miss breaks the Pick, comtxt 0x90, the chest still opens); then
+   *  1 in 4 and RndCo(120) > skill springs the trap ("The chest is trapped! %h is poisoned!/ill!", Poisoned for an even
+   *  `hrmid`, Ill for an odd one, energy and HP halved, " But the chest is open."), else a lockpick skill roll and
+   *  "%h opens the chest."; then its contents (chestLook). */
+  const openChest = (h: Hero) => {
+    const ch = chamber!, r = h.rec as Record<string, number> & Hero['rec'];
+    panel.show();
+    if (!near(1, 1)) { panel.line(ptext(8, h)); return void panel.set([{ label: cmd[0], act: () => close() }]); }
+    if (duntre.has(ch.key)) { panel.line(ptext(0, h) + ch.texts[1]); return void panel.set([{ label: cmd[0], act: () => close() }]); }
+    if (!ch.opened) {
+      const skill = Math.min(99, (r.h_dextrty >> 1) + r.h_lockpck);
+      if (skill <= rnd(100)) { panel.line(comtxt[0x90]); h.dec(h.slot(0x50)); }
+      ch.opened = true;
+      if (rnd(4) === 0 && rnd(120) > skill) {
+        const odd = ch.hr.id & 1;
+        r.h_cond1 |= ch.trap[odd]; r.h_energy >>= 1; r.h_hitpts >>= 1; h.isHeTr();
+        panel.line(ptext(2, h) + ' ' + ch.texts[3 + odd]);
+        panel.line(ptext(5, h));
+      } else {
+        // _SkillUp0 for lockpick (skill 10): (50 − skill)/4 % below 50, else 1 %; capped by _MaxSkill.
+        const chance = r.h_lockpck < 50 ? (50 - r.h_lockpck) >> 2 : 1;
+        if (r.h_lockpck < cdata.maxtbl[10 * 6 + r.h_race] && rnd(100) < chance) { r.h_lockpck++; panel.line(ctext(0x60, { h: h.name, l: 'Lockpick' })); }
+        panel.line(ptext(9, h));
+      }
+    }
+    chestLook(h);
+  };
+  /** The opened chest's contents: " It contains %b %as. Will %h take them?" (6; 14 for one) → _IncObj; taken: the
+   *  `_duntre` bit, hirelings' partybucks += value × amount, and Darkfinder (0x1E) sets event 93 (`_events+11 & 0x20`). */
+  const chestLook = (h: Hero) => {
+    const ch = chamber!, item = ch.hr.reward, n = ch.hr.amount;
+    panel.show();
+    if (!near(1, 1)) { panel.line(ptext(8, h)); return void panel.set([{ label: cmd[0], act: () => close() }]); }
+    if (duntre.has(ch.key)) { panel.line(ch.texts[1].trim()); return void panel.set([{ label: cmd[0], act: () => close() }]); }
+    panel.line(ptext(n === 1 ? 14 : 6, h, { a: items[item], b: n }));
+    panel.set([{ label: cmd[3], act: () => {
+      const ok = item === 0 ? h.rec.h_gold + n <= 9999 && (h.rec.h_gold += n, true) : incObj(h, item, n);
+      if (!ok) return close(ctext(h.slot(item) >= 0 ? 0x32 : 0x33, { o: h.name }));
+      duntre.add(ch.key);
+      if (item === 0x1e) events.add(93);
+      for (const { hero: m } of party.members)
+        if (m.rec.h_relatn === 2) m.rec.h_partybucks = Math.min(30000, (m.rec.h_partybucks as number) + tables.lootvalues[item] * n);
+      close();
+    } }, { label: cmd[4], act: () => close() }]);
+  };
+  /** P07 ovl_0d54, Look at the fountain: the first drink of a spell fountain by a member with magic (spell ≠ 0x2A)
+   *  adds its charges (" of %a spells.", "Will %h drink from it?", "%h gains %b %a spells.", cap 99); every other drink
+   *  sets energy to 99 ("How refreshing!"). */
+  const fountain = (h: Hero) => {
+    const ch = chamber!, spell = ch.hr.reward - 0x80, r = h.rec;
+    panel.show();
+    if (!near(9, 1) && !near(9, 0)) { panel.line(ptext(8, h)); return void panel.set([{ label: cmd[0], act: () => close() }]); }
+    const charges = !duntre.has(ch.key) && r.h_magic && spell !== 0x2a;
+    if (charges) panel.line(level.tileName(9, 1) + ptext(10, h, { a: cdata.spells.names[spell] }));
+    panel.line(ptext(11, h));
+    panel.set([{ label: cmd[3], act: () => {
+      if (charges) {
+        const row = Math.floor(spell / 7), col = spell % 7, before = r.h_spells[row][col];
+        r.h_spells[row][col] = Math.min(99, before + ch.hr.amount);
+        duntre.add(ch.key);
+        return close(ptext(12, h, { b: r.h_spells[row][col] - before, a: cdata.spells.names[spell] }));
+      }
+      r.h_energy = 99; h.isHeTr();
+      close(ptext(13, h));
+    } }, { label: cmd[4], act: () => close() }]);
+  };
+  /** Leaving by door n (P07: "Do you want to leave now?", comtxt 0x23): the level with the window at `hrmxy[n]`. */
+  const leaveChamber = (n: number) => {
+    panel.show();
+    panel.line(comtxt[0x23]);
+    panel.set([{ label: cmd[3], act: () => {
+      const w = chamber!.window(n);
+      go(chamberBack!.level, w.x + 4, w.y + 3);
+      chamber = null; chamberBack = null; close();
+    } }, { label: cmd[4], act: () => close() }]);
+  };
   /** P95 ovl_0a06: while a corpse is unsearched, "Would you like to search for valuables?" (comtxt 0xC8); Yes → "Who is
    *  going to search?" (0x10F, a living member) → ovl_0a78. No ends the fight's aftermath. */
   const searchAsk = () => {
@@ -601,6 +740,7 @@ async function main() {
     for (const m of movers) {
       const x = m.x + dx, y = m.y + dy;
       if (patch && (x < 0 || y < 0 || x >= level.w || y >= level.h)) { leavePatch(); return render(); }
+      if (chamber && chamber.exitAt(x, y) >= 0) { leaveChamber(chamber.exitAt(x, y)); return render(); }
       const exit = level.loc.exits.find(e => e.x === x && e.y === y);
       const other = figureAt(x, y);
       if (room && exit) {
@@ -626,6 +766,8 @@ async function main() {
 
   /** _Look (rules/locations.md, Look). Line of sight is not modelled yet: every square counts as visible. */
   const look = (x: number, y: number) => {
+    if (chamber && x === 1 && y === 1 && chamber.opened && !(chamber.hr.reward & 0x80)) return chestLook(lead.hero);
+    if (chamber && x === 9 && (y === 0 || y === 1) && chamber.hr.reward & 0x80) return fountain(lead.hero);
     let what: string;
     const who = figures.find(f => f.x === x && f.y === y);
     if (who && who.num < 0x20 && who.name) what = who.name;
@@ -708,6 +850,7 @@ async function main() {
     }).join(' ');
     const pick = (who: Hero, item: number) => {
       panel.line(`> ${items[item]}`, 'you');
+      if (chamber && item === 0x50 && chamber.hr.reward && !(chamber.hr.reward & 0x80)) return openChest(who);
       if (!tables.useall.includes(item) || party.members.length < 2) return done(once(who, item));
       panel.line(say(comtxt[0x3c]));
       panel.set([{ label: cmd[3], act: () => done(everyone(item)) }, { label: cmd[4], act: () => done(once(who, item)) }]);

@@ -55,39 +55,63 @@ export class Fight {
 
   static async data(): Promise<CombatData> { return json<CombatData>('combat.json'); }
 
-  /** P96 setup for a wilderness fight (`_cmbtyp` 1, side 6): heroes at formation 0 of `_setupxy`, then the group's
-   *  monsters on random free squares (scan forward from RndCo(99)+17). The best leader rank leads (`c_state |= 4`). */
+  /** A wilderness fight (`_cmbtyp` 1): side 6, monsters on random free squares (scan forward from RndCo(99)+17). */
   static wild(data: CombatData, level: Level, heroes: { hero: Hero; num: number }[], group: number, diff: number): Fight {
-    const f = new Fight(data, level);
+    return Fight.setup(data, level, heroes, group, diff, 6, null);
+  }
+
+  /** A dungeon-room fight (`_cmbtyp` 5): the door's side (type 6-9) places both sides; the flee squares are the room's
+   *  doors (`doors`, P96 ovl_0e19), taken one step inside the room. */
+  static room(data: CombatData, level: Level, heroes: { hero: Hero; num: number }[], group: number, diff: number, side: number,
+              doors: { x: number; y: number }[]): Fight {
+    return Fight.setup(data, level, heroes, group, diff, side, doors);
+  }
+
+  /** P96 setup: heroes at formation `side − 6` of `_setupxy` (member m at 6f + m, _PlacePerson), then the group's
+   *  monsters — in a room, a random square in the side's rectangle (P96 0x19/0x29; casters, `c_magskl ≠ 0` except
+   *  Vankruh and Doombeast, by the casters' rectangle), moved to a free one by _PlacePerson. The best leader rank leads. */
+  private static setup(data: CombatData, level: Level, heroes: { hero: Hero; num: number }[], group: number, diff: number,
+                       side: number, doors: { x: number; y: number }[] | null): Fight {
+    const f = new Fight(data, level), k = side - 6;
+    const taken = (x: number, y: number) => f.occupied(x, y);
     heroes.forEach(({ hero, num }, m) => {
       const r = hero.rec as Record<string, number> & typeof hero.rec, item = r.h_inhand === NONE ? NONE : r.h_invitem[r.h_inhand];
+      const at = level.place(data.setupxy[6 * k + m], data.setupxy[24 + 6 * k + m], taken);
       f.recs.push({ recno: m, side: 0, name: hero.name, race: r.h_race, hero, num, tile: 0,
-        x: data.setupxy[m], y: data.setupxy[24 + m], hp: r.h_hitpts, shield: r.h_shield, armor: f.heroArmor(hero),
+        x: at.x, y: at.y, hp: r.h_hitpts, shield: r.h_shield, armor: f.heroArmor(hero),
         bravery: r.h_bravery, str: r.h_strngth, dex: r.h_dextrty, agi: r.h_agility, int: r.h_intellg,
         wskl: Fight.wpnSkl(hero), weapon: item, res: r.h_resist, mskl: r.h_magic, maxhp: r.h_hpmax, invis: 0, fear: 0, freeze: 0,
         nift: r.h_inuse & 0x40 ? 3 : 0, state: r.h_cond1 & 0x80 ? 0x80 : 0, health: 0, target: NONE, moves: 0 });
     });
     for (const code of f.roster(group, diff)) {
       const s = data.monsters[(code & 0x7f) - 5], recno = 6 + f.recs.length - heroes.length;
-      let i = rnd(99) + 17;
-      while (f.occupied(i % 99 % W, Math.floor(i % 99 / W)) || !level.walkable(i % 99 % W, Math.floor(i % 99 / W))) i++;
-      f.recs.push({ recno, side: 1, name: s.name, race: code & 0x7f, num: NONE, tile: s.tile, x: i % 99 % W,
-        y: Math.floor(i % 99 / W), hp: s.hp, shield: s.shield, armor: s.armor, bravery: s.bravery, str: s.str, dex: s.dex,
+      let x: number, y: number;
+      if (!doors) {
+        let i = rnd(99) + 17;
+        while (f.occupied(i % 99 % W, Math.floor(i % 99 / W)) || !level.walkable(i % 99 % W, Math.floor(i % 99 / W))) i++;
+        x = i % 99 % W; y = Math.floor(i % 99 / W);
+      } else {
+        const c = s.mskl && (code & 0x7f) !== 28 && (code & 0x7f) !== 32 ? 4 : 0, rx = data.ranges.x[c + k], ry = data.ranges.y[c + k];
+        ({ x, y } = level.place(rx[0] + rnd(rx[1] - rx[0] + 1), ry[0] + rnd(ry[1] - ry[0] + 1), taken));
+      }
+      f.recs.push({ recno, side: 1, name: s.name, race: code & 0x7f, num: NONE, tile: s.tile, x,
+        y, hp: s.hp, shield: s.shield, armor: s.armor, bravery: s.bravery, str: s.str, dex: s.dex,
         agi: s.agi, int: s.int, wskl: s.wskl, weapon: s.weapon, res: s.res, mskl: s.mskl, maxhp: s.hp, invis: 0, fear: 0, freeze: 0, nift: 0, state: s.undead ? 2 : 0, health: 0, target: NONE, moves: 0 });
     }
     const lead = f.recs.filter(r => r.side && data.monsters[r.race - 5].leader !== NONE)
       .sort((a, b) => data.monsters[b.race - 5].leader - data.monsters[a.race - 5].leader)[0];
     if (lead) lead.state |= 4;
-    f.flee = f.fleeSquares();
+    f.flee = doors ? new Set(doors.map(d => Math.min(H - 2, Math.max(1, d.y)) * W + Math.min(W - 2, Math.max(1, d.x)))) : f.fleeSquares();
     return f;
   }
 
   /** P96 ovl_020a: monster codes for group `g`. Below 60, `g` itself; else row g − 60 = {count, m0..m3}, a zero count
-   *  taken from D06 by difficulty; each monster is one of the four entries at random, and an entry with bit 0x80 adds
+   *  taken from D06's row for the difficulty (lo .. hi − 1); each monster is one of the four entries at random, and an entry with bit 0x80 adds
    *  one more of that code on top. (The per-entry quotas, OV_0x19b, are not modelled.) */
   private roster(g: number, diff: number): number[] {
     const row = g < 60 ? [0, g, g, g, g] : this.data.groups[g - 60];
-    const n = row[0] || this.data.d06.counts[7 * diff + rnd(7)];
+    const c = this.data.d06.counts, lo = c[7 * diff], hi = c[7 * diff + 1];   // P96 0x334: lo + seed mod (hi − lo)
+    const n = row[0] || lo + (hi > lo ? rnd(hi - lo) : 0);
     const out = Array.from({ length: n }, () => row[1 + rnd(4)] & 0x7f);
     const extra = row.slice(1).find(c => c & 0x80);
     if (extra) out.push(extra & 0x7f);

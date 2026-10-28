@@ -242,6 +242,9 @@ def main(src, dst):
                              'clothing': [list(p01[0x2A2 + 12 * k:0x2AE + 12 * k]) for k in range(7)],   # rows 0x2B-0x30, then none
                              'regions': [list(p01[0x236 + 4 * k:0x23A + 4 * k]) for k in range(16)],    # {x0,y0,x1,y1}, first match
                              'patchtiles': list(p01[0x36A:0x374])})   # mushroom-patch tileset by terrain class (ovl_09bf)
+    p07 = open(f'{src}/P07.MCO', 'rb').read()   # dungeon rooms (rules/locations.md): chest/fountain texts, trap bits
+    dump(f'{dst}/p07.json', {'texts': [x.decode('latin1') for x in p07[0x806:0x980].split(b'\0')[:15]], 'trap': list(p07[0x804:0x806]),
+                             'doorx': list(p07[3:11]), 'doory': list(p07[11:19])})   # door n squares: (x[2n+k], y[2n+k])
     p04 = open(f'{src}/P04.MCO', 'rb').read()   # mushroom patches (rules/locations.md), lists by kind = item − 0x33
     dump(f'{dst}/p04.json', {'amount': list(p04[0x72:0x7C]), 'icon': list(p04[0x7C:0x86]),   # picked per mushroom, E00 icon
                              'x': list(p04[0x88:0x97]), 'y': list(p04[0x97:0xA6])})          # the 15 growing places
