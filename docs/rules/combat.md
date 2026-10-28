@@ -164,7 +164,7 @@ So the party always enters from one wall, melee monsters fill the far half and s
 | 6 (0x1AE) | auto-hero drinks a **Potion** when HP `≤` this: `[20, 25, 15, 35, 10, 10]` |
 | 8 (0x22B) | monster count table (7 bytes per location difficulty) |
 | 9 (0x1BA) | armour values for items 0x1F–0x2A (`items.md`) |
-| 10 (0x1C6) | dodge-step directions by attack direction (P06 `ovl_0a98`-area dodge, `CURDIR·2 + n`) |
+| 10 (0x1C6) | dodge-step directions by attack direction (P06 `ovl_0fcf`, entry `CURDIR·2 + n`, tried in turn) |
 | 12 (0x263) | weapon preference per race, 22 item numbers each (item − 9 = weapon index) |
 
 ## Open items
