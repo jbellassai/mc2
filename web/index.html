@@ -11,11 +11,14 @@
   [hidden] { display: none !important; }
   #status { min-height: 1.4em; }
   #panel { width: min(1008px, 96vw); background: #1d1d24; border: 1px solid #444; padding: 8px 12px; box-sizing: border-box; }
-  #log { max-height: 9em; overflow-y: auto; white-space: pre-wrap; margin-bottom: 6px; }
+  #log { max-height: 22em; overflow-y: auto; white-space: pre-wrap; margin-bottom: 6px; }
   #log .you { color: #9cf; }
   #ask { display: flex; margin-bottom: 6px; }
   #ask input { flex: 1; background: #111; color: #eee; border: 1px solid #555; padding: 4px 6px; font: inherit; }
   #buttons { display: flex; gap: 6px; }
+  .sheets { display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap; }
+  .sheet caption { text-align: left; font-weight: 600; padding-bottom: 2px; }
+  .sheet td { padding: 0 10px 0 0; } .sheet td:last-child { text-align: right; color: #fc9; }
   #buttons button { background: #333; color: #eee; border: 1px solid #555; padding: 4px 10px; font: inherit; cursor: pointer; }
 </style>
 </head>

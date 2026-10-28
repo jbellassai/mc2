@@ -5,8 +5,19 @@ export const PICK = 0x50;
 
 export interface HeroRecord {
   h_name: string; h_fullnm: string; h_sex: number; h_strngth: number; h_dextrty: number; h_charm: number;
-  h_lockpck: number; h_hitpts: number; h_energy: number; h_gold: number; h_invitem: number[]; h_invamt: number[];
+  h_lockpck: number; h_hitpts: number; h_hpmax: number; h_energy: number; h_gold: number;
+  h_invitem: number[]; h_invamt: number[]; h_wears: number[]; h_inhand: number;
+  [field: string]: unknown;
 }
+
+/** Attribute and skill fields in HERO order (structs.h), labelled for the sheet. */
+export const STATS: [string, string][] = [['h_bravery', 'Bravery'], ['h_strngth', 'Strength'], ['h_dextrty', 'Dexterity'],
+  ['h_endur', 'Endurance'], ['h_agility', 'Agility'], ['h_loyalty', 'Loyalty'], ['h_charm', 'Charm'], ['h_intellg', 'Intellect'],
+  ['h_resist', 'Resist']];
+export const SKILLS: [string, string][] = [['h_sword', 'Sword'], ['h_axe', 'Axe'], ['h_archry', 'Archery'], ['h_magic', 'Magic'],
+  ['h_fist', 'Fist'], ['h_swim', 'Swim'], ['h_trade', 'Trade'], ['h_stealth', 'Stealth'], ['h_research', 'Research'],
+  ['h_soulrd', 'Soulread'], ['h_lockpck', 'Lockpick'], ['h_track', 'Track'], ['h_music', 'Music'], ['h_carpent', 'Carpentry'],
+  ['h_smith', 'Smith'], ['h_gemcut', 'Gemcut'], ['h_tailor', 'Tailor'], ['h_hunt', 'Hunt'], ['h_ldrshp', 'Leadership']];
 
 export class Hero {
   constructor(readonly rec: HeroRecord, readonly items: string[]) {}
@@ -21,6 +32,18 @@ export class Hero {
   get name() { return this.rec.h_name; }
   get female() { return this.rec.h_sex === 1; }
   get charm() { return this.rec.h_charm; }
+
+  /** The pack: name, count (equipment shows its wear), worn / in hand. Equipment bytes are 0x80 | wear (items.md). */
+  pack(): { name: string; count: string; worn: boolean; hand: boolean }[] {
+    const r = this.rec, out = [];
+    for (let i = 0; i < r.h_invitem.length; i++) {
+      const c = r.h_invitem[i], a = r.h_invamt[i];
+      if (c === 0xff || c === 0) continue;                       // code 0 = coins, shown as gold
+      out.push({ name: this.items[c] ?? `item ${c}`, count: a & 0x80 ? `wear ${a & 0x7f}` : String(a),
+                 worn: r.h_wears.includes(i), hand: r.h_inhand === i });
+    }
+    return out;
+  }
 
   /** _SearchInv: inventory slot holding `item`, or -1. */
   slot(item: number): number { return this.rec.h_invitem.indexOf(item); }

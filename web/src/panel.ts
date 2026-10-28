@@ -18,6 +18,8 @@ export const panel = {
   get open() { return !box.hidden; },
   show() { log.textContent = ''; box.hidden = false; },
   hide() { box.hidden = true; submit = null; },
+  /** Arbitrary content (e.g. a table) appended to the log. */
+  add(el: HTMLElement) { log.append(el); },
   line(text: string, cls = '') {
     const d = document.createElement('div');
     d.textContent = text; d.className = cls;

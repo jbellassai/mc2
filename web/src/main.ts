@@ -5,7 +5,7 @@ import { View } from './view';
 import { resolveRoom } from './room';
 import { json, type Door, type Exit } from './pack';
 import { Talk, format, wmatch } from './talk';
-import { Hero, PICK } from './hero';
+import { Hero, PICK, STATS, SKILLS } from './hero';
 import { panel } from './panel';
 
 const status = document.getElementById('status')!;
@@ -162,6 +162,24 @@ async function main() {
     message = text;
     render();
   };
+  /** Character sheet (the original's Inven): attributes, skills, coins, pack. */
+  const sheet = () => {
+    const r = hero.rec;
+    const table = (title: string, rows: [string, string][]) => {
+      const t = document.createElement('table'); t.className = 'sheet';
+      t.innerHTML = `<caption>${title}</caption>`;
+      for (const [k, v] of rows) { const tr = t.insertRow(); tr.insertCell().textContent = k; tr.insertCell().textContent = v; }
+      return t;
+    };
+    const wrap = document.createElement('div'); wrap.className = 'sheets';
+    wrap.append(
+      table(`${r.h_fullnm}`, [['Hit points', `${r.h_hitpts} / ${r.h_hpmax}`], ['Energy', String(r.h_energy)], ['Coins', String(r.h_gold)],
+                              ...STATS.map(([f, l]) => [l, String(r[f])] as [string, string])]),
+      table('Skills', SKILLS.map(([f, l]) => [l, String(r[f])] as [string, string])),
+      table('Pack', hero.pack().map(p => [p.name + (p.worn ? ' (worn)' : p.hand ? ' (in hand)' : ''), p.count] as [string, string])));
+    panel.show(); panel.add(wrap);
+    panel.set([{ label: cmd[0], act: () => close(message) }]);   // End
+  };
   let looking = false;
   view.canvas.addEventListener('click', e => {
     if (panel.open) return;
@@ -176,6 +194,7 @@ async function main() {
   let queue = Promise.resolve();   // steps run in order; keys pressed while a room loads are not lost
   addEventListener('keydown', e => {
     if (panel.open) return;
+    if (e.key === 'i' || e.key === 'I') { sheet(); return; }
     if (e.key === 'l' || e.key === 'L') { looking = true; message = say(comtxt[0x0d]); render(); return; }   // "Mark the target."
     const k = KEYS[e.key];
     if (!k) return;
