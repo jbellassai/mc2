@@ -65,7 +65,7 @@ Evidence: `_Magic` (EXE, FF module, `out/decomp/MC2_all.c`), tables in the data 
 ## Casting in combat — P94 (`ovl_1721` → `ovl_1740`)
 A combatant record (`CMBTNT`, 33 bytes) may cast `G_curspl` when: state flags (`c_state` +5) & 0x98 == 0; `c_invis` (+14) == 0; it is a hero (`c_recno` +31 < 6); `_EneUsg(spell, hero) ≤ c_energy` (+13); and the hero has the spell memorised (`h_spells[spell] != 0`). The effect is then dispatched through P94's jump table (slot = `SPLVECS` offset / 3): each P94 spell entry is a 3-instruction stub `call prolog; mov ah,N; int 61h; jmp epilog`, and INT 61h is **V06.MCO** (see *Combat spell effects* below).
 
-## Timed effects — `_DecSpells()` (called once per game hour/day tick, TODO confirm)
+## Timed effects — `_DecSpells()` (every 5-minute tick, from `_CalUpd1`)
 - `_detectsw` (Detect) counts down; at 0 `_DetectOff()`.
 - For each of the 6 party slots: while `h_glamcnt` (HERO+0x2A, Glamour) > 0, decrement it **and** `h_charm` (HERO+0x13) — Glamour's charm bonus decays one point per tick.
 
