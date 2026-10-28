@@ -32,7 +32,7 @@ Loaded by `_LoadMap(num, set, letter)` into `struct MAPTYPE { u8 map_xl; u8 map_
 | file | header | body | count | role |
 |---|---|---|---|---|
 | `Mbb Ett.MCM` | `2A 2A` | 42×42 tile indices, row-major | 150 | block *bb* drawn with tileset `Vtt.MCT`; placed into a location by its `D` record (below) |
-| `Gnn E00.MCM` | per chunk `0B 09` | N consecutive chunks of 2 + 11×9 bytes | 13 | combat arenas: `_LoadMap` with letter `G` (only caller: `_DoACmbt`); the `E00` is never substituted |
+| `Gnn E00.MCM` | per chunk `0B 09` | N consecutive chunks of 2 + 11×9 bytes | 13 | **room interiors and arenas** (*Room maps* below): `_LoadMap(n, 0, 'G')` from the room programs; the `E00` is never substituted |
 | `M07/11/14 E93.MCM` | `2A 2A` | 5040 bytes, autocorrelation says 84 wide | 3 | **unresolved**: engine would read only the first 3638 bytes; does not align with sibling blocks |
 | `M07E65.MCM` | `54 3C` = 84,60 | 84×60 + 78 junk bytes | 1 | **unresolved**, header honours the (xl,yl) convention |
 | `G04E00.MCM` | | 3 valid chunks then zeros, 1766 B | 1 | probably a stale file |
@@ -46,6 +46,20 @@ A location record (`Dnn.MCV`, below) lists blocks with `(block, tileset, x, y)`.
 The world map ("Nameless", `D01`, 19 blocks, tilesets 01 and 23) and Telermain (`D02`) composed by `tools/loc.py`:
 
 ![world](img/world_gurtex.png) ![telermain](img/telermain.png)
+
+### Room maps (`GnnE00.MCM`)
+
+Every 11×9 interior — shop, inn, house, temple, dungeon room, mushroom patch, wilderness arena — is one chunk of a `G` file. A room program loads chunk 0 into `_thismap` with `_LoadMap(g, 0, 'G')` and, if the wanted chunk `c ≠ 0`, copies chunk `c` (`_thismap + c·0x65`, 101 bytes) over it. The tileset is not changed by the room: it is the `tilefile` of the door's PGM record (`P02` 0x8F8 → `_rmdata+4` → `_LoadTiles`). Which `g` and `c`:
+
+| program | g | c |
+|---|---|---|
+| P05 services / houses, P09 special rooms | `maps[0]` of the room's LOCTYPE | single LOCTYPE: `maps[1 + idx]`, `idx = id − boundary` (`services.md`; P05 also maps school ids > 0x5B to inns, `idx −= 0x14`); bank entry (below): `maps[1]` |
+| P08 scenes | `maps[0]` | `maps[1]`, or a per-scene table (P08 0x14FA) |
+| P07 dungeon rooms, P96 arenas with `_cmbtyp 5` | 5 | `hrmmap & 0xF` of the `HROOM` record (`rules/locations.md`) |
+| P04 mushroom patch, P96 wilderness arena (`_cmbtyp 1`) | 0 | `_curter` / `_terrain` — terrain under the party |
+| P96 street / other fights (`_cmbtyp` 0, 2–4; table P96 file 0xCC4 = −1) | — | the arena is cut from the current map around the party |
+
+`G04E00.MCM` is never referenced. `tools/render_rooms.py original out/rooms` renders every door's room (995 doors → 137 distinct images) plus a sheet of every chunk per (G file, tileset); `tools/gallery.py out` writes `out/index.html` with each location map and its rooms.
 
 Six `MxxE80.MCM` blocks are referenced by **no** location record, no `V80` tileset exists and no EXE/overlay code loads map letter 80 (`_LoadMap` callers checked): cut content, ignore for a port.
 
@@ -83,7 +97,7 @@ Sub-table `maps`: byte **before** the pointer target is the count *n* (0xFF = no
 | `loctext` | NUL-separated strings | location texts (signs, messages) |
 | `spetbl`, `treasptr`, `spdoors`, `lkdata`, `hroomptr`, `locptr`, `locevptr` | | see `rules/locations.md`, *Pointer table conventions* |
 
-Some `D` files (`D06, D15–D18, D36, D55, D60`) are not `LOCTYPE` images (garbage names, size 0) — different record kind, TODO.
+**LOCTYPE banks.** `D15–D18, D36, D55, D60, D75, D80–D83, D90, D91` start with a word `k < 0x1F`: `_LoadVar` then relocates only words `0…k`, and words `1…k` point at `k` complete `LOCTYPE` records (their pointers relative to the record's own start). Room id `r` uses entry `r` (word `r+1`): P05 `ovl_12bc` copies it over `_loc` and relocates its 20 pointers. These are the houses and private rooms of a town — `D15` Telermain (Kemrul's, Bol's, homes, guard towers, jail; entries named `dummy` are behind doors whose PGM index 0 leads nowhere), `D16` Castle Oshcrun state rooms, `D17` its bed chambers, `D18` its service rooms, `D36` huts and camps, `D60` quest-scene rooms, the rest one bank per town. `D06` is the combat AI record (above).
 
 ## `Bnn.MCV` — per-tileset tile data (confirmed = `struct TDATATYPE`, 1012 B max)
 
