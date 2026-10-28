@@ -2,7 +2,7 @@
 // the wilderness arena (P96 formation 0, random monster squares), rounds and actions (P94 ovl_04a6), melee and bow
 // attacks with dodge, knockdown, armour, weapon wear and skill gains (P06 ovl_050a/ovl_0cde, FAR_SKILLUP), and the
 // monster AI's targeting and movement (P94 ovl_0b4b), magic damage and missiles for the heroes' spells (spells.ts).
-// Monsters cast their two spells by the leader race's D06 chance (spells.ts). Not yet: parley, fleeing, Use, auto-combat, Doombeast images.
+// Monsters cast their two spells by the leader race's D06 chance (spells.ts). The pre-fight Talk (rally, hailing the leader) is here and in main.ts. Not yet: Doombeast images.
 import { json } from './pack';
 import type { Hero } from './hero';
 import type { Level } from './level';
@@ -19,7 +19,8 @@ export interface CombatData { monsters: Monster[]; groups: number[][]; weapons: 
   d06: { cast: number[]; crit: number[]; crit2: number[]; prey: number[]; counts: number[]; armor: number[]; dodge: number[];
     gonshi: number[]; sermin: number[]; potion: number[] };
   spells: { names: string[]; energy: number[]; where: number[]; side: number[]; skill: number[] };
-  songs: { instruments: number[]; races: number[][]; names: string[][] } }
+  songs: { instruments: number[]; races: number[][]; names: string[][] };
+  parley: { texts: string[]; kins: string[]; attitudes: string[]; worth: number[]; rolls: number[] } }
 
 /** A CMBTNT record. `side` 0 = party (`c_alignmnt` 0), 1 = monsters. */
 export interface Rec {
@@ -50,6 +51,14 @@ export class Fight {
   private skilled = new Set<string>();   // G_sklbits: one gain per hero and combat skill per fight
   timestop = false;                       // _timestop: monsters cannot act, blows cannot miss; cleared each round
   readonly magbits = new Set<number>();   // _magbits: spells 30-35 cast this encounter
+  /** P96 `OV_0x192`: the race the party can talk to, the group's starred extra entry (ovl_06b8), else 0. */
+  speaker = 0;
+  /** `_cmbtyp` 0: a street fight, which has no pre-fight menu. */
+  street = false;
+  /** `_endcmbt` set before any round: 1 the monsters surrendered (a win, with loot), 4 they left (P95 makes it a win). */
+  ended: 0 | 1 | 4 = 0;
+  /** P96 `OV_0x197`: the attitude rolled at set-up (`attitude()`), used by Greet. */
+  mood = 0;
 
   private constructor(readonly data: CombatData, readonly level: Level) {}
 
@@ -81,6 +90,7 @@ export class Fight {
   private static setup(data: CombatData, level: Level, heroes: { hero: Hero; num: number }[], group: number, diff: number,
                        side: number, doors: { x: number; y: number }[] | null, street: { x: number; y: number }[] | null): Fight {
     const f = new Fight(data, level), k = side - 6;
+    f.street = !!street;
     const taken = (x: number, y: number) => f.occupied(x, y);
     heroes.forEach(({ hero, num }, m) => {
       const r = hero.rec as Record<string, number> & typeof hero.rec, item = r.h_inhand === NONE ? NONE : r.h_invitem[r.h_inhand];
@@ -124,7 +134,7 @@ export class Fight {
     const n = row[0] || lo + (hi > lo ? rnd(hi - lo) : 0);
     const out = Array.from({ length: n }, () => row[1 + rnd(4)] & 0x7f);
     const extra = row.slice(1).find(c => c & 0x80);
-    if (extra) out.push(extra & 0x7f);
+    if (extra) { out.push(extra & 0x7f); this.speaker = extra & 0x7f; }
     return out;
   }
 
@@ -153,11 +163,36 @@ export class Fight {
 
   /** INT61_08: 1 = no monster left, 2 = every party member dead, 3 = the rest of the party fled, else 0. */
   outcome(): 0 | 1 | 2 | 3 {
+    if (this.ended) return 1;
     const party = this.recs.filter(r => r.side === 0);
     if (!this.recs.some(r => r.side === 1 && this.alive(r))) return 1;
     if (party.every(r => r.state & 0x80)) return 2;
     if (!party.some(r => this.alive(r))) return 3;
     return 0;
+  }
+
+  /** P96 ovl_0b5c: the monsters' attitude (`_w_attitudes` 0-7). No speaker → 6, a speaker of race ≥ 25 → 7. Else
+   *  the monsters' strength M = Σ (hp + magic skill, +10 with a bow) against the party's worth P = Σ worth[race]
+   *  (P96 0xB3F): M / P ≥ 2 → 5; = 1 → rolls[11 + RndCo(6)]; 0 → rolls[M / (P / 8) + RndCo(4)] (P96 0xB4B; the second
+   *  table follows the first, and the index can run into it). P = 0 would divide by zero in DOS; taken as ≥ 2 here. */
+  attitude(): number {
+    if (!this.speaker) return 6;
+    if (this.speaker >= 25) return 7;
+    let m = 0, p = 0;
+    for (const r of this.recs.filter(r => !(r.state & 8))) {
+      if (r.side) m += r.hp + r.mskl + (r.weapon >= 0x1a && r.weapon < 0x80 ? 10 : 0);
+      else p += this.data.parley.worth[r.race] ?? 0;
+    }
+    const { rolls } = this.data.parley, q = p ? Math.floor(m / p) : 2;
+    if (q >= 2) return 5;
+    if (q === 1) return rolls[11 + rnd(6)];
+    return rolls[Math.floor(m / Math.max(1, p >> 3)) + rnd(4)];
+  }
+
+  /** P96 ovl_0a22: the monsters leave ("The monsters leave."): every monster is taken off the board. */
+  leave() {
+    for (const r of this.recs.filter(r => r.side)) { r.state |= 0x10; r.x = r.y = -1; }
+    this.ended = 4;
   }
 
   /** `_fleetbl` (P96 ovl_0c5c/ovl_0c6f, wilderness): the arena's edge squares the first hero can reach (`_blobmap` < 100,

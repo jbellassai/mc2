@@ -91,7 +91,7 @@ The same roll serves every non-combat skill through `_SkillUp0` (INT 62h AH=0x31
 `_DecSta(hero, field, amount)` subtracts with floor 0. `_IsHeTr(hero)`: energy 0 → `HERO+0xBD |= 0x10` (exhausted); energy < 15 → `HERO+0xBE |= 0x20` (tired), else cleared.
 
 ## Combat flow (`_DoACmbt` → P96 setup → P94 fight → P95 aftermath)
-1. `_DoACmbt` loads P06 at 0CA8:2000 (room half), V06 into `_rvarbuf` (INT 61h), then runs **P96** at 0CA8:0000: builds the 24 `CMBTNT` records (`ovl_020a`: party slots 0–5 from the heroes via `ovl_0f2a`, monsters from the encounter group `_grpsptr[grpno−60]` or `_monstlist`, count = `ptr8[7·diff] + seed mod (ptr8[7·diff+1] − ptr8[7·diff])` when the group gives none (`encounters.md`)), places them on the 11×9 arena (*Arena placement* below), and shows the pre-fight parley menu (`ovl_06e7`: *rally* = `RndCo(100) < h_ldrshp` of the acting leader (P96 0x789) gives every other party member `bravery += RndCo(3)+1` and `agility += 4`, both capped at 12; *hail the leader* = truce / bribe dialogue; `_ambflg` = ambush).
+1. `_DoACmbt` loads P06 at 0CA8:2000 (room half), V06 into `_rvarbuf` (INT 61h), then runs **P96** at 0CA8:0000: builds the 24 `CMBTNT` records (`ovl_020a`: party slots 0–5 from the heroes via `ovl_0f2a`, monsters from the encounter group `_grpsptr[grpno−60]` or `_monstlist`, count = `ptr8[7·diff] + seed mod (ptr8[7·diff+1] − ptr8[7·diff])` when the group gives none (`encounters.md`)), places them on the 11×9 arena (*Arena placement* below), rolls the monsters' attitude (`ovl_0b5c`) and, unless it is an ambush or a street fight, shows the pre-fight menu (*Talk before a fight* below).
 2. If `_endcmbt == 0`, **P94** runs the fight (`ovl_00b4` → `ovl_02e8`, rounds until `_endcmbt != 0`), then **P95** handles the aftermath (loot, resurrection prompts).
 3. INT 61h/08 (`V06 INT61_08`) sets `_endcmbt` after every action: 1 = no living monster left (win), 2 = every party member dead, 3 = every party member fled/removed.
 
@@ -116,6 +116,32 @@ The same roll serves every non-combat skill through `_SkillUp0` (INT 62h AH=0x31
 | 9 | x 0–10, y 0–3 | x 0–10, y 0 |
 
 So the party always enters from one wall, melee monsters fill the far half and spellcasters hug the far wall. Monster records also get `c_alignmnt = 1`, `c_energy = 99`, `c_target = 0xFF`, the leader rank (file 0x39) and the undead flag (file 0x62 → `c_state |= 2`).
+
+### Talk before a fight (P96 `ovl_0b5c`, menu 10, `ovl_06e7`)
+Texts are V06's own table (`_txtptr` = V06 word 5 = file 0x0B, `ModTxt(n)`); `%l` is the last `SetTxt…` word (the kin name or the attitude).
+
+**Who talks.** `OV_0x192` = the group's starred fourth entry, the leader added on top of the count (`ovl_06b8`, `encounters.md`); a group without one has no speaker (0). **Attitude** `OV_0x197`, rolled once at set-up, `_w_attitudes` = Panicky, Frightened, Nervous, Cautious, Greedy, Eager to fight, Hostile, Enraged:
+- no speaker → 6; speaker race ≥ 25 (Gaem and up) → 7;
+- else M = Σ over the monsters (`c_alignmnt` 1, not `c_state & 8`) of `hp + c_magskl` (+10 when `c_rdywpn` ≥ 0x1A, a bow), P = Σ over the party of a worth by race (P96 file 0xB3F: Human 40, Wizard 60, Elf 30, Halfling 0, Dwarf 50, Orc 20); `M / P` ≥ 2 → 5; = 1 → `[3,4,4,5,5,5][RndCo(6)]` (file 0xB56); 0 → `T[(M mod P) / (P / 8) + RndCo(4)]` with T = file 0xB4B `[0,1,0,1,2,2,1,3,2,5,3]` (the index can run on into the 0xB56 table). An all-Halfling party (P = 0) would divide by zero.
+
+**Advice** (`_Advice`; not in street fights (`_cmbtyp` 0), not against Vankruh, and only while DS:0x79E6 is set, which P01 sets for every world-map fight — other callers not traced, the port assumes every non-street fight): `RndCo(100)` ≤ the party's best **soul reading** (`_HighStat` 0x20) → "The monsters appear to be %l." (30) when that member is the acting one, else "%o thinks the monsters seem %l." (29), `%l` = the attitude.
+
+**Menu 10**: Draw, Recall, Talk, Look, Begin, Sheathe; direction keys move the heroes (`_RMove`). Begin starts the fight. **Talk** opens menu 14: Rally, Greet; both start the fight except the first Rally case.
+- **Rally**: fewer than 2 in the party → "There is no one to rally!" (0), back to menu 10. Else `RndCo(2)` = 0 → "The enemy attacks!!" (4), `_ambflg` = 1 (the monsters move first). Else "%h rallies the team with a moving speech!" (1) and `RndCo(100) < h_ldrshp` of the acting member: every other member's bravery `+= RndCo(3)+1` and agility `+= 4`, each then capped at 12 (a higher agility drops to 12), "All members get a temporary (+%b) boost of courage and (+%i) agility!" (2); P95 restores both from `_savcrg`/`_savagi` after the fight. Failure: "Unfortunately, they are not impressed!" (3).
+- **Greet** (hail the leader). Attitude 6 → "The monsters do not understand %h." (5), 7 → "The %a leader will not discuss a truce!" (6); both then "The enemy attacks!!" with `_ambflg`. Otherwise "%h hails the %a leader." (7), "The %l glowers at the party." (8) and the attitude's handler (tables file 0x94B, Yes-handlers 0x957; `_SetYN` 0 = Yes):
+
+| attitude | handler | text | Yes |
+|---|---|---|---|
+| 0 Panicky | every monster `c_state |= 0x40` (routed), `_ambflg` | "Suddenly, the %l begins to gibber in panic!" (31) | — |
+| 1 Frightened | `_endcmbt` = 1: a won fight, P95 loots every monster still on the board | "…falls to its knees. 'We beg you to spare our miserable lives…'" (33) | — |
+| 2 Nervous | ransom = 3 × monsters (`_BRIBEAMT` = +amount) | "If we give you %i coins, will you let us depart?" (34) | `_IncObj` coins to the acting member |
+| 3 Cautious | truce | "'We have no quarrel with you at this time…' What say you to a truce?" (35) | — |
+| 4 Greedy | bribe = min(100 × party members, the party's coins) (`_BRIBEAMT` = −amount) | "For a price, we will ignore this meeting… %i coins?" (36) | members pay in slot order until it is paid |
+| 5 Eager to fight | `_ambflg` | "Then the %l grins and points at %h. The monsters rush to the attack!" (32) | — |
+
+Yes on 2–4: "The monsters leave." (37), every monster `c_state |= 0x10` off the board, `_endcmbt` = 4; No: the fight begins. P95 turns `_endcmbt` 4 into 1 (so the guard or patrol counts as beaten), skips "VICTORY!", keeps Gonshi/Nift, and finds no loot (no monster left; `_BRIBEAMT` ≠ 0).
+
+**Vankruh** (first monster race 28): Greet passes only if no party member has a weapon ready (`c_rdywpn` 0xFF, so Sheathe first): comtxt 0x108 (the rhyme), events 66 and 150, `_endcmbt` 4; otherwise comtxt 0x107 "Vankruh's eyes widen in affront and it attacks!" with `_ambflg`.
 
 ### Wilderness fights (P01 `ovl_0846`)
 After a world-map step P01 checks the party's square for an uncleared **guard spot** (region `gwrds` `{x, y, group}`, `_grdsta` bit `region·8 + n`, `_ctype` 0) or else a living patrol (`_ptrlxy`/`_ptrlsta`, `_ctype` 1, group `newsr[n & 7]`, `encounters.md` *Patrols*). Either way: `_grpno` = the group, `_terrain` = terrain class of the square, `_diff` = P01 file 0x33A `[region]` = `[0,7,3,4,2,1,5,6,4,3,3,4,5,7,6,5]`, `_cmbtyp` 1, side `_rmdata+6` = 6, the window stays (`_pwinxy = _winxy`, so after the fight the party stands on that square), and the tileset is the terrain's from P01 0x36A (`ovl_09bf`, the same as a mushroom patch); `_ambflg` = 1 when camping (`_swcamp`) and no party member is on watch (`h_actvty` 9). The arena is G00 chunk `_terrain` (`formats.md`). P01 draws each uncleared guard spot in view as E00 icon 0x0F (a skull, `ovl_0833`). Victory sets the guard's `_grdsta` bit.
@@ -186,7 +212,7 @@ A hero's attack costs **2 energy** (`h_energy −= 2`, floor 0, `_IsHeTr`). A ta
 
 ## Open items
 - `ovl_0a2b/ovl_0394`: weapon → type lookup table is built at run time (P06 private data).
-- Parley details: truce/bribe amounts (`G_BRIBEAMT`, V06 strings 0x337/0x3CB). Song effects: `encounters.md`. Monster stats, groups, loot: `encounters.md`.
+- Song effects: `encounters.md`. Monster stats, groups, loot: `encounters.md`.
 - INT 61h = V06 (see spells.md / overlays.md). The services P06 itself calls are small helpers: 0x00 builds a combatant from a hero (armour, `items.md`); 0x22 `_OrTile` at the current square; 0x23 index (0–23, 24 = none) of the combat record standing at square DX; 0x27/0x28 redraw the attacker/target sprite (`_PDraw`), 0x29/0x2A restore the background under the attacker/target; 0x2B idle animation of living records (random 0–50 tick timers); 0x25 fills `_blobmap` (walkable cells for movement and pathing); 0x2C a table lookup; 0x24 the Doombeast rule below.
 
 ### Doombeasts (race 32: P96 `ovl_1405`, V06 `INT61_24`)

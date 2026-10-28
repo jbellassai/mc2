@@ -388,10 +388,75 @@ async function main() {
     panel.show();
     panel.line(comtxt[ambush ? 0x7c : 0x44]);                         // "AMBUSH!" / "COMBAT!"
     fight.newRound();
-    onWin = won; fightDiff = diff;
-    if (ambush) void monsterPhase(); else partyTurn();                // `_ambflg`: the monsters move first
+    onWin = won; fightDiff = diff; f.mood = f.attitude();
+    if (!f.street && f.recs.find(r => r.side)?.race !== 28) advice();
+    if (ambush) void monsterPhase();                                  // `_ambflg`: the monsters move first
+    else if (f.street) partyTurn();                                   // no pre-fight menu in a street fight
+    else prefight();
   };
   let onWin = () => {}, fightDiff = 0, afterWin: (() => void) | null = null;
+
+  // ---- before the fight (P96 menu 10 and ovl_06e7; rules/combat.md, Talk before a fight) ----
+  /** V06's texts with `%x` from `v`. */
+  const vtext = (n: number, v: Record<string, string | number> = {}) =>
+    cdata.parley.texts[n].replace(/%([a-z])/g, (_, c: string) => String(v[c] ?? ''));
+  /** `_Advice` (P96 ovl_0b5c): RndCo(100) ≤ the party's best soul reading → the attitude, as "The monsters appear to be
+   *  %l." (30) when the best reader is the acting member, else "%o thinks the monsters seem %l." (29). */
+  const advice = () => {
+    const best = party.members.reduce((a, m) => (m.hero.rec.h_soulrd as number) > (a.hero.rec.h_soulrd as number) ? m : a);
+    if (rnd(100) > (best.hero.rec.h_soulrd as number)) return;
+    const l = cdata.parley.attitudes[fight!.mood].toLowerCase();
+    panel.line(best === lead ? vtext(30, { l }) : vtext(29, { o: best.hero.name, l }));
+  };
+  /** Menu 10: Draw, Recall, Talk, Look, Begin, Sheathe, and moving. Built: Talk and Begin. */
+  const prefight = () => {
+    panel.set([{ label: cmd[41], act: () => panel.set([{ label: cmd[34], act: rally }, { label: cmd[18], act: greet },
+      { label: cmd[0], act: prefight }]) }, { label: cmd[5], act: () => begin(false) }]);
+    render();
+  };
+  const begin = (ambush: boolean) => { if (ambush) void monsterPhase(); else partyTurn(); };
+  /** Rally (ovl_06e7 menu 14 item 0): alone → "There is no one to rally!" (0) and back; a coin flip → "The enemy
+   *  attacks!!" (4) and the monsters move first; else the speech (1) and RndCo(100) < the leader's leadership gives every
+   *  other member bravery + RndCo(3)+1 and agility + 4, each capped at 12 (2; P95 restores both after the fight),
+   *  or "Unfortunately, they are not impressed!" (3). The fight begins either way. */
+  const rally = () => {
+    const f = fight!;
+    if (party.members.length < 2) { panel.line(vtext(0)); return prefight(); }
+    if (!rnd(2)) { panel.line(vtext(4)); return begin(true); }
+    panel.line(vtext(1, { h: lead.hero.name }));
+    if (rnd(100) < (lead.hero.rec.h_ldrshp as number)) {
+      const b = rnd(3) + 1;
+      for (const r of f.recs.filter(r => !r.side && r.hero !== lead.hero)) { r.bravery = Math.min(12, r.bravery + b); r.agi = Math.min(12, r.agi + 4); }
+      panel.line(vtext(2, { b, i: 4 }));
+    } else panel.line(vtext(3));
+    begin(false);
+  };
+  /** Greet = hail the leader (menu 14 item 1). Attitude 6/7: "The monsters do not understand %h." / "The %a leader
+   *  will not discuss a truce!", then "The enemy attacks!!". Otherwise "%h hails the %a leader." and "The %l glowers at
+   *  the party.", then by attitude (handlers P96 0x94B / 0x957): 0 panic (31, every monster routed, they move first);
+   *  1 surrender (33, a won fight with loot); 2 ransom of 3 coins per monster to the acting member (34); 3 truce (35);
+   *  4 bribe of 100 coins per party member, at most the party's coins, paid member by member (36); 5 attack (32, they
+   *  move first). 2-4 ask Yes/No: Yes → "The monsters leave." (37) and the fight ends, No → the fight begins.
+   *  (Vankruh, race 28, wants every weapon sheathed instead - not built: no Sheathe yet.) */
+  const greet = () => {
+    const f = fight!, mood = f.mood, kin = cdata.parley.kins[f.speaker], v = { h: lead.hero.name, a: kin, l: kin };
+    if (mood >= 6) { panel.line(vtext(mood - 1, v)); panel.line(vtext(4)); return begin(true); }
+    panel.line(vtext(7, v)); panel.line(vtext(8, v));
+    if (mood === 0) { panel.line(vtext(31, v)); for (const r of f.recs.filter(r => r.side)) r.state |= 0x40; return begin(true); }
+    if (mood === 1) { panel.line(vtext(33, v)); f.ended = 1; return void finished(); }
+    if (mood === 5) { panel.line(vtext(32, v)); return begin(true); }
+    const here = f.recs.filter(r => !(r.state & 8)), coins = party.members.reduce((t, m) => t + m.hero.rec.h_gold, 0);
+    const amount = mood === 2 ? 3 * here.filter(r => r.side).length : mood === 4 ? Math.min(100 * here.filter(r => !r.side).length, coins) : 0;
+    panel.line(vtext(mood + 32, { ...v, i: amount }));
+    panel.set([{ label: cmd[3], act: () => {
+      if (mood === 2) lead.hero.rec.h_gold = Math.min(9999, lead.hero.rec.h_gold + amount);
+      if (mood === 4) for (let left = amount, k = 0; left > 0 && k < party.members.length; k++) {
+        const h = party.members[k].hero.rec, pay = Math.min(h.h_gold, left);
+        h.h_gold -= pay; left -= pay;
+      }
+      panel.line(vtext(37)); f.leave(); finished();
+    } }, { label: cmd[4], act: () => begin(false) }]);
+  };
   /** The next hero with actions left acts; when none is left, the monsters' phase. */
   const partyTurn = () => {
     if (finished()) return;
@@ -547,6 +612,7 @@ async function main() {
     actor = null; message = '';
     if (o === 2) { panel.line(comtxt[0x50]); panel.set([{ label: cmd[1], act: () => location.reload() }]); return true; }
     if (o === 3) { panel.set([{ label: cmd[0], act: endFight }]); render(); return true; }   // fled: the guard stays
+    if (fight!.ended === 4) { onWin(); panel.set([{ label: cmd[0], act: endFight }]); render(); return true; }   // they left: no loot
     panel.line(comtxt[0x4e]);
     onWin();
     for (const { hero: h } of party.members) h.rec.h_inuse = (h.rec.h_inuse as number) & ~0xc0;   // P95: Gonshi and Nift end

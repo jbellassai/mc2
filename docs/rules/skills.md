@@ -10,7 +10,7 @@ Hero skill bytes (`HERO+0x17…0x29`, `docs/structs.h`). "Best in party" = `_Hig
 | trade | 1D | `P90` | haggling vs the merchant's skill (`economy.md`); never improves by trading |
 | stealth | 1E | `P92 ovl_0716` (daily) | a travelling companion (task 8): each travel day a 1-in-10 check, `RndCo(100) ≥ stealth` → captured and jailed in a region dungeon (`assignments.md`) |
 | research | 1F | `P05` library | subject needs `research ≥ required` (20–70); immediate subjects take `(100 − research)/4 + 1` ticks to read (`services.md`) |
-| soul reading | 20 | — | **no reader found** (trainable at Wanasol, `services.md`) |
+| soul reading | 20 | `P96 ovl_0b5c` (best in party, `_Advice`) | before a fight, `RndCo(100) ≤ soul reading` → the monsters' attitude is told (`combat.md`, *Talk before a fight*) |
 | lockpick | 21 | `P02`, `P07` | `min(99, dex/2 + lockpick)` vs d100 to pick doors/chests/search spots; a failed roll breaks the Pick; improves on success (`locations.md`) |
 | track | 22 | `P02 ovl_1690` (best in party) | town ambush: `RndCo(200) < track` → "%o detects an ambush!" and the fight is not an ambush |
 | music | 23 | `V06 INT61_1d` (combat), V06 0x2860 (Horn) | each known song of the instrument charms every monster of its race with chance `RndCo(200) ≤ music + 100`, once per use (`encounters.md`, *Combat songs*); the Horn's effect repeats `music/20 + 1` times |
@@ -19,7 +19,7 @@ Hero skill bytes (`HERO+0x17…0x29`, `docs/structs.h`). "Best in party" = `_Hig
 | gemcut | 26 | `P05` jobs | daily wage of a gemcutter job (`services.md`); otherwise unused |
 | tailor | 27 | `P97 0x728`, `_tailorcharm`, `P05` jobs | adds to charm in dialogue checks (`dialogue.md`) and reduces weather energy loss (`time_weather.md`) |
 | hunt | 28 | `P93` Hunt | `terrain + weather + hunt/2 ≥ RndCo(100)` → +1 Food twice an hour (`camp.md`); improves on success |
-| leadership | 29 | `P96 0x789` | pre-combat *Rally*: `RndCo(100) < leader's leadership` → the rally succeeds (every other member `bravery += RndCo(3)+1`, `agility += 4`, capped 12) |
+| leadership | 29 | `P96 0x789` | pre-combat *Rally* (after a coin flip that can start an ambush instead): `RndCo(100) < leader's leadership` → every other member `bravery += RndCo(3)+1`, `agility += 4`, capped 12, for that fight (`combat.md`, *Talk before a fight*) |
 
 Learning: skills rise through `_SkillUp`/`_SkillUp0` rolls at the uses marked "improves" (chance `(50−skill)/4` % below 50, 1 % above, plus a weapon base for the five combat skills — `combat.md`, *Skill advancement*) and through **school lessons** (`services.md`: one lesson = +3…+9 up to a racial cap, lesson length shortened by `h_intellg`). Soul reading has no reader at all; research only gates library subjects; gemcut only pays a job wage.
 

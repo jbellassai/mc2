@@ -56,7 +56,7 @@ Weapons 09–1E map to `WEAPDATA` rows `code − 9` (table in `combat.md`). `_Ge
 | 0x44 Lyre, 0x45 Lute, 0x48 Flute, 0x5B Bandore | play a song (`encounters.md`, *Combat songs*; outside combat FFFAR service 0x12); not in the fight overlay's own *Use* |
 | everything else (scrolls, keys, Rope, Shovel, Pick, Orb, Horn, Conch, Map, Fireglobe, shapes…) | nothing here; location programs react to the *used* item themselves (`open-questions.md` item 7) |
 
-Potion and Sermin add through `_IncSta`, which refuses any result ≥ 100 (no partial gain), so they assume HP/energy maxima ≤ 99 — true for every hero in the shipped saves. The 0x80 and 0x40 flags are cleared after a fight (`P95`, unless the party fled — `_endcmbt 4`); 0x20/0x10/0x08 are one-shot and cleared when consumed.
+Potion and Sermin add through `_IncSta`, which refuses any result ≥ 100 (no partial gain), so they assume HP/energy maxima ≤ 99 — true for every hero in the shipped saves. The 0x80 and 0x40 flags are cleared after a fight (`P95`, unless the monsters left after a truce, ransom or bribe — `_endcmbt 4`); 0x20/0x10/0x08 are one-shot and cleared when consumed.
 
 ## Armour (`V06 INT61_00`, combatant built from a hero)
 

@@ -317,6 +317,12 @@ def main(src, dst):
         'songs': {'instruments': list(v06[0x28FF:v06.index(0, 0x28FF)]),                 # INT61_1d: item per instrument
                   'races': [list(v06[0x4EC + 8 * k:0x4EE + 8 * k]) for k in range(4)],       # song 0/1 → monster race
                   'names': [[x.decode('latin1') for x in exe[ds + 0x4014:ds + 0x4200].split(b'\0')[8 * k:8 * k + 2]] for k in range(4)]},
+        # pre-fight Talk (P96 ovl_06e7 / ovl_0b5c, combat.md Parley): V06's text table (`_txtptr` = V06 word 5), _w_kins,
+        # _w_attitudes, the party's worth per hero race (P96 0xB3F) and the attitude rolls (0xB4B: 11 + 6 bytes, read as one)
+        'parley': {'texts': [x.decode('latin1') for x in v06[struct.unpack_from('<H', v06, 5)[0]:0x45A].split(b'\0')[:40]],
+                   'kins': [x.decode('latin1') for x in exe[ds + 0x4084:ds + 0x42AE].split(b'\0')[:40]],
+                   'attitudes': [x.decode('latin1') for x in exe[ds + 0x42AE:ds + 0x4320].split(b'\0')[:8]],
+                   'worth': list(struct.unpack_from('<6H', p96, 0xB3F)), 'rolls': list(p96[0xB4B:0xB5C])},
         'maxtbl': list(exe[ds + 0x2C7E:ds + 0x2C7E + 120]),   # _MaxSkill: skill·6 + race
         'guarddiff': list(open(f'{src}/P01.MCO', 'rb').read()[0x33A:0x34A]),       # world fights' difficulty by region
         'd06': {'cast': list(d06[ptr[0]:ptr[1]]), 'crit': list(d06[ptr[1]:ptr[2]]), 'crit2': list(d06[ptr[2]:ptr[3]]),
