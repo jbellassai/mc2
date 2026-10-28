@@ -8,6 +8,7 @@ import { Talk, format, wmatch } from './talk';
 import { Hero, PICK, STATS, SKILLS } from './hero';
 import { panel, type Button } from './panel';
 import { loadTrade, lot, single, prices, incObj, sellable } from './shop';
+import { ServiceRoom, noon, INN } from './service';
 
 const status = document.getElementById('status')!;
 const START = { level: 'D02', x: 98, y: 18 };   // mutable for the ?at= dev aid     // new_game.md: window (93,14), leader at window cell (5,4)
@@ -16,8 +17,8 @@ const rnd = (n: number) => Math.floor(Math.random() * n);   // RndCo(n): 0 … n
 
 async function main() {
   const view = await View.create(document.getElementById('view') as HTMLCanvasElement);
-  const [cmd, p02, comtxt, npctypes] = await Promise.all([json<string[]>('commands.json'), json<string[]>('p02text.json'),
-    json<string[]>('comtxt.json'), json<string[]>('npctypes.json')]);
+  const [cmd, p02, comtxt, npctypes, items] = await Promise.all([json<string[]>('commands.json'), json<string[]>('p02text.json'),
+    json<string[]>('comtxt.json'), json<string[]>('npctypes.json'), json<string[]>('items.json')]);
   const hero = await Hero.profile(0);                        // profile A until character creation exists
   const clock = Clock.newGame();
   // Dev aids: ?hour=20 starts in the evening, ?at=74,25 starts on another square.
@@ -28,6 +29,7 @@ async function main() {
   const pos = { x: START.x, y: START.y, sprite: 0x3b };      // hero 0 = E00 tile 0x3B (_MCCPTile)
   let level = await Level.load(START.level);
   let outside: { level: Level; x: number; y: number } | null = null;   // where to return from a room
+  let service: ServiceRoom | null = null;                               // the P05 room the party is in
   let figures: Figure[] = level.figures(clock, events);
   let message = `${hero.name} has landed in Telermain.`;
   const say = (s: string, other = '') => format(s, hero, other);
@@ -37,20 +39,29 @@ async function main() {
   const render = () => {
     const room = level.loc.kind === 'room';
     view.draw(level, room ? 5 : pos.x, room ? 4 : pos.y, figures, [pos], phase);
-    status.textContent = `${clock}  —  ${level.loc.name.replace(/\s+[MX]$/, '')}${message ? '  —  ' + message : ''}`;
+    status.textContent = `${clock}  —  ${place()}${message ? '  —  ' + message : ''}`;
   };
+  /** School and job D-files have no location name: show the town's. */
+  const place = () => (level.loc.name.trim() || outside?.level.loc.name || '').replace(/\s+[MX]$/, '');
   const go = (lv: Level, x: number, y: number) => {
     level = lv; pos.x = x; pos.y = y;
     figures = level.figures(clock, events);
   };
   const close = (msg = '') => { panel.hide(); message = msg; render(); };
+  /** The hour tick: who is about, and the inns' noon checkout (P92). */
+  const hourly = () => {
+    figures = level.figures(clock, events);
+    if (clock.hour !== 12 || clock.minute !== 0) return;
+    if (!noon().includes(service?.kind === INN ? service.room : -1)) return;
+    if (panel.open) panel.line(level.loc.texts[9]); else message = level.loc.texts[9];   // "It's time to check out."
+  };
+  const ctx = { hero, clock, cmd, comtxt, items, close, tick: () => { if (clock.tick()) hourly(); render(); } };
 
   // ---- talking (dialogue.md) ----
   const talkTo = async (who: Figure) => {
     const t = await Talk.open(level.loc, who, hero, events);
     const speak = (s: string) => panel.line(`${who.name ? who.name + ': ' : ''}${s}`);
     const end = () => { const bye = t.farewell(); close(bye ? `${who.name}: ${bye}` : ''); };
-    const items = await json<string[]>('items.json');
     await loadTrade();
     const coins = (n: number) => `${n} ${comtxt[0xb1]}`;
     const pouch = (item: number) => lot(item) > 1 ? comtxt[0xb2].replace('%b', String(lot(item))) : '';
@@ -138,7 +149,9 @@ async function main() {
     if (!ref) return void (message = 'This door leads somewhere not built yet.');
     outside = { level, x: pos.x, y: pos.y };
     go(await Level.loadRoom(ref), ref.start.x, ref.start.y);
-    message = `${hero.name} enters ${level.loc.name}.`;
+    message = level.loc.name.trim() ? `${hero.name} enters ${level.loc.name}.` : '';   // which of D08/D09's room names applies is not traced
+    service = ref.pgm.program === 5 ? await ServiceRoom.open(ctx, ref.room, ref.kind, level.loc.texts, level.loc.words) : null;
+    service?.greet();
   };
 
   const lockedDoor = (door: Door) => {
@@ -196,7 +209,7 @@ async function main() {
     if (exit.datafile !== undefined && exit.datafile !== 255)
       go(outside?.level.id === id ? outside.level : await Level.load(id), exit.tx + 5, exit.ty + 4);
     else if (outside) go(outside.level, outside.x, outside.y);
-    outside = null;
+    outside = null; service = null;
     message = '';
   };
 
@@ -206,12 +219,13 @@ async function main() {
     const d = level.loc.doors.find(e => e.x === x && e.y === y);
     const exit = level.loc.exits.find(e => e.x === x && e.y === y);
     const room = level.loc.kind === 'room';
-    if (who) { message = ''; await talkTo(who); }   // walking into someone talks to them (the original uses a Talk command)
+    if (who) { message = ''; if (!service?.talk()) await talkTo(who); }   // walking into someone talks to them (the original uses a Talk command)
     else if (level.walkable(x, y) && !(room && exit)) {
       pos.x = x; pos.y = y;
       message = '';
-      if (clock.step()) figures = level.figures(clock, events);
-    } else if (exit && room) await leave(exit);
+      if (clock.step()) hourly();
+    } else if (exit && room && service) service.leave(() => void leave(exit).then(render));
+    else if (exit && room) await leave(exit);
     else if (d) await door(d);
     else if (exit) message = 'The way out of town. The world map comes later.';
     else message = `Blocked by ${level.tileName(x, y)}.`;
@@ -253,7 +267,16 @@ async function main() {
     panel.show(); panel.add(wrap);
     panel.set([{ label: cmd[0], act: () => close(message) }]);   // End
   };
-  let looking = false;
+  /** Talk + direction: the person there, or "%h talks to" the square (comtxt 0x11). In a service room the keeper
+   *  answers whatever square is marked (assumption: how the original routes Talk to `_swgreet = −3` is not traced). */
+  const talkAt = async (x: number, y: number) => {
+    const who = figures.find(f => f.x === x && f.y === y);
+    message = '';
+    if (service?.talk()) return;
+    if (who) return talkTo(who);
+    message = say(comtxt[0x11]) + level.tileName(x, y) + comtxt[0x10];
+  };
+  let looking = false, talking = false;
   view.canvas.addEventListener('click', e => {
     if (panel.open) return;
     const t = view.cellAt(e, level.loc.kind === 'room' ? 5 : pos.x, level.loc.kind === 'room' ? 4 : pos.y);
@@ -269,10 +292,12 @@ async function main() {
     if (panel.open) return;
     if (e.key === 'i' || e.key === 'I') { sheet(); return; }
     if (e.key === 'l' || e.key === 'L') { looking = true; message = say(comtxt[0x0d]); render(); return; }   // "Mark the target."
+    if (e.key === 't' || e.key === 'T') { talking = true; message = say(comtxt[0x0d]); render(); return; }
     const k = KEYS[e.key];
     if (!k) return;
     e.preventDefault();
     if (looking) { looking = false; look(pos.x + k[0], pos.y + k[1]); return; }
+    if (talking) { talking = false; void talkAt(pos.x + k[0], pos.y + k[1]).then(render); return; }
     queue = queue.then(() => step(...k)).catch(err => { status.textContent = String(err); console.error(err); });
   });
   render();

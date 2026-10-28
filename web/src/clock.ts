@@ -19,10 +19,15 @@ export class Clock {
     return appear < disappear ? this.hour >= appear && this.hour < disappear : this.hour >= appear || this.hour < disappear;
   }
 
-  /** Returns true when the hour changed (callers re-check who is present). */
+  /** One town step. Returns true when the hour changed (callers re-check who is present). */
   step(): boolean {
     if (++this.steps < 12) return false;
     this.steps = 0;
+    return this.tick();
+  }
+
+  /** _CalUpd1: five minutes. Returns true when the hour changed. */
+  tick(): boolean {
     this.minute += 5;
     if (this.minute < 60) return false;
     this.minute = 0;

@@ -17,8 +17,8 @@ export function wmatch(typed: string, words: string[]): number {
   return words.findIndex(w => w.length > 0 && t.startsWith(w.toLowerCase()));
 }
 
-/** FAR_PRTAWRD format codes that need no print parameters (dialogue.md, Text format codes). */
-export function format(s: string, hero: Speaker, other: string): string {
+/** FAR_PRTAWRD format codes (dialogue.md, Text format codes); `vars` fills the print parameters: %a object or word, %b and %i numbers. */
+export function format(s: string, hero: Speaker, other: string, vars: Record<string, string | number> = {}): string {
   return s.replace(/\r/g, '\n').replace(/%(r(\d+)|[a-zA-Z])/g, (_, c: string, para?: string) => {
     if (para) return `[Read Paragraph ${para}.]`;
     switch (c) {
@@ -30,7 +30,7 @@ export function format(s: string, hero: Speaker, other: string): string {
       case 'y': return hero.female ? "ma'am" : 'sir';
       case 'n': return '\n';
       case 'q': return '"';
-      default: return '';
+      default: return String(vars[c] ?? '');
     }
   });
 }

@@ -1,4 +1,4 @@
-// Drive the dev build in headless Chrome: press keys, then save a screenshot and print the status line.
+// Drive the dev build in headless Chrome: press keys, then save a screenshot and print the status line and the open panel (log, buttons).
 // usage: node scripts/shot.mjs URL OUT.png [key ...]   keys: any key name (ArrowUp, Enter …); "xN" repeats the previous key;
 // "type:TEXT" types text into the focused field; "click:LABEL" clicks a button; "wait:MS" pauses;
 // "snap:FILE" saves a screenshot mid-script
@@ -52,7 +52,7 @@ try {
     await send('Input.dispatchKeyEvent', { type: 'keyUp', key, code: key });
   }
   await sleep(500);
-  console.log(await evaluate('document.getElementById("status").textContent'));
+  console.log(await evaluate(`document.getElementById("status").textContent + "\\n" + (document.getElementById("panel").hidden ? "" : document.getElementById("log").innerText + "\\n[" + [...document.querySelectorAll("#buttons button")].map(b => b.textContent).join("] [") + "]")`));
   writeFileSync(out, Buffer.from((await send('Page.captureScreenshot', { format: 'png' })).result.data, 'base64'));
   ws.close();
 } finally {

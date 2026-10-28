@@ -6,7 +6,8 @@ const BANKS = new Set([15, 16, 17, 18, 36, 55, 60, 75, 80, 81, 82, 83, 90, 91]);
 /** P05 ovl_1411: party base square by `_rmtyp` (P05 file 0x1F / 0x28); members fill a 3×3 formation from it. */
 const BASE_X = [4, 7, 4, 4, 4, 4, 4, 4, 7], BASE_Y = [5, 5, 5, 5, 5, 5, 5, 5, 1];
 
-export interface RoomRef { id: string; pgm: Pgm; index: number; map: { g: number; chunk: number }; start: { x: number; y: number } }
+/** `room` = the door's room id (`_rmdata[0]`), `kind` = P05's `_rmtyp` (rules/services.md). */
+export interface RoomRef { id: string; pgm: Pgm; index: number; room: number; kind: number; map: { g: number; chunk: number }; start: { x: number; y: number } }
 
 export async function resolveRoom(door: Door, pgm: Pgm): Promise<RoomRef | null> {
   if (![5, 8, 9].includes(pgm.program)) return null;          // P04 patches, P06/P07 dungeon rooms: later milestones
@@ -26,5 +27,5 @@ export async function resolveRoom(door: Door, pgm: Pgm): Promise<RoomRef | null>
   // P05's base table covers rmtyp 0-8; P08/P09 placement is not traced yet, so they use the store base.
   const k = pgm.program === 5 && rmtyp < BASE_X.length ? rmtyp : 0;
   // Assumption: a lone leader stands in the formation's centre cell (+1,+1).
-  return { id, pgm, index: idx, map: { g: rm.g, chunk }, start: { x: BASE_X[k] + 1, y: BASE_Y[k] + 1 } };
+  return { id, pgm, index: idx, room: door.id, kind: rmtyp, map: { g: rm.g, chunk }, start: { x: BASE_X[k] + 1, y: BASE_Y[k] + 1 } };
 }
