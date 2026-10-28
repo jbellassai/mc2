@@ -53,7 +53,7 @@ async function main() {
   const events = new Set(NEW_GAME_EVENTS);
   const party = new Party(hero, START.x, START.y);
   const lead = party.leader;                                 // the acting member (_curpla) is always the leader for now
-  if (import.meta.env.DEV) Object.assign(window, { dbg: { party } });   // for scripts/shot.mjs eval:
+  if (import.meta.env.DEV) Object.assign(window, { dbg: { party, world } });   // for scripts/shot.mjs eval:
   let level = await Level.load(START.level);
   let outside: { level: Level; x: number; y: number } | null = null;   // where to return from a room
   let service: ServiceRoom | null = null;                               // the P05 room the party is in
@@ -69,7 +69,8 @@ async function main() {
   const render = () => {
     const room = level.loc.kind === 'room', wild = level.loc.kind === 'world';
     const icons: Icon[] = fight ? fight.recs.filter(r => r.side && fight!.alive(r)).map(r => ({ x: r.x, y: r.y, frame: r.tile, sheet: 'E01' }))
-      : wild ? world.guards().map(g => ({ ...g, frame: 0x0f })) : patch?.icons() ?? [];
+      : wild ? [...world.guards(), ...world.patrols(lead.x, lead.y, events.has(105))].map(g => ({ x: g.x, y: g.y, frame: 0x0f }))
+      : patch?.icons() ?? [];
     const people = fight ? fight.recs.filter(r => !r.side && fight!.alive(r)) : wild ? [lead] : party.members;   // world: the leader alone
     view.draw(level, room ? 5 : lead.x, room ? 4 : lead.y, figures, people, phase, icons);
     const where = wild || patch || (fight && outside?.level.loc.kind === 'world') ? `${world.rec?.name.replace(/\s*[MX]$/, '') ?? ''}, ${tables.weathers[clock.weather]}` : place();
@@ -334,6 +335,8 @@ async function main() {
     if (pgm?.program !== 1) { message = 'This way leads somewhere not built yet.'; return; }
     go(await Level.load('D01'), exit.tx + 5, exit.ty + 4);
     await world.at(lead.x, lead.y, clock);
+    world.movePatrols(level, lead.x, lead.y, clock.month);              // P01 start: ovl_169e, then ovl_0a94
+    world.engage(lead.x, lead.y);
     outside = null; service = null; message = '';
   };
   /** A world-map step (P01): a town entrance of the current region (`exitptr`) loads that town with the window at
@@ -356,11 +359,16 @@ async function main() {
     for (let n = world.stepTicks(ter, clock, party); n > 0; n--) tick();
     world.fatigue(ter, clock, party);
     await world.at(x, y, clock);
-    const guard = world.guards().find(g => g.x === x && g.y === y);
-    if (guard) {
+    world.movePatrols(level, x, y, clock.month);
+    // ovl_0846: a live guard spot under the party, else a live patrol (which may just have walked onto it)
+    const guard = world.guards().find(g => g.x === x && g.y === y), n = guard ? -1 : world.patrolAt(x, y);
+    if (guard || n >= 0) {
       const lv = await Level.wild(world.patchTileset(ter), ter), diff = world.diff(cdata.guarddiff);
-      startFight(lv, Fight.wild(cdata, lv, party.members, guard.group, diff), diff, () => world.cleared.add(guard.bit));
+      const group = guard ? guard.group : world.patrolGroup(n);
+      return startFight(lv, Fight.wild(cdata, lv, party.members, group, diff), diff,
+        () => guard ? world.cleared.add(guard.bit) : world.dead.add(n));
     }
+    world.engage(x, y);
   };
 
   // ---- combat (rules/combat.md; combat.ts) ----
@@ -376,7 +384,7 @@ async function main() {
     fight = f;
     afterWin = after;
     autoHeroes.clear(); heading = false;
-    if (import.meta.env.DEV) Object.assign(window, { dbg: { party, fight } });   // for scripts/shot.mjs eval:
+    if (import.meta.env.DEV) Object.assign(window, { dbg: { party, fight, world } });   // for scripts/shot.mjs eval:
     panel.show();
     panel.line(comtxt[ambush ? 0x7c : 0x44]);                         // "AMBUSH!" / "COMBAT!"
     fight.newRound();

@@ -241,7 +241,13 @@ def main(src, dst):
     dump(f'{dst}/p01.json', {'terraintime': list(p01[0x276:0x280]), 'weathertime': s8(0x280, 12), 'terrainenergy': list(p01[0x298:0x2A4]),
                              'clothing': [list(p01[0x2A2 + 12 * k:0x2AE + 12 * k]) for k in range(7)],   # rows 0x2B-0x30, then none
                              'regions': [list(p01[0x236 + 4 * k:0x23A + 4 * k]) for k in range(16)],    # {x0,y0,x1,y1}, first match
-                             'patchtiles': list(p01[0x36A:0x374])})   # mushroom-patch tileset by terrain class (ovl_09bf)
+                             'patchtiles': list(p01[0x36A:0x374]),   # mushroom-patch tileset by terrain class (ovl_09bf)
+                             # patrols (encounters.md): 8 start squares per region, respawn interval in months per region,
+                             # the step tables (ovl_17c0 / ovl_18c1): 8 directions, the two side steps per direction, wander order
+                             'patrols': [list(p01[0x136 + 2 * k:0x138 + 2 * k]) for k in range(128)],
+                             'respawn': list(p01[0x32A:0x33A]),
+                             'steps': {k: [s8(o + 2 * i, 2) for i in range(8)] for k, o in (('dirs', 0x1790), ('side1', 0x17A0), ('side2', 0x17B0))}
+                                      | {'order': [b // 2 for b in p01[0x18B7:0x18C1]]}})
     p81 = open(f'{src}/P81.MCO', 'rb').read()   # new game (rules/new_game.md): string table from 0x15, string 40 = intro scenes
     parts = p81[0x15:0x7B1].split(b'\0')
     scenes = [list(x) for x in parts[40].split(b'\xff')[:5]]
