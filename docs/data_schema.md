@@ -8,13 +8,14 @@ Built by `.venv/bin/python -I tools/export_json.py original out/pack`; never com
 | `blocks.json` | `{"MbbEtt": hex(42×42 tile ids)}` — map blocks (`formats.md`, *Locations are mosaics*) |
 | `rooms.json` | `{"Gnn": [hex(11×9 tile ids) per chunk]}` — room interiors (*Room maps*) |
 | `tilesets/Vnn.png` | 16 tiles per row, 16×16 px, opaque |
-| `tiledata/Bnn.json` | `names`, `nameindex` (per tile), `walkable`, `walkable_los` (tile ids), `anim`/`doors` (hex, raw), `colors` (minimap colour per tile) |
+| `tiledata/Bnn.json` | `names`, `nameindex` (per tile), `walkable`, `walkable_los` (tile ids), `anim` (`aniptr`, 7-byte records) and `doors` (segment 4: door tiles of room tilesets, the Walkwater tiles of B60) as raw hex, `colors` (minimap colour per tile) |
 | `sprites/E0n.png` | creature tile *k* at cell *k*, 32 per row, 16×16 RGBA (colour 2 = transparent); E00 heroes/companions, E01 combat (weapons, monsters), E02 town NPCs, E03 companions from party index 0x18 |
 | `conversations/Cnn.json` | `texts`, `words`, `slots[8]` = `{script, gifts[{item, min, fewer, enough, event}], shop[{item, pays, charges}], greet, bye, skill, nobuy, unknown}` (`formats.md`, *Cnn.MCV*; NPC *n* = file `n >> 3`, slot `n & 7`) |
 | `comtxt.json` | the EXE's common message texts, message *n* at index *n* |
 | `items.json` | item names by code (`_w_objects`, 0x00–0x5C) |
 | `companions.json` | the 31 companions' starting `HERO` records from `R90.MCV` (index = `h_orinum` − 1, plain gold) |
 | `p93text.json` | camp texts (P93 file 0x3D): 0 "Is everyone going to sleep?", 1 "%o will sleep.", … 8 "Camp activities are in progress." (`rules/camp.md`) |
+| `v02.json` | town spells (V02): `vision` = door-id band thresholds `ids[16]` (file 0x8C) and their comtxt numbers `texts[16]` (0x9C); `sense[16]` = direction index (comtxt 0x9E + n) by `ovl_082e`'s flags (0x7FE, words) (`rules/spells.md`) |
 | `p89.json` | Teleport picker (P89): `tiers[5]` (file 0x09, magic thresholds), window rectangle per tier `x0`/`y0` (0x10/0x15, inclusive) and `x1`/`y1` (0x1A/0x1F, exclusive), `rects` = world `[x0, y0, x1, y1]` no-teleport rectangles, inclusive (count 0x10A, 0x10C) (`rules/spells.md`) |
 | `p93.json` | `hunt` = `terrain[10]` (P93 file 0x03, by terrain class) and `weather[12]` (0x0D): signed hunting odds, −1 = impossible (`rules/camp.md`) |
 | `exetables.json` | small EXE tables: `hungerhours[race]` (DS:3AA8), `nousetext[item]` (`_NoUse` comtxt number, DS:2D9A), `weathers` (names, `_w_weather` DS:424E), `lootvalues[item]` (DS:2E72, `economy.md`), `useall` (items whose *Use* asks "Is this order for everyone?", DS:8AE), `tod` = `words` (`_SetTxtToD` list, DS:41E0: morning … night) and `hour[24]` (TODWORDS, DS:38F2), `attribs[29]` (`_w_attrib` + `_w_skills`, DS:3AAE, by HERO offset − 13), `speltim[42]` (`_speltim` DS:2B8F, `_LrnTim`) |

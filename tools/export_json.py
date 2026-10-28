@@ -1,7 +1,7 @@
 """Build the web port's data pack from the original files (decision 1). Never commit or publish the output.
 usage: export_json.py ORIGDIR OUTDIR -> OUTDIR/locations/*.json, tiledata/Bnn.json, tilesets/Vnn.png, sprites/E0n.png, conversations/Cnn.json,
        blocks.json, rooms.json, sprites.json, comtxt.json, items.json, heroes.json,
-       commands.json, npctypes.json, p90.json, p02text.json, p91text.json, p01.json, p05.json, p09.json, p92text.json, p97.json, p93text.json, p93.json, p89.json, conds.json, companions.json, exetables.json, combat.json
+       commands.json, npctypes.json, p90.json, p02text.json, p91text.json, p01.json, p05.json, p09.json, p92text.json, p97.json, p93text.json, p93.json, p89.json, v02.json, conds.json, companions.json, exetables.json, combat.json
 Schema: docs/data_schema.md. Byte strings are lowercase hex; every list is in file order."""
 import json, os, struct, sys
 sys.path.insert(0, os.path.dirname(__file__))
@@ -224,6 +224,9 @@ def main(src, dst):
                              'lots': {str(lots[i]): lots[i + 1] for i in range(0, len(lots) - 1, 2)}})
     p02 = open(f'{src}/P02.MCO', 'rb').read()
     dump(f'{dst}/p02text.json', [x.decode('latin1') for x in p02[0x67:0x28A].split(b'\0')[:17]])   # town program's own texts
+    v02 = open(f'{src}/V02.MCO', 'rb').read()   # town spells (rules/spells.md)
+    dump(f'{dst}/v02.json', {'vision': {'ids': list(v02[0x8C:0x9C]), 'texts': list(v02[0x9C:0xAC])},   # door id bands → comtxt
+                             'sense': [struct.unpack_from('<H', v02, 0x7FE + 2 * i)[0] for i in range(16)]})   # direction by flags
     p89 = open(f'{src}/P89.MCO', 'rb').read()   # the Teleport picker (rules/spells.md)
     dump(f'{dst}/p89.json', {'tiers': list(p89[0x09:0x0E]), 'x0': list(p89[0x10:0x15]), 'y0': list(p89[0x15:0x1A]),
                              'x1': list(p89[0x1A:0x1F]), 'y1': list(p89[0x1F:0x24]),

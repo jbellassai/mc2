@@ -110,7 +110,7 @@ Loaded by `_LoadTiles(n)` right after `Vnn.MCT`; six leading u16 offsets are rel
 | `txttbl` | NUL-separated name pool ("a bridge", "grassland", "a plant", "a door" …) |
 | `txtptr` | 128 bytes: name index per tile |
 | `walkptr` | two `FF`-terminated tile-id lists: list 1 = **walkable** tiles; list 2 = extra tiles `_ChkWlk` accepts only while `_losflag` is set — only P02 slot 10 (`ovl_1ae7`, the V02 0x0B flood-fill of reachable squares) sets it |
-| `aniptr` | **animated tiles**: records `{tile, barrier class, kind, cycle tiles…, FF}` separated by a second `FF`, list ends `FF FF` — street lamps, fountains, fireplaces, cauldrons, torches; spiders and snakes carry barrier class `'B'` (Repel) and some walls `'C'` (Pierce), `rules/spells.md`. Every tile of a cycle has its own record with the same cycle. Frame timing not traced |
+| `aniptr` | **animated tiles**: 7-byte records `{tile, newtile, class, cycle tiles…, FF, FF padding}`, list ends `FF` — class `'R'` street lamps, fountains, fireplaces, cauldrons, torches (newtile 0xFF); `'B'` spiders and snakes (Repel) and `'C'` energy fields (Pierce), whose `newtile` replaces them (`rules/spells.md`; V02 scans in steps of 7). Every tile of a cycle has its own record with the same cycle. Frame timing not traced |
 | `doorptr` | door tile pairs |
 | `colorptr` | 128 bytes: minimap colour per tile |
 

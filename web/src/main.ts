@@ -33,6 +33,7 @@ async function main() {
   const tables = await json<{ hungerhours: number[]; nousetext: number[]; useall: number[]; lootvalues: number[]; weathers: string[]; attribs: string[];
     tod: { words: string[]; hour: number[] }; speltim: number[] }>('exetables.json');
   const p93tables = await json<{ hunt: { terrain: number[]; weather: number[] } }>('p93.json');
+  const v02 = await json<{ vision: { ids: number[]; texts: number[] }; sense: number[] }>('v02.json');
   const p89 = await json<{ tiers: number[]; x0: number[]; y0: number[]; x1: number[]; y1: number[]; rects: number[][] }>('p89.json');
   const world = await World.create();
   const p92 = await json<string[]>('p92text.json');
@@ -73,6 +74,9 @@ async function main() {
   setInterval(() => { phase++; render(); }, 300);
   /** P01 ovl_076c: guard posts and patrols are drawn only while event 105 is set or a Locate spell lasts (patrols next
    *  to the party are seen anyway, ovl_0a94). */
+  let detect = 0, walkwater = 0;   // `_detectsw` (5-minute ticks left, saved), `_wlkwcount` (steps left; P02 zeroes it)
+  let sensed = '';                  // P02 cs:0x133: the ambush spot the last Sense pointed at ("x,y")
+  const snakes: [string, number, number, number][] = [];   // `_snakes`/`_snakelocs`: barriers Pierce/Repel removed
   let locate = 0;   // P01 OV_0x1bb: world-map draws left in which a Locate spell shows every patrol and guard post
   const seeAll = () => events.has(105) || locate > 0;
   const render = () => {
@@ -80,7 +84,8 @@ async function main() {
     const icons: Icon[] = fight ? fight.recs.filter(r => r.side && fight!.alive(r)).map(r => ({ x: r.x, y: r.y, frame: r.tile, sheet: 'E01' }))
       : wild ? [...(seeAll() ? world.guards() : []), ...world.patrols(lead.x, lead.y, seeAll())].map(g => ({ x: g.x, y: g.y, frame: 0x0f }))
           .concat(world.ships.boats().map(b => ({ ...b, frame: 0x12 })))
-      : patch?.icons() ?? [];
+      : patch?.icons() ?? (detect && level.loc.kind === 'level'   // V02 INT60_0d: Detect shows the teleportal spots
+        ? (level.loc.spots ?? []).filter(p => p.type === 1).map(p => ({ x: p.x, y: p.y, frame: 10 + (phase & 1) })) : []);
     const people = fight ? fight.recs.filter(r => !r.side && fight!.alive(r)) : wild ? [lead] : party.members;   // world: the leader alone
     view.draw(level, room ? 5 : lead.x, room ? 4 : lead.y, figures, people, phase, icons);
     const where = wild || patch || (fight && outside?.level.loc.kind === 'world') ? `${world.rec?.name.replace(/\s*[MX]$/, '') ?? ''}, ${tables.weathers[clock.weather]}` : place();
@@ -91,6 +96,8 @@ async function main() {
   /** To a level with the formation origin at (x, y). */
   const go = (lv: Level, x: number, y: number) => {
     level = lv; party.place(x, y);
+    if (lv.loc.kind === 'level') { walkwater = 0; sensed = ''; }        // P02 start; INT60_14 puts the removed barriers back
+    for (const [id, x1, y1, t] of snakes) if (id === lv.id) lv.set(x1, y1, t);
     figures = level.figures(clock, events, party.away);
   };
   const close = (msg = '') => { panel.hide(); message = msg; render(); };
@@ -118,6 +125,7 @@ async function main() {
   /** _CalUpd: five minutes; _DecEnergy at minute 0 and 30; the hour tick. */
   const tick = () => {
     const hour = clock.tick();
+    if (detect) detect--;                                                // _DecSpells: Detect runs out
     for (const { hero: h } of party.members)                            // _DecSpells: Glamour wears off with charm
       if ((h.rec.h_glamcnt as number) > 0) { h.rec.h_glamcnt = (h.rec.h_glamcnt as number) - 1; h.rec.h_charm = (h.rec.h_charm as number) - 1; }
     if (clock.minute % 30 === 0) party.decEnergy();
@@ -962,14 +970,17 @@ async function main() {
       if (other) { message = `Blocked by ${other.name ?? npctypes[other.type] ?? 'someone'}.`; return render(); }
       const mate = party.at(x, y);                       // in town a mate's square is vacated by the same step
       if (mate ? !room : level.walkable(x, y)) continue;
+      if (walkwater && !room && water(x, y)) continue;                  // V02 INT60_02: Walkwater crosses the listed tiles
       const d = level.loc.doors.find(e => e.x === x && e.y === y);
       if (d && !mate) { await door(d); return render(); }
       if (room && service?.kind === INN && x === 8 && y === 4) { innArch(); return render(); }
       if (exit && !mate) { await toWorld(exit); return render(); }
       message = `Blocked by ${mate ? mate.hero.name : level.tileName(x, y)}.`;
+      if (!room) bump(movers, dx, dy);
       return render();
     }
     for (const m of movers) { m.x += dx; m.y += dy; }
+    if (walkwater && !room) walkwater--;
     message = '';
     if (patch) pickAt(lead.x, lead.y);
     walked();
@@ -977,6 +988,23 @@ async function main() {
     render();
   };
 
+  /** V02 INT60_02: the tileset's segment-4 list (door tiles in room tilesets; water and rocks in B60) up to its 0xFF. */
+  const water = (x: number, y: number) => {
+    const t = hex(level.data.doors), i = t.indexOf(0xff);
+    return [...(i < 0 ? t : t.subarray(0, i + 1))].includes(level.tile(x, y));
+  };
+  /** V02 INT60_08/09, a step refused: each member whose square ahead is a barrier tile pays - class 'C' (Pierce)
+   *  10 + RndCo(10) energy, class 'B' (Repel) 1 HP, never below 1 HP. (The port tests the squares ahead after the first
+   *  refusal; the original marks the members as it tests them.) */
+  const bump = (movers: Member[], dx: number, dy: number) => {
+    for (const m of movers) {
+      const r = barrierRec(level.tile(m.x + dx, m.y + dy)), h = m.hero.rec;
+      if (!r || party.at(m.x + dx, m.y + dy)) continue;
+      if (r[2] === 0x43) h.h_energy = Math.max(0, (h.h_energy as number) - 10 - rnd(10));
+      else h.h_hitpts = Math.max(1, (h.h_hitpts as number) - 1);
+      m.hero.isHeTr();
+    }
+  };
   /** P02 ovl_0d70, a key door (type bit 0x80): the key is item `type & 0x7F` anywhere in the party (not used up). With
    *  it every `spdoors` record's square gets its `newtile` and the carrier says `loctext[text]`; without it
    *  `loctext[text + 1]`. With the key the party then goes through: the door's PGM record (P02 L_198c). */
@@ -1088,11 +1116,11 @@ async function main() {
    *  events 49, 70, 71, 72, 90, 107 when they trigger). A street fight on the view around the party, `_diff` = locdiff − 1;
    *  the monsters move first unless `RndCo(200)` is below the party's best tracking ("%o detects an ambush!", 0xBB).
    *  (The Sense spell's detection is not modelled.) */
-  const ambushAt = (p: { d1: number; d2: number }) => {
+  const ambushAt = (p: { x: number; y: number; d1: number; d2: number }) => {
     const k = spotTables.ambush.ids.indexOf(p.d2);
     if (k >= 0) events.add(spotTables.ambush.events[k]);
     const best = party.members.reduce((a, m) => (m.hero.rec.h_track as number) > (a.hero.rec.h_track as number) ? m : a);
-    const seen = rnd(200) < (best.hero.rec.h_track as number);
+    const seen = sensed === `${p.x},${p.y}` || rnd(200) < (best.hero.rec.h_track as number);
     if (seen) message = format(comtxt[0xbb], hero, best.hero.name);
     const wx = lead.x - 4, wy = lead.y - 3, lv = Level.view(level, wx, wy), diff = Math.max(0, level.loc.locdiff - 1);
     const f = Fight.street(cdata, lv, party.members, p.d1, diff, party.members.map(m => ({ x: m.x - wx, y: m.y - wy })));
@@ -1199,7 +1227,8 @@ async function main() {
         r.h_rdyspl = sp;
         const need = Math.max(1, cdata.spells.energy[sp] - (r.h_magic >> 2));
         if (r.h_energy < need) return close(comtxt[0x41]);                                  // "Not enough energy!"
-        if (!(cdata.spells.where[sp] & cdata.spells.here[program()])) return close(ctext(0x56, { h: h.name }));
+        const here = cdata.spells.here[program()] | (program() === 2 && level.loc.locdiff ? 4 : 0);   // + _InDungeon
+        if (!(cdata.spells.where[sp] & here)) return close(ctext(0x56, { h: h.name }));
         spell(h, sp, (text: string) => {
           const rr = h.rec as Record<string, number>, up = cdata.spells.skill.includes(sp) ? magicUp(h) : '';
           const row = Math.floor(sp / 7), col = sp % 7;
@@ -1248,8 +1277,61 @@ async function main() {
         return done(comtxt[0x43]);
       case 4: locate = m >> 2; return done('');                                             // Locate (P01 ovl_1ac2)
       case 7: return teleport(m, done);
+      case 10: return target(h, (x, y) => done(format(comtxt[0xdb], h, h.name) + comtxt[vision(x, y)]));   // Vision
+      case 15:                                                                              // Walkwater: dungeons only
+        if (!level.loc.locdiff) return done(comtxt[0x95]);
+        walkwater = Math.floor(m / 20) + 2;
+        return done(ctext(0xc9, { b: walkwater }));
+      case 25: detect += m >> 4; return done(ctext(0xf6, { u: detect * 5 }));             // Detect
+      case 13: case 3: return target(h, (x, y) => {                                         // Pierce 'C', Repel 'B'
+        const r = barrierRec(level.tile(x, y), sp === 13 ? 0x43 : 0x42);
+        if (!r) return done(comtxt[0x95]);
+        snakes.push([level.id, x, y, r[1]]); level.set(x, y, r[1]);
+        done(comtxt[sp === 13 ? 0xe7 : 0xe8]);
+      });
+      case 39: return done(sense(h, m));                                                    // Sense
     }
     close(comtxt[0x119]);
+  };
+  /** _Target: mark any square ("Mark the target.", comtxt 0x0D); cancelling (Escape) casts nothing. */
+  const target = (h: Hero, then: (x: number, y: number) => void) => { close(); mark(format(comtxt[0x0d], h, h.name), then); };
+  /** V02 INT60_00 (Vision): a door there names what is behind it - rooms of types 6-9 by their HROOM record and whether
+   *  their guards were beaten (`_dunrms`): 0xE1-0xE3 / 0xE4-0xE6 for no reward, a chest, a fountain; other doors by the
+   *  band of their id (V02 0x8C → comtxt 220-223). No door: "nothing. Try a door." (0xE0). */
+  const vision = (x: number, y: number) => {
+    const d = level.loc.doors.find(e => e.x === x && e.y === y);
+    if (!d) return 0xe0;
+    if (d.type < 6 || d.type > 9) return v02.vision.texts[v02.vision.ids.findIndex(t => t > d.id)];
+    const hr = level.loc.hrooms?.find(r => r.id === d.id);
+    const k = !hr || !(hr.reward || hr.amount) ? 0 : hr.reward < 0x80 ? 1 : 2;
+    return (dunrms.has(`${level.id}:${d.id}`) ? 0xe4 : 0xe1) + k;
+  };
+  /** The tileset's `aniptr` record (7 bytes: tile, new tile, class, cycle…) of `tile` with barrier class `cls`
+   *  ('C' 0x43 Pierce, 'B' 0x42 Repel), scanned as V02 does in steps of 7. */
+  const barrierRec = (tile: number, cls?: number) => {
+    const a = hex(level.data.anim);
+    for (let i = 0; i < a.length && a[i] !== 0xff; i += 7)
+      if (a[i] === tile && (cls === undefined ? a[i + 2] === 0x43 || a[i + 2] === 0x42 : a[i + 2] === cls)) return a.slice(i, i + 7);
+    return null;
+  };
+  /** V02 INT60_13 (Sense): the nearest ambush spot not yet fought (`_ambush`), squared distance from the leader below
+   *  255 and at most (magic/4)²: "%h senses an ambush to the " (0x9D) + a direction (0x9E + V02 0x7FE table), and
+   *  that spot is then always detected (P02 cs:0x133); else "%h senses nothing." (0x9C). */
+  const sense = (h: Hero, m: number) => {
+    let best = 0xff, at: { x: number; y: number } | null = null;
+    for (const p of level.loc.spots ?? []) {
+      if (p.type !== 0 || ambushed.has(p.d2)) continue;
+      const d = (p.x - lead.x) ** 2 + (p.y - lead.y) ** 2;
+      if (d < best) { best = d; at = p; }
+    }
+    if (!at || (m >> 2) ** 2 < best) return format(comtxt[0x9c], h, h.name);
+    sensed = `${at.x},${at.y}`;
+    let a = at.x - lead.x, b = lead.y - at.y, f = 0;                                   // ovl_082e: b > 0 = north
+    if (a < 0) { f |= 8; a = -a; }
+    if (b < 0) { f |= 4; b = -b; }
+    if (b + 2 <= a * 3) f |= 2;
+    if (b * 3 <= a + 1) f |= 1;
+    return format(comtxt[0x9d], h, h.name) + comtxt[0x9e + v02.sense[f]];
   };
   /** Teleport (P01 ovl_1b02 → P89): not aboard (region text 0x1A) or while camping (0x19). The magic skill picks a
    *  tier ([10, 30, 50, 70, 90], below 10 nothing) and the window rectangle the target must lie in; the target is not
@@ -1427,6 +1509,7 @@ async function main() {
     events: [...events], party: party.snapshot(), level: { id: level.id, ts: level.tileset }, at: { x: lead.x, y: lead.y },
     world: world.snapshot(), patches: [...patches.left], dunrms: [...dunrms], duntre: [...duntre], chests: [...chests],
     ambushed: [...ambushed], rent: [...rent], walk: [walkSteps, walkTicks], casino: [...casino], gates: [...gates],
+    detect, snakes: snakes.map(r => [...r] as [string, number, number, number]),
   });
   type Save = ReturnType<typeof snapshot>;
   const canSave = () => !fight && !patch && !chamber && level.loc.kind !== 'room';
@@ -1441,6 +1524,7 @@ async function main() {
     rent.splice(0, rent.length, ...sv.rent);
     casino.splice(0, 8, ...(sv.casino ?? casino.map(() => 1000)));
     gates.clear(); (sv.gates ?? []).forEach(g => gates.add(g));
+    detect = sv.detect ?? 0; snakes.splice(0, snakes.length, ...(sv.snakes ?? []));
     [walkSteps, walkTicks] = sv.walk;
     outside = null; service = null; special = null; patch = null; fight = null; chamber = null; chamberBack = null; shipCamp = null;
     go(await Level.load(sv.level.id, sv.level.id === 'D01' ? undefined : sv.level.ts), sv.at.x, sv.at.y);
@@ -1513,7 +1597,7 @@ async function main() {
     await world.at(x, y, clock);
     message = '';
   }
-  if (import.meta.env.DEV) Object.assign(window, { dbg: { party, world, clock } });   // for scripts/shot.mjs eval:
+  if (import.meta.env.DEV) Object.assign(window, { dbg: { party, world, clock, get level() { return level; } } });   // for scripts/shot.mjs eval:
   render();
 }
 
