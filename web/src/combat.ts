@@ -16,7 +16,8 @@ interface Weapon { minst: number; basedam: number; type: number; unbreakable: nu
 export interface CombatData { monsters: Monster[]; groups: number[][]; weapons: Weapon[]; setupxy: number[]; maxtbl: number[];
   ranges: { x: number[][]; y: number[][] }; guarddiff: number[];
   loot: { thresholds: number[]; items: number[]; amounts: number[][]; an: number[] };
-  d06: { cast: number[]; crit: number[]; crit2: number[]; prey: number[]; counts: number[]; armor: number[]; dodge: number[] };
+  d06: { cast: number[]; crit: number[]; crit2: number[]; prey: number[]; counts: number[]; armor: number[]; dodge: number[];
+    gonshi: number[]; sermin: number[]; potion: number[] };
   spells: { names: string[]; energy: number[]; where: number[]; side: number[]; skill: number[] };
   songs: { instruments: number[]; races: number[][]; names: string[][] } }
 
@@ -354,6 +355,20 @@ export class Fight {
     return d;
   }
 
+  /** P94 ovl_0a98, a hero fighting on auto (Head, Will): by the side leader's race, eat a Gonshi when RndCo(100) is
+   *  below D06 ptr4 and none is working yet, drink a Potion when HP ≤ ptr6, eat a Sermin when energy < ptr5 (each only
+   *  if carried, one action); otherwise act like a monster. `use` applies the item (Hero.use + the record sync).
+   *  (A hero with no target casts by the spell AI, ovl_157b — not modelled: it takes a random step.) */
+  autoHero(r: Rec, use: (r: Rec, item: number) => string[], text: (n: number, v?: Record<string, string | number>) => string): string[] {
+    const h = r.hero!.rec, lead = this.recs.find(o => o.side === r.side && this.alive(o) && o.state & 4) ?? this.recs[0];
+    const d = this.data.d06, lr = lead.race;
+    const has = (item: number) => h.h_invitem.includes(item);
+    if (rnd(100) < d.gonshi[lr] && !((h.h_inuse as number) & 0x80) && has(0x34)) return use(r, 0x34);
+    if (r.hp <= d.potion[lr] && has(0x32)) return use(r, 0x32);
+    if ((h.h_energy as number) < d.sermin[lr] && has(0x33)) return use(r, 0x33);
+    return this.monsterAct(r, text);
+  }
+
   /** P94 ovl_0f32/ovl_10ef: on a flee square the record leaves ("%a flees!", comtxt 0xCA); otherwise it steps toward the
    *  nearest flee square. (The original heads for the exit opposite the enemies' centroid by a quadrant table, and a
    *  fleeing leader passes leadership on and may spread panic — not modelled.) */
@@ -407,7 +422,7 @@ export class Fight {
       r.target = t ? t.recno : NONE;
     }
     // D06 ptr0: the leader race's chance to cast instead (ovl_1553); a monster's spells cost it nothing here.
-    if (rnd(100) < this.data.d06.cast[ldrace]) {
+    if (r.side && rnd(100) < this.data.d06.cast[ldrace]) {
       const s = monsterSpell(this, r, this.data.monsters[r.race - 5].spells);
       if (s) { r.moves--; return [`${r.name}: ${this.data.spells.names[s.spell]}`, ...effect(this, r, s.spell, s.target, text)]; }
     }

@@ -342,6 +342,7 @@ async function main() {
     level = await Level.wild(world.patchTileset(ter), ter);
     figures = [];
     fight = Fight.wild(cdata, level, party.members, group, diff);
+    autoHeroes.clear(); heading = false;
     if (import.meta.env.DEV) Object.assign(window, { dbg: { fight } });   // for scripts/shot.mjs eval:
     panel.show();
     panel.line(comtxt[0x44]);
@@ -356,7 +357,9 @@ async function main() {
     actor = fight!.recs.find(r => !r.side && fight!.alive(r) && r.moves > 0) ?? null;
     if (!actor) return void monsterPhase();
     message = `${actor.name}: ${actor.moves}`;
+    if (heading || autoHeroes.has(actor.recno)) return void autoTurn(actor);
     panel.set([{ label: cmd[7], act: aim }, { label: cmd[27], act: magic }, { label: cmd[35], act: recall }, { label: cmd[43], act: fightUse },
+      { label: cmd[19], act: () => { heading = true; partyTurn(); } }, { label: cmd[46], act: () => { autoHeroes.add(actor!.recno); partyTurn(); } },
       { label: cmd[14], act: drawWeapon }, { label: cmd[30], act: () => { actor!.moves = 0; partyTurn(); } }]);
     render();
   };
@@ -373,25 +376,43 @@ async function main() {
    *  instruments play their songs (INT61_1d) and are never used up. One action (assumed). The Horn and Fireglobe
    *  (globe traps, INT61_1f) are not built. */
   const fightUse = () => {
-    const a = actor!, h = a.hero!, r = h.rec;
+    const a = actor!, r = a.hero!.rec;
     const codes = [...new Set(r.h_invitem.filter(c => c > 0x30 && c < 0x51 || c === 0x5b))];
-    const fmt = (s: string, item: number) => format(s.replace(/%l/g, items[item]), h, h.name);
-    const done = () => { a.moves--; partyTurn(); };
     panel.line(comtxt[0x2b]);                                                     // "Select."
     panel.set([...codes.map(item => ({ label: items[item], act: () => {
-      if (cdata.songs.instruments.includes(item)) { report(fight!.song(a, item, ctext)); return done(); }
-      const down = (r.h_cond1 as number) & 1;
-      if (!h.use(item, tables.hungerhours[r.h_race as number])) { panel.line(fmt(comtxt[tables.nousetext[item]], item)); return partyTurn(); }
-      h.dec(h.slot(item));
-      a.hp = r.h_hitpts;
-      if (item === 0x32 && down && !((r.h_cond1 as number) & 8)) {
-        r.h_cond1 = (r.h_cond1 as number) & ~1; a.health &= ~1; a.agi = r.h_agility as number; a.dex = r.h_dextrty;
-      }
-      if (item === 0x35) a.nift = 3;
-      if (item === 0x34) a.moves = 4;                                              // then this Use spends one of them
-      panel.line(fmt(comtxt[0x38], item));                                        // "%o uses a %l."
-      done();
+      const lines = useInFight(a, item);
+      report(lines.map(l => l.replace(/^!/, '')));
+      if (lines.length && a.moves > 0 && !lines[0].startsWith('!')) a.moves--;
+      partyTurn();
     } })), { label: cmd[0], act: partyTurn }]);
+  };
+  /** One item used by `a` in a fight; a refused item's _NoUse text comes back marked '!' (no action spent). */
+  const useInFight = (a: Rec, item: number): string[] => {
+    const h = a.hero!, r = h.rec, fmt = (s: string) => format(s.replace(/%l/g, items[item]), h, h.name);
+    if (cdata.songs.instruments.includes(item)) return fight!.song(a, item, ctext);
+    const down = (r.h_cond1 as number) & 1;
+    if (!h.use(item, tables.hungerhours[r.h_race as number])) return ['!' + fmt(comtxt[tables.nousetext[item]])];
+    h.dec(h.slot(item));
+    a.hp = r.h_hitpts;
+    if (item === 0x32 && down && !((r.h_cond1 as number) & 8)) {
+      r.h_cond1 = (r.h_cond1 as number) & ~1; a.health &= ~1; a.agi = r.h_agility as number; a.dex = r.h_dextrty;
+    }
+    if (item === 0x35) a.nift = 3;
+    if (item === 0x34) a.moves = 4;                                              // then this Use spends one of them
+    return [fmt(comtxt[0x38])];                                                   // "%o uses a %l."
+  };
+  /** Head (`_mnusel` 0x13: the whole party on auto until a key is pressed) and Will (0x2E: this member for the rest of
+   *  the fight) run P94 ovl_0a98 (Fight.autoHero) for the hero's actions. Head's speed digit is not asked. */
+  const autoHeroes = new Set<number>();
+  let heading = false;
+  const autoTurn = async (a: Rec) => {
+    panel.set(heading ? [{ label: cmd[40], act: () => { heading = false; } }] : []);   // Stop
+    while (fight && a.moves > 0 && fight.alive(a) && !fight.outcome()) {
+      report(fight.autoHero(a, (r, item) => { const l = useInFight(r, item); r.moves--; return l.map(x => x.replace(/^!/, '')); }, ctext));
+      render();
+      await sleep(200);
+    }
+    partyTurn();
   };
   /** Recall (_RecSpl): ready one of the spells the hero has memorised (`h_spells`, `h_rdyspl`). Takes no action. */
   const recall = () => {
@@ -773,7 +794,12 @@ async function main() {
   };
   let queue = Promise.resolve();   // steps run in order; keys pressed while a room loads are not lost
   addEventListener('keydown', e => {
-    if (fight) { const k = KEYS[e.key]; if (k) { e.preventDefault(); fightStep(...k); } return; }
+    if (fight) {
+      if (heading) { heading = false; return; }                   // any key ends Head (after the current action)
+      const k = KEYS[e.key];
+      if (k && actor && !autoHeroes.has(actor.recno)) { e.preventDefault(); fightStep(...k); }
+      return;
+    }
     if (panel.open) return;
     if (e.key === 'i' || e.key === 'I') { sheet(); return; }
     if (e.key === 'l' || e.key === 'L') { looking = true; message = say(comtxt[0x0d]); render(); return; }   // "Mark the target."

@@ -176,7 +176,7 @@ A hero's attack costs **2 energy** (`h_energy −= 2`, floor 0, `_IsHeTr`). A ta
 | 1 (0x52) | target criterion triples `{critA, chance%, critB}` |
 | 2 (0xD0) | fallback criterion triples |
 | 3 (0x14E) | prey race for *By race* (0xFF none): Dwarf→Orc, Orc→Dwarf, Zorlim→Wizard, Tekhir→Elf, Troll→Human … |
-| 4 (0x1A2) | auto-hero (P94 `ovl_0a98`, party races 0–5): chance % to eat a **Gonshi** each action when not already under it: `[45, 60, 30, 25, 40, 25]` |
+| 4 (0x1A2) | auto-hero (P94 `ovl_0a98`, indexed by the side leader's race `_LDRACE`, so the party leader's race decides for everyone): chance % to eat a **Gonshi** each action when not already under it: `[45, 60, 30, 25, 40, 25]`; the checks run Gonshi, then Potion, then Sermin, each only when the item is carried (`ovl_148f`), and use one action |
 | 5 (0x1A8) | auto-hero eats a **Sermin** when `h_energy <` this: `[20, 30, 20, 10, 5, 5]` |
 | 6 (0x1AE) | auto-hero drinks a **Potion** when HP `≤` this: `[20, 25, 15, 35, 10, 10]` |
 | 8 (0x22B) | monster count table (7 bytes per location difficulty) |
