@@ -416,10 +416,19 @@ async function main() {
       partyTurn();
     } })), { label: cmd[0], act: partyTurn }]);
   };
-  /** A hero's step; walking into an enemy attacks it (a port shortcut for Attack + target). */
+  /** A hero's step (P94 ovl_01ad → _RMove): walking into an enemy attacks it; a step off the arena asks to flee
+   *  ("%h is fleeing from combat." "Do you want to leave?", comtxt 0x6C/0x6D — the ids are assumed from their
+   *  wording) and Yes takes the hero off the board. (The leader's flight is refused while a companion holds a quest
+   *  item, ovl_09a8 → comtxt 0x114 — not modelled.) */
   const fightStep = (dx: number, dy: number) => {
     const a = actor;
     if (!a) return;
+    const x = a.x + dx, y = a.y + dy;
+    if (x < 0 || y < 0 || x >= fight!.level.w || y >= fight!.level.h) {
+      panel.line(ctext(0x6c, { h: a.name }));
+      panel.line(comtxt[0x6d]);
+      return void panel.set([{ label: cmd[3], act: () => { fight!.remove(a); partyTurn(); } }, { label: cmd[4], act: partyTurn }]);
+    }
     const t = fight!.at(a.x + dx, a.y + dy);
     if (t && t.side) return strike(t);
     if (fight!.move(a, dx, dy)) return partyTurn();
@@ -450,6 +459,7 @@ async function main() {
     if (!o) return false;
     actor = null; message = '';
     if (o === 2) { panel.line(comtxt[0x50]); panel.set([{ label: cmd[1], act: () => location.reload() }]); return true; }
+    if (o === 3) { panel.set([{ label: cmd[0], act: endFight }]); render(); return true; }   // fled: the guard stays
     panel.line(comtxt[0x4e]);
     onWin();
     // P95 ovl_072d: loot for every slain monster, its value to each hireling's partybucks (ovl_164e, cap 30000).

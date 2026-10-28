@@ -1,5 +1,5 @@
 // Spells a hero casts in combat (rules/spells.md: _Magic, P94 ovl_1740, V06 INT 61h handlers, FFFAR HEAL/ENERGY/SHIELD).
-// Not yet: Betray, Summon, Double, Destroy, Jump, Terrify (they need fleeing, side changes or extra records).
+// Not yet: Betray, Summon, Double, Destroy, Jump (side changes, extra records, square targeting).
 import type { Fight, Rec } from './combat';
 
 type Text = (n: number, v?: Record<string, string | number>) => string;
@@ -8,14 +8,14 @@ const rnd = (n: number) => Math.floor(Math.random() * n);
 /** Who a spell is aimed at: P94 TALIGN (0 own side, 1 the enemy), with the group spells and Assess/Timestop aimed at
  *  nobody; Courage (TALIGN 0xFF) at one's own side. */
 export function aim(f: Fight, spell: number): 'own' | 'enemy' | null {
-  if ([5, 19, 20, 21, 23, 35].includes(spell)) return null;   // Assess, Zapall, Zengrl, Zishoxe, Zutyun, Timestop
+  if ([5, 19, 20, 21, 23, 33, 35].includes(spell)) return null;   // Assess, Zapall, Zengrl, Zishoxe, Zutyun, Terrify, Timestop
   if (spell === 38) return 'own';
   const s = f.data.spells.side[spell];
   return s === 0 ? 'own' : s === 1 ? 'enemy' : null;
 }
 
 /** The spells built here; the rest answer "The spell fails." */
-export const BUILT = new Set([0, 2, 5, 6, 8, 9, 11, 12, 14, 16, 18, 19, 20, 21, 22, 23, 27, 28, 35, 36, 37, 38, 40]);
+export const BUILT = new Set([0, 2, 5, 6, 8, 9, 11, 12, 14, 16, 18, 19, 20, 21, 22, 23, 27, 28, 33, 35, 36, 37, 38, 40]);
 
 /** `_EneUsg`: max(1, energy[spell] − magic/4). */
 export const cost = (f: Fight, spell: number, magic: number) => Math.max(1, f.data.spells.energy[spell] - (magic >> 2));
@@ -120,6 +120,8 @@ export function effect(f: Fight, c: Rec, spell: number, t: Rec | null, text: Tex
     case 40: if ((t!.state & 0x82) !== 0x82) return [text(0x95)];                           // Restsoul
       t!.state = (t!.state & ~2) | 8; t!.x = t!.y = -1; return [text(0x94, { l: t!.name })];
     case 35: f.timestop = true; return [];                                                  // Timestop
+    case 33: for (const r of foes()) if (rnd(12) < power(c, r)) { r.bravery = 0; r.state |= 0x40; }   // Terrify
+      return [text(0x97, { a: c.name })];                                                  // Timestop
     case 5: return f.recs.filter(r => r.side && f.alive(r)).map(r => `${r.name}: HP ${r.hp}, A ${r.armor}, SH ${r.shield}`);   // Assess
     // FFFAR: Heal / Zengrl set HP to the maximum and stand a downed target up; Energy = a Sermin; Shield = the caster's
     // magic skill; Zishoxe = half of it on the whole side.

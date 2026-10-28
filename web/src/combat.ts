@@ -74,6 +74,7 @@ export class Fight {
     const lead = f.recs.filter(r => r.side && data.monsters[r.race - 5].leader !== NONE)
       .sort((a, b) => data.monsters[b.race - 5].leader - data.monsters[a.race - 5].leader)[0];
     if (lead) lead.state |= 4;
+    f.flee = f.fleeSquares();
     return f;
   }
 
@@ -112,12 +113,28 @@ export class Fight {
   }
   enemies(r: Rec): Rec[] { return this.recs.filter(e => e.side !== r.side && this.visible(e)); }
 
-  /** INT61_08: 1 = no monster left, 2 = no party member left, else 0. */
-  outcome(): 0 | 1 | 2 {
+  /** INT61_08: 1 = no monster left, 2 = every party member dead, 3 = the rest of the party fled, else 0. */
+  outcome(): 0 | 1 | 2 | 3 {
+    const party = this.recs.filter(r => r.side === 0);
     if (!this.recs.some(r => r.side === 1 && this.alive(r))) return 1;
-    if (!this.recs.some(r => r.side === 0 && this.alive(r))) return 2;
+    if (party.every(r => r.state & 0x80)) return 2;
+    if (!party.some(r => this.alive(r))) return 3;
     return 0;
   }
+
+  /** `_fleetbl` (P96 ovl_0c5c/ovl_0c6f, wilderness): the arena's edge squares the first hero can reach (`_blobmap` < 100,
+   *  flood-filled over the background only). (P96 moves an edge square one step inward where the edge has a door;
+   *  arenas cut from G00 have none.) */
+  private fleeSquares(): Set<number> {
+    const h = this.recs[0], d = this.distances(h.x, h.y, true), out = new Set<number>();
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++)
+      if ((x === 0 || y === 0 || x === W - 1 || y === H - 1) && d[y * W + x] < 0x7e && this.level.walkable(x, y)) out.add(y * W + x);
+    return out;
+  }
+  flee = new Set<number>();
+
+  /** Off the board: a fled hero (P94 ovl_01ad) or monster (ovl_10ef): `c_state |= 0x10`, position −1. */
+  remove(r: Rec) { r.state |= 0x10; r.x = r.y = -1; r.moves = 0; for (const o of this.recs) if (o.target === r.recno) o.target = NONE; }
 
   /** P95 ovl_08f6, after a won fight, for every slain monster (not fled or removed): a coin flip; heads 5-10 Coins,
    *  tails an item only if RndCo(20) + diff > 10, by the race's d100 bands (P95 0x21E/0x17A, race·4) with an amount from
@@ -293,7 +310,7 @@ export class Fight {
   }
 
   /** `_blobmap` (V06 0x25): steps from (x, y) to every square over free squares (8-way); the goal may be occupied. */
-  private distances(x: number, y: number): number[] {
+  private distances(x: number, y: number, background = false): number[] {
     const d = new Array(W * H).fill(0x7e);
     d[y * W + x] = 0;
     const q = [[x, y]];
@@ -303,10 +320,23 @@ export class Fight {
         const nx = cx + DX[k], ny = cy + DY[k];
         if (nx < 0 || ny < 0 || nx >= W || ny >= H || d[ny * W + nx] !== 0x7e) continue;
         d[ny * W + nx] = d[cy * W + cx] + 1;
-        if (this.free(nx, ny)) q.push([nx, ny]);
+        if (background ? this.level.walkable(nx, ny) : this.free(nx, ny)) q.push([nx, ny]);
       }
     }
     return d;
+  }
+
+  /** P94 ovl_0f32/ovl_10ef: on a flee square the record leaves ("%a flees!", comtxt 0xCA); otherwise it steps toward the
+   *  nearest flee square. (The original heads for the exit opposite the enemies' centroid by a quadrant table, and a
+   *  fleeing leader passes leadership on and may spread panic — not modelled.) */
+  private fleeStep(r: Rec, text: (n: number, v?: Record<string, string | number>) => string): string[] {
+    if (this.flee.has(r.y * W + r.x)) { this.remove(r); return [text(0xca, { a: r.name })]; }
+    const d = this.distances(r.x, r.y), goal = [...this.flee].sort((a, b) => d[a] - d[b])[0];
+    if (goal === undefined || d[goal] >= 0x7e) { r.moves--; return []; }
+    const g = this.distances(goal % W, Math.floor(goal / W)), here = g[r.y * W + r.x];
+    const steps = [...Array(8).keys()].filter(k => this.free(r.x + DX[k], r.y + DY[k]) && g[(r.y + DY[k]) * W + r.x + DX[k]] < here);
+    if (steps.length) { const k = steps[rnd(steps.length)]; this.move(r, DX[k], DY[k]); } else r.moves--;
+    return [];
   }
 
   /** P94 ovl_124a: the candidates best meeting criterion `c` (table at file 0x122A), ties broken at random. */
@@ -337,8 +367,9 @@ export class Fight {
 
   /** One action of a monster (P94 ovl_0b4b → ovl_0db1): keep or choose a target by the leader race's D06 criteria,
    *  then shoot, strike when adjacent, or step toward it (a random lower-distance neighbour), else a random move.
-   *  The spell roll (D06 ptr0) is skipped until spells exist. */
+   *  A routed record (`c_state & 0x40`) flees instead. */
   monsterAct(r: Rec, text: (n: number, v?: Record<string, string | number>) => string): string[] {
+    if (r.state & 0x40) return this.fleeStep(r, text);
     const lead = this.recs.find(o => o.side === r.side && this.alive(o) && o.state & 4);
     const ldrace = lead ? lead.race : r.race;
     let t = this.recs[r.target === NONE ? -1 : this.recs.findIndex(o => o.recno === r.target)];
