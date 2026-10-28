@@ -62,8 +62,9 @@ export class Level {
     return lv;
   }
 
-  /** A mushroom patch (P04): G00 chunk `chunk` drawn with tileset `ts` (formats.md, Room maps). */
-  static async patch(ts: number, chunk: number): Promise<Level> {
+  /** A mushroom patch (P04) or wilderness arena (P96 `_cmbtyp` 1): G00 chunk `chunk` drawn with tileset `ts`
+   *  (formats.md, Room maps). */
+  static async wild(ts: number, chunk: number): Promise<Level> {
     const rec = await json<Location>('locations/D04.json');
     const rooms = await json<Record<string, string[]>>('rooms.json');
     const lv = await Level.make('D04', { ...rec, exits: [], townsfolk: [], npcs: [] }, ts);

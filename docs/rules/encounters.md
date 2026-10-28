@@ -49,7 +49,7 @@ Unused bytes 16/17/18 per monster (probably design notes — the first grows wit
 | 40 | Munak | 75 | 0 | — | 5 | 8 | 23 | 9 | 8 | 1 | 2 | 65 | 0 | — | 4 | 10 | 7 | 298 | 2 |
 | 41 | Barbarian | 65 | 0 | 12 | 5 | 11 | 24 | 5 | 4 | 1 | 3 | 55 | 0 | — | 0 | 8 | 2 | 301 | 8 |
 
-Leader rank (P96 file 0x39): Orc 5, Zorlim 40, Tekhir 10, Troll 15, Goblin 20, Minotaur 35, Domug 30, Jerrah 50, Gnoll 25, Ogre 55, Gaem 60, Zumagin 45, Hibliss 65, Naur 75, Farazu 70, Kazih 48; others never lead (0xFF).
+Leader rank (P96 file 0x39 + code, so Orc at 0x3E): Orc 5, Zorlim 40, Tekhir 10, Troll 15, Goblin 20, Minotaur 35, Domug 30, Jerrah 50, Gnoll 25, Ogre 55, Gaem 60, Zumagin 45, Hibliss 65, Naur 75, Farazu 70, Kazih 48, Barbarian 0; the others never lead (0xFF). Undead flag: P96 file 0x62 + code (Skeleton, Zombie, Ghoul = 1).
 
 ## Encounter groups (`_grps`, group numbers 60–222)
 

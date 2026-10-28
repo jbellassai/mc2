@@ -3,11 +3,12 @@ import { image, json, type Sprites } from './pack';
 import type { Level, Figure } from './level';
 
 export const COLS = 21, ROWS = 15, TILE = 16;
+export interface Icon { x: number; y: number; frame: number; sheet?: 'E01' }
 
 export class View {
   private ctx: CanvasRenderingContext2D;
   private constructor(readonly canvas: HTMLCanvasElement, private heroes: HTMLImageElement, private folk: HTMLImageElement,
-                      private more: HTMLImageElement, private sprites: Sprites) {
+                      private more: HTMLImageElement, private monsters: HTMLImageElement, private sprites: Sprites) {
     canvas.width = COLS * TILE; canvas.height = ROWS * TILE;
     canvas.style.width = `${COLS * TILE * 3}px`;
     canvas.style.aspectRatio = `${COLS} / ${ROWS}`;   // keeps square tiles when max-height shrinks it
@@ -16,8 +17,8 @@ export class View {
   }
 
   static async create(canvas: HTMLCanvasElement): Promise<View> {
-    const [e00, e02, e03] = await Promise.all(['E00', 'E02', 'E03'].map(n => image(`sprites/${n}.png`)));
-    return new View(canvas, e00, e02, e03, await json<Sprites>('sprites.json'));
+    const [e00, e02, e03, e01] = await Promise.all(['E00', 'E02', 'E03', 'E01'].map(n => image(`sprites/${n}.png`)));
+    return new View(canvas, e00, e02, e03, e01, await json<Sprites>('sprites.json'));
   }
 
   private sheet(im: HTMLImageElement, k: number, cols: number, cx: number, cy: number) {
@@ -39,9 +40,9 @@ export class View {
   }
 
   /** `phase` counts animation steps: tile cycles advance every step, animated NPCs flip every few (_NPCANIMATE). */
-  /** `icons`: E00 frames on the map under the figures (mushrooms, P04 ovl_055a). */
+  /** `icons`: E00 frames (mushrooms, guards) or E01 frames (monsters in combat) under the figures. */
   draw(lv: Level, cx: number, cy: number, figures: Figure[], party: { x: number; y: number; num: number }[], phase = 0,
-       icons: { x: number; y: number; frame: number }[] = []) {
+       icons: Icon[] = []) {
     const ox = cx - (COLS >> 1), oy = cy - (ROWS >> 1);
     const ctx = this.ctx;
     ctx.fillStyle = '#000';
@@ -54,7 +55,7 @@ export class View {
         if (t !== 0xff) ctx.drawImage(lv.tiles, (t % 16) * 16, (t >> 4) * 16, 16, 16, x * TILE, y * TILE, TILE, TILE);
       }
     const cols = this.sprites.columns;
-    for (const i of icons) this.sheet(this.heroes, i.frame, cols, i.x - ox, i.y - oy);
+    for (const i of icons) this.sheet(i.sheet === 'E01' ? this.monsters : this.heroes, i.frame, cols, i.x - ox, i.y - oy);
     for (const f of figures) {
       // _SingleNPCDraw: companions (num < 0x20) use their hero frames; anyone else the E02 sprite `tile`.
       if (f.num < 0x20) this.hero(f.num, f.x - ox, f.y - oy);

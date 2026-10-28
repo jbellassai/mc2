@@ -1,7 +1,7 @@
 // Drive the dev build in headless Chrome: press keys, then save a screenshot and print the status line and the open panel (log, buttons).
 // usage: node scripts/shot.mjs URL OUT.png [key ...]   keys: any key name (ArrowUp, Enter …); "xN" repeats the previous key;
 // "type:TEXT" types text into the focused field; "click:LABEL" clicks a visible button; "wait:MS" pauses;
-// "snap:FILE" saves a screenshot mid-script
+// "snap:FILE" saves a screenshot mid-script; "eval:EXPR" prints a page expression (dev builds expose `window.dbg`)
 import { spawn } from 'node:child_process';
 import { writeFileSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -42,6 +42,7 @@ try {
       writeFileSync(key.slice(5), Buffer.from((await send('Page.captureScreenshot', { format: 'png' })).result.data, 'base64'));
       continue;
     }
+    if (key.startsWith('eval:')) { console.log(JSON.stringify(await evaluate(key.slice(5)))); continue; }
     if (key.startsWith('click:')) {
       await sleep(300);
       await evaluate(`[...document.querySelectorAll('button')].find(b => b.offsetParent && b.textContent === ${JSON.stringify(key.slice(6))})?.click()`);

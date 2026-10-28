@@ -106,7 +106,7 @@ The same roll serves every non-combat skill through `_SkillUp0` (INT 62h AH=0x31
 | 2 (8) | 6,6,6,7,7,9 | 2,4,6,3,5,4 | right |
 | 3 (9) | 3,5,7,4,6,5 | 5,5,5,6,6,7 | bottom |
 
-- Monsters (P96 file 0x19 = x ranges, 0x29 = y ranges, `{lo,hi}` word pairs; a random cell in the rectangle, re-rolled until `_PlacePerson` finds a free passable cell; wilderness fights instead take a random cell of the whole 11×9 map, scanning forward from `RndCo(99)+17` for a free one):
+- Monsters (P96 file 0x19 = x ranges, 0x29 = y ranges, `{lo,hi}` **byte** pairs, 8 each: sides 6–9 melee, then sides 6–9 casters; a random cell in the rectangle, re-rolled until `_PlacePerson` finds a free passable cell; wilderness fights instead take a random cell of the whole 11×9 map, scanning forward from `RndCo(99)+17` for a free one):
 
 | side | melee monsters | casters (`c_magskl ≠ 0`, except Vankruh and Doombeast) |
 |---|---|---|
@@ -116,6 +116,21 @@ The same roll serves every non-combat skill through `_SkillUp0` (INT 62h AH=0x31
 | 9 | x 0–10, y 0–3 | x 0–10, y 0 |
 
 So the party always enters from one wall, melee monsters fill the far half and spellcasters hug the far wall. Monster records also get `c_alignmnt = 1`, `c_energy = 99`, `c_target = 0xFF`, the leader rank (file 0x39) and the undead flag (file 0x62 → `c_state |= 2`).
+
+### Wilderness fights (P01 `ovl_0846`)
+After a world-map step P01 checks the party's square for a living patrol (`_ptrlxy`/`_ptrlsta`, `_ctype` 1, group `newsr[n & 7]`) or an uncleared **guard spot** (region `gwrds` `{x, y, group}`, `_grdsta` bit `region·8 + n`, `_ctype` 0). Either way: `_grpno` = the group, `_terrain` = terrain class of the square, `_diff` = P01 file 0x33A `[region]` = `[0,7,3,4,2,1,5,6,4,3,3,4,5,7,6,5]`, `_cmbtyp` 1, side `_rmdata+6` = 6, the window stays (`_pwinxy = _winxy`, so after the fight the party stands on that square), and the tileset is the terrain's from P01 0x36A (`ovl_09bf`, the same as a mushroom patch); `_ambflg` = 1 when camping (`_swcamp`) and no party member is on watch (`h_actvty` 9). The arena is G00 chunk `_terrain` (`formats.md`). P01 draws each uncleared guard spot in view as E00 icon 0x0F (a skull, `ovl_0833`). Victory sets the guard's `_grdsta` bit.
+
+### The combat menu (`_Menu(11)`, P94 `ovl_015e` by `_mnusel`)
+Attack (7), Draw (0x0E, `_DrawWeap`, no action used), Head (0x13, auto-combat with a speed digit), Look (0x19), Magic (0x1B), Pass (0x1E: `c_removes = 1`, then the action is spent), Recall (0x23), Use (0x2B: only items 'J', 'H', 'D', 'E', '[' and '9' do something), Will (0x2E: this member fights on auto). Moving is a direction key (`_RMove`), one action per step.
+
+### Messages of a blow (P06 `ovl_0bc2`)
+`"%a" " hits " "%a" "."` (comtxt 0x46, 0x47, 0x46, 0x10), then `" -"` (0x4A) and the hit value when the line has room; a new line `"Dam:"` (0x4B) damage, `" (A-%b)"` (0x4C) armour — or `" (SH:%b)"` (0x57) shield for magic, `" (NF:%b)"` (0x58) Nift charges left —, `" HP:"` (0x4D) the target's HP. A knockdown adds `"CRITICAL HIT!"` (0x48) and, unless the target is a Dreadknight, `"%a is wounded."` (0x49). A dodge prints nothing (only the side-step shows).
+
+### Attack direction and the dodge step (P06 `ovl_0b2b`, `ovl_0fcf`)
+Directions 0–7 = W, N, E, S, NW, NE, SE, SW (dx P06 file 0x93 `[-1,0,1,0,-1,1,1,-1]`, dy 0x9B `[0,-1,0,1,-1,-1,1,1]`). With `dx = target.x − attacker.x`, `dy = attacker.y − target.y`, the index `(dx<0)·8 + (dy<0)·4 + (3|dx| ≥ |dy|+2)·2 + (3|dy| ≤ |dx|+1)` selects from P06 file 0xB0B `[1,–,5,2,3,–,6,2,1,–,4,0,3,–,7,0]` (– never occurs). A dodging target tries direction `D06 ptr10[dir·2 + 1]`, then `[dir·2]` (e.g. attacked from the south it side-steps E, else W), taking the first free square without a globe; if neither is free it stays.
+
+### After a blow (P06 `ovl_050a`)
+A hero's attack costs **2 energy** (`h_energy −= 2`, floor 0, `_IsHeTr`). A target that was hit (result 1/2) and is still alive turns on the attacker (`c_target`, `c_targx`, clears Terrify 0x40) when `RndCo(100)` exceeds its `c_intel`. A killed target becomes `c_health 0x80`, `c_state` 0x80 (keeping the undead bit), energy 0, and every record targeting it forgets its target (`ovl_0adb`).
 
 ### A round (`P94 ovl_02e8`)
 - `_curphase = 1`, `_timestop` cleared at the end of each round.

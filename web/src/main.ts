@@ -13,6 +13,8 @@ import { camp } from './camp';
 import { Party, type Member } from './party';
 import { World } from './world';
 import { Patches, type Patch } from './patch';
+import { Fight, type Rec } from './combat';
+import type { Icon } from './view';
 
 const status = document.getElementById('status')!;
 const START = { level: 'D02', x: 97, y: 17 };   // new_game.md: window (93,14) + (4,3), formation cell 0; mutable for ?at=
@@ -28,6 +30,7 @@ async function main() {
   const world = await World.create();
   const p92 = await json<string[]>('p92text.json');
   const patches = await Patches.create();
+  const cdata = await Fight.data();
   const hero = await Hero.profile(0);                        // profile A until character creation exists
   const clock = Clock.newGame();
   // Dev aids: ?hour=20 starts in the evening, ?at=74,25 starts on another square.
@@ -41,6 +44,7 @@ async function main() {
   let outside: { level: Level; x: number; y: number } | null = null;   // where to return from a room
   let service: ServiceRoom | null = null;                               // the P05 room the party is in
   let patch: Patch | null = null;                                        // the mushroom patch the party is in
+  let fight: Fight | null = null;                                        // the fight in progress
   let roomStart = { x: 0, y: 0 };                                       // its formation origin (base square)
   let figures: Figure[] = level.figures(clock, events, party.away);
   let message = `${hero.name} has landed in Telermain.`;
@@ -50,8 +54,11 @@ async function main() {
   setInterval(() => { phase++; render(); }, 300);
   const render = () => {
     const room = level.loc.kind === 'room', wild = level.loc.kind === 'world';
-    view.draw(level, room ? 5 : lead.x, room ? 4 : lead.y, figures, wild ? [lead] : party.members, phase, patch?.icons());   // world: the leader alone
-    const where = wild || patch ? `${world.rec?.name.replace(/\s*[MX]$/, '') ?? ''}, ${tables.weathers[clock.weather]}` : place();
+    const icons: Icon[] = fight ? fight.recs.filter(r => r.side && fight!.alive(r)).map(r => ({ x: r.x, y: r.y, frame: r.tile, sheet: 'E01' }))
+      : wild ? world.guards().map(g => ({ ...g, frame: 0x0f })) : patch?.icons() ?? [];
+    const people = fight ? fight.recs.filter(r => !r.side && fight!.alive(r)) : wild ? [lead] : party.members;   // world: the leader alone
+    view.draw(level, room ? 5 : lead.x, room ? 4 : lead.y, figures, people, phase, icons);
+    const where = wild || patch || fight ? `${world.rec?.name.replace(/\s*[MX]$/, '') ?? ''}, ${tables.weathers[clock.weather]}` : place();
     status.textContent = `${clock}  —  ${where}${message ? '  —  ' + message : ''}`;
   };
   /** School and job D-files have no location name: show the town's. */
@@ -319,6 +326,99 @@ async function main() {
     for (let n = world.stepTicks(ter, clock, party); n > 0; n--) tick();
     world.fatigue(ter, clock, party);
     await world.at(x, y, clock);
+    const guard = world.guards().find(g => g.x === x && g.y === y);
+    if (guard) await startFight(guard.group, world.diff(cdata.guarddiff), ter, () => world.cleared.add(guard.bit));
+  };
+
+  // ---- combat (rules/combat.md; combat.ts) ----
+  /** `%a`/`%b`/`%h`/`%l` filled from `v` (the combat texts name records, not the acting hero). */
+  const ctext = (n: number, v: Record<string, string | number> = {}) => comtxt[n].replace(/%([a-z])/g, (_, c: string) => String(v[c] ?? ''));
+  let actor: Rec | null = null;
+  /** P01 ovl_0846 → _DoACmbt: a wilderness fight on G00 chunk `ter`; `won` runs on victory (e.g. the guard is cleared).
+   *  "COMBAT!" (comtxt 0x44), then rounds: the party phase, hero by hero, then the monster phase (P94 ovl_02e8). */
+  const startFight = async (group: number, diff: number, ter: number, won: () => void) => {
+    outside = { level, x: lead.x, y: lead.y };
+    level = await Level.wild(world.patchTileset(ter), ter);
+    figures = [];
+    fight = Fight.wild(cdata, level, party.members, group, diff);
+    if (import.meta.env.DEV) Object.assign(window, { dbg: { fight } });   // for scripts/shot.mjs eval:
+    panel.show();
+    panel.line(comtxt[0x44]);
+    fight.newRound();
+    onWin = won;
+    partyTurn();
+  };
+  let onWin = () => {};
+  /** The next hero with actions left acts; when none is left, the monsters' phase. */
+  const partyTurn = () => {
+    if (finished()) return;
+    actor = fight!.recs.find(r => !r.side && fight!.alive(r) && r.moves > 0) ?? null;
+    if (!actor) return void monsterPhase();
+    message = `${actor.name}: ${actor.moves}`;
+    panel.set([{ label: cmd[7], act: aim }, { label: cmd[14], act: drawWeapon }, { label: cmd[30], act: () => { actor!.moves = 0; partyTurn(); } }]);
+    render();
+  };
+  const report = (lines: string[]) => { for (const l of lines) panel.line(l); };
+  /** Attack: the enemies in range (adjacent, or in a bow's clear line); choosing one strikes it. */
+  const aim = () => {
+    const a = actor!, foes = fight!.enemies(a).filter(t => fight!.inRange(a, t));
+    if (!foes.length) { panel.line(ctext(0x0d)); return; }                 // "Mark the target."
+    panel.set([...foes.map(t => ({ label: `${t.name} (${t.x},${t.y})`, act: () => strike(t) })), { label: cmd[0], act: partyTurn }]);
+  };
+  const strike = (t: Rec) => { report(fight!.attack(actor!, t, ctext)); partyTurn(); };
+  /** Draw (_DrawWeap): a weapon 9-0x1E from the pack; refused for another race (comtxt 0x103), broken (0x39) or too
+   *  heavy (0x69). Takes no action. */
+  const drawWeapon = () => {
+    const a = actor!, h = a.hero!, r = h.rec;
+    const slots = r.h_invitem.map((c, i) => i).filter(i => r.h_invitem[i] >= 9 && r.h_invitem[i] <= 0x1e && i !== r.h_inhand);
+    panel.set([...slots.map(i => ({ label: items[r.h_invitem[i]], act: () => {
+      const w = cdata.weapons[r.h_invitem[i] - 9];
+      if (w.race !== 0xff && w.race !== r.h_race) panel.line(ctext(0x103, { a: items[r.h_invitem[i]] }));
+      else if (r.h_invamt[i] >= 0xe4) panel.line(ctext(0x39));
+      else if (r.h_strngth < w.minst) panel.line(ctext(0x69, { h: a.name }));
+      else { r.h_inhand = i; a.weapon = r.h_invitem[i]; a.wskl = Fight.wpnSkl(h); panel.line(`${a.name}: ${items[a.weapon]}`); }
+      partyTurn();
+    } })), { label: cmd[0], act: partyTurn }]);
+  };
+  /** A hero's step; walking into an enemy attacks it (a port shortcut for Attack + target). */
+  const fightStep = (dx: number, dy: number) => {
+    const a = actor;
+    if (!a) return;
+    const t = fight!.at(a.x + dx, a.y + dy);
+    if (t && t.side) return strike(t);
+    if (fight!.move(a, dx, dy)) return partyTurn();
+    message = `Blocked by ${t?.name ?? level.tileName(a.x + dx, a.y + dy)}.`;
+    render();
+  };
+  const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+  /** P94 ovl_0b4b: monsters 6-23 in order, each using its actions; then a new round. */
+  const monsterPhase = async () => {
+    actor = null;
+    panel.set([]);
+    for (const m of fight!.recs.filter(r => r.side)) {
+      while (fight && m.moves > 0 && fight.alive(m) && !fight.outcome()) {
+        report(fight.monsterAct(m, ctext));
+        render();
+        await sleep(200);
+      }
+    }
+    if (finished()) return;
+    fight!.newRound();
+    partyTurn();
+  };
+  /** INT61_08: "VICTORY!" (0x4E), or every hero dead: "Alas, your quest has failed." (0x50). Loot (P95) is not built. */
+  const finished = (): boolean => {
+    const o = fight!.outcome();
+    if (!o) return false;
+    actor = null; message = '';
+    if (o === 2) { panel.line(comtxt[0x50]); panel.set([{ label: cmd[1], act: () => location.reload() }]); return true; }
+    panel.line(comtxt[0x4e]);
+    onWin();
+    panel.set([{ label: cmd[0], act: () => {
+      level = outside!.level; party.place(outside!.x, outside!.y); outside = null; fight = null; close();
+    } }]);
+    render();
+    return true;
   };
   /** P01 ovl_0d01 onto a mushroom-patch feature: the step's time is spent and the window stays where it was, so leaving
    *  the patch returns the party to the square it stepped from. P04 ovl_050f: the formation from (4,3), each member by
@@ -327,7 +427,7 @@ async function main() {
     const ter = level.data.nameindex[level.tile(x, y)];
     for (let n = world.stepTicks(ter, clock, party); n > 0; n--) tick();
     outside = { level, x: lead.x, y: lead.y };
-    const lv = await Level.patch(world.patchTileset(ter), ter);
+    const lv = await Level.wild(world.patchTileset(ter), ter);
     go(lv, 4, 3);
     const placed: Member[] = [];
     for (const m of party.members) { Object.assign(m, lv.place(m.x, m.y, (a, b) => placed.some(p => p.x === a && p.y === b))); placed.push(m); }
@@ -564,6 +664,7 @@ async function main() {
   };
   let queue = Promise.resolve();   // steps run in order; keys pressed while a room loads are not lost
   addEventListener('keydown', e => {
+    if (fight) { const k = KEYS[e.key]; if (k) { e.preventDefault(); fightStep(...k); } return; }
     if (panel.open) return;
     if (e.key === 'i' || e.key === 'I') { sheet(); return; }
     if (e.key === 'l' || e.key === 'L') { looking = true; message = say(comtxt[0x0d]); render(); return; }   // "Mark the target."

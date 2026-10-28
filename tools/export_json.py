@@ -1,7 +1,7 @@
 """Build the web port's data pack from the original files (decision 1). Never commit or publish the output.
 usage: export_json.py ORIGDIR OUTDIR -> OUTDIR/locations/*.json, tiledata/Bnn.json, tilesets/Vnn.png, sprites/E0n.png, conversations/Cnn.json,
        blocks.json, rooms.json, sprites.json, comtxt.json, items.json, heroes.json,
-       commands.json, npctypes.json, p90.json, p02text.json, p91text.json, p01.json, p05.json, p92text.json, p97.json, p93text.json, conds.json, companions.json, exetables.json
+       commands.json, npctypes.json, p90.json, p02text.json, p91text.json, p01.json, p05.json, p92text.json, p97.json, p93text.json, conds.json, companions.json, exetables.json, combat.json
 Schema: docs/data_schema.md. Byte strings are lowercase hex; every list is in file order."""
 import json, os, struct, sys
 sys.path.insert(0, os.path.dirname(__file__))
@@ -264,6 +264,35 @@ def main(src, dst):
         'weathers': [x.decode('latin1') for x in exe[ds + 0x424E:ds + 0x4300].split(b'\0')[:12]],   # _w_weather
         'lootvalues': list(struct.unpack_from('<93H', exe, ds + 0x2E72)),                      # item values (economy.md)
         'useall': [i + 0x31 for i in range(32) if struct.unpack_from('<H', exe, ds + 0x8AE + 2 * i)[0]]})   # _AllDoit asks
+    # Combat (rules/combat.md, encounters.md): monsters by code − 5, groups by number − 60, weapons by item − 9.
+    p96 = open(f'{src}/P96.MCO', 'rb').read()
+    d06 = open(f'{src}/D06.MCV', 'rb').read()
+    ptr = struct.unpack_from('<14H', d06)   # D06 header words are file offsets
+    names = [x.decode('latin1') for x in exe[ds + 0x40A4:ds + 0x4204].split(b'\0')[:37]]   # _w_monstrs
+    def monster(k):
+        r = exe[ds + 0x308E + 23 * k:ds + 0x308E + 23 * k + 23]
+        return {'name': names[k], 'hp': struct.unpack_from('<H', r)[0], 'shield': r[2], 'weapon': r[3], 'armor': r[4],
+                'bravery': r[5], 'str': r[6], 'dex': r[7], 'agi': r[8], 'res': r[9], 'int': r[10], 'wskl': r[11], 'mskl': r[12],
+                'spells': list(r[13:16]), 'tile': struct.unpack_from('<H', r, 20)[0], 'anim': r[22],
+                'leader': p96[0x39 + 5 + k], 'undead': p96[0x62 + 5 + k]}
+    def weapon(k):
+        r = exe[ds + 0x2CF6 + 9 * k:ds + 0x2CF6 + 9 * k + 9]
+        hl = struct.unpack_from('<H', r, 7)[0]
+        return {'minst': r[0], 'basedam': r[1], 'type': r[2], 'unbreakable': r[3], 'stbonus': r[4], 'sklbonus': r[5],
+                'race': r[6], 'hitlist': list(exe[ds + hl:exe.index(b'\xff', ds + hl)]) if hl else []}
+    dump(f'{dst}/combat.json', {
+        'monsters': [monster(k) for k in range(37)],
+        'groups': [list(exe[ds + 0x340B + 5 * k:ds + 0x3410 + 5 * k]) for k in range(163)],   # {count, m0..m3}
+        'weapons': [weapon(k) for k in range(22)],
+        'setupxy': list(open(f'{src}/P81.MCO', 'rb').read()[0x162F:0x165F]),   # 24 x, 24 y: formation f member m at 6f+m
+        'ranges': {'x': [list(p96[0x19 + 2 * k:0x1B + 2 * k]) for k in range(8)],      # sides 6-9 melee, then casters
+                   'y': [list(p96[0x29 + 2 * k:0x2B + 2 * k]) for k in range(8)]},
+        'maxtbl': list(exe[ds + 0x2C7E:ds + 0x2C7E + 120]),   # _MaxSkill: skill·6 + race
+        'guarddiff': list(open(f'{src}/P01.MCO', 'rb').read()[0x33A:0x34A]),       # world fights' difficulty by region
+        'd06': {'cast': list(d06[ptr[0]:ptr[1]]), 'crit': list(d06[ptr[1]:ptr[2]]), 'crit2': list(d06[ptr[2]:ptr[3]]),
+                'prey': list(d06[ptr[3]:ptr[3] + 42]), 'gonshi': list(d06[ptr[4]:ptr[5]]), 'sermin': list(d06[ptr[5]:ptr[6]]),
+                'potion': list(d06[ptr[6]:ptr[7]]), 'counts': list(d06[ptr[8]:ptr[8] + 56]), 'armor': list(d06[ptr[9]:ptr[10]]),
+                'dodge': list(d06[ptr[10]:ptr[11]]), 'prefs': list(d06[ptr[12]:ptr[12] + 132])}})
     ct = ds + 0x9F8   # common text, message n = n-th string
     dump(f'{dst}/comtxt.json', [x.decode('latin1') for x in exe[ct:ct + 0x4000].split(b'\0')[:400]])
     print(f'{n} locations, {len(blocks)} blocks, {sum(map(len, rooms.values()))} room chunks')

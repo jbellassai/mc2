@@ -42,6 +42,20 @@ export class World {
     cur.hours = hi + rnd((dur & 15) - hi + 2);
   }
 
+  /** `_grdsta`: guard spots cleared, bit region·8 + n. */
+  readonly cleared = new Set<number>();
+
+  /** The region's 8 guard spots (`gwrds` {x, y, group}, x 0 = none) not yet cleared. P01 draws each as E00 icon 0x0F
+   *  while it is in view (ovl_0833) and fights it when the party stands on it (ovl_0846, `_ctype` 0). */
+  guards(): { x: number; y: number; group: number; bit: number }[] {
+    const g = hex(this.rec?.tables.gwrds ?? '');
+    return Array.from({ length: 8 }, (_, n) => ({ x: g[3 * n], y: g[3 * n + 1], group: g[3 * n + 2], bit: this.region * 8 + n }))
+      .filter(s => s.x && !this.cleared.has(s.bit));
+  }
+
+  /** P01 table 0x33A: the difficulty of fights in this region (`_diff`). */
+  diff(table: number[]): number { return table[this.region]; }
+
   /** P01 ovl_09bf: a mushroom patch's tileset by the terrain class under the party. */
   patchTileset(ter: number): number { return this.p01.patchtiles[ter]; }
 

@@ -1,0 +1,285 @@
+// Combat (rules/combat.md, encounters.md): up to 24 CMBTNT records on an 11×9 arena, party slots first. Built so far:
+// the wilderness arena (P96 formation 0, random monster squares), rounds and actions (P94 ovl_04a6), melee and bow
+// attacks with dodge, knockdown, armour, weapon wear and skill gains (P06 ovl_050a/ovl_0cde, FAR_SKILLUP), and the
+// monster AI's targeting and movement (P94 ovl_0b4b). Not yet: spells, parley, fleeing, Use, auto-combat, Doombeast images.
+import { json } from './pack';
+import type { Hero } from './hero';
+import type { Level } from './level';
+
+interface Monster { name: string; hp: number; shield: number; weapon: number; armor: number; bravery: number; str: number;
+  dex: number; agi: number; res: number; int: number; wskl: number; mskl: number; spells: number[]; tile: number;
+  anim: number; leader: number; undead: number }
+interface Weapon { minst: number; basedam: number; type: number; unbreakable: number; stbonus: number; sklbonus: number;
+  race: number; hitlist: number[] }
+export interface CombatData { monsters: Monster[]; groups: number[][]; weapons: Weapon[]; setupxy: number[]; maxtbl: number[];
+  ranges: { x: number[][]; y: number[][] }; guarddiff: number[];
+  d06: { cast: number[]; crit: number[]; crit2: number[]; prey: number[]; counts: number[]; armor: number[]; dodge: number[] } }
+
+/** A CMBTNT record. `side` 0 = party (`c_alignmnt` 0), 1 = monsters. */
+export interface Rec {
+  recno: number; side: 0 | 1; name: string; race: number; hero?: Hero; num: number; tile: number;
+  x: number; y: number; hp: number; shield: number; armor: number; bravery: number; str: number; dex: number;
+  agi: number; int: number; wskl: number; weapon: number;
+  state: number;    // c_state: 0x80 dead, 0x10 removed, 4 leader, 2 undead
+  health: number;   // c_health: 1 knocked down
+  target: number;   // c_target, 0xFF none
+  moves: number;    // c_removes: actions left this round
+}
+
+const rnd = (n: number) => Math.floor(Math.random() * n);   // _RndCo
+/** Directions 0-7: W N E S NW NE SE SW (P06 file 0x93 dx, 0x9B dy). */
+const DX = [-1, 0, 1, 0, -1, 1, 1, -1], DY = [0, -1, 0, 1, -1, -1, 1, 1];
+/** P06 ovl_0b2b: attacker → target direction from sign and slope bits (table P06 file 0xB0B). */
+const DIRTBL = [1, 255, 5, 2, 3, 255, 6, 2, 1, 255, 4, 0, 3, 255, 7, 0];
+const W = 11, H = 9, ARROWS = 0x51, NONE = 0xff;
+const cheb = (a: Rec, x: number, y: number) => Math.max(Math.abs(a.x - x), Math.abs(a.y - y));
+
+export class Fight {
+  readonly recs: Rec[] = [];
+  private skilled = new Set<string>();   // G_sklbits: one gain per hero and combat skill per fight
+
+  private constructor(readonly data: CombatData, readonly level: Level) {}
+
+  static async data(): Promise<CombatData> { return json<CombatData>('combat.json'); }
+
+  /** P96 setup for a wilderness fight (`_cmbtyp` 1, side 6): heroes at formation 0 of `_setupxy`, then the group's
+   *  monsters on random free squares (scan forward from RndCo(99)+17). The best leader rank leads (`c_state |= 4`). */
+  static wild(data: CombatData, level: Level, heroes: { hero: Hero; num: number }[], group: number, diff: number): Fight {
+    const f = new Fight(data, level);
+    heroes.forEach(({ hero, num }, m) => {
+      const r = hero.rec as Record<string, number> & typeof hero.rec, item = r.h_inhand === NONE ? NONE : r.h_invitem[r.h_inhand];
+      f.recs.push({ recno: m, side: 0, name: hero.name, race: r.h_race, hero, num, tile: 0,
+        x: data.setupxy[m], y: data.setupxy[24 + m], hp: r.h_hitpts, shield: r.h_shield, armor: f.heroArmor(hero),
+        bravery: r.h_bravery, str: r.h_strngth, dex: r.h_dextrty, agi: r.h_agility, int: r.h_intellg,
+        wskl: Fight.wpnSkl(hero), weapon: item, state: r.h_cond1 & 0x80 ? 0x80 : 0, health: 0, target: NONE, moves: 0 });
+    });
+    for (const code of f.roster(group, diff)) {
+      const s = data.monsters[(code & 0x7f) - 5], recno = 6 + f.recs.length - heroes.length;
+      let i = rnd(99) + 17;
+      while (f.occupied(i % 99 % W, Math.floor(i % 99 / W)) || !level.walkable(i % 99 % W, Math.floor(i % 99 / W))) i++;
+      f.recs.push({ recno, side: 1, name: s.name, race: code & 0x7f, num: NONE, tile: s.tile, x: i % 99 % W,
+        y: Math.floor(i % 99 / W), hp: s.hp, shield: s.shield, armor: s.armor, bravery: s.bravery, str: s.str, dex: s.dex,
+        agi: s.agi, int: s.int, wskl: s.wskl, weapon: s.weapon, state: s.undead ? 2 : 0, health: 0, target: NONE, moves: 0 });
+    }
+    const lead = f.recs.filter(r => r.side && data.monsters[r.race - 5].leader !== NONE)
+      .sort((a, b) => data.monsters[b.race - 5].leader - data.monsters[a.race - 5].leader)[0];
+    if (lead) lead.state |= 4;
+    return f;
+  }
+
+  /** P96 ovl_020a: monster codes for group `g`. Below 60, `g` itself; else row g − 60 = {count, m0..m3}, a zero count
+   *  taken from D06 by difficulty; each monster is one of the four entries at random, and an entry with bit 0x80 adds
+   *  one more of that code on top. (The per-entry quotas, OV_0x19b, are not modelled.) */
+  private roster(g: number, diff: number): number[] {
+    const row = g < 60 ? [0, g, g, g, g] : this.data.groups[g - 60];
+    const n = row[0] || this.data.d06.counts[7 * diff + rnd(7)];
+    const out = Array.from({ length: n }, () => row[1 + rnd(4)] & 0x7f);
+    const extra = row.slice(1).find(c => c & 0x80);
+    if (extra) out.push(extra & 0x7f);
+    return out;
+  }
+
+  /** V06 INT61_00: armour = Σ D06 armour value of each worn item 0x1F-0x2A (items.md). */
+  private heroArmor(h: Hero): number {
+    const r = h.rec;
+    return r.h_wears.reduce((s, w) => { const c = w === NONE ? 0 : r.h_invitem[w]; return s + (c >= 0x1f && c <= 0x2a ? this.data.d06.armor[c - 0x1f] : 0); }, 0);
+  }
+
+  /** _GetWpnSkl: the skill for the weapon in hand (items 9-0x11 sword, -0x19 axe, -0x1E archery), else fist. */
+  static wpnSkl(h: Hero): number {
+    const r = h.rec as Record<string, number> & typeof h.rec;
+    const c = r.h_inhand === NONE ? NONE : r.h_invitem[r.h_inhand];
+    return c < 0x12 ? r.h_sword : c < 0x1a ? r.h_axe : c < 0x1f ? r.h_archry : r.h_fist;
+  }
+
+  private weapon(r: Rec): Weapon | null { return r.weapon >= 9 && r.weapon <= 0x1e ? this.data.weapons[r.weapon - 9] : null; }
+  alive(r: Rec): boolean { return !(r.state & 0x90); }
+  at(x: number, y: number): Rec | undefined { return this.recs.find(r => this.alive(r) && r.x === x && r.y === y); }
+  private occupied(x: number, y: number) { return !!this.at(x, y); }
+  free(x: number, y: number): boolean {
+    return x >= 0 && y >= 0 && x < W && y < H && this.level.walkable(x, y) && !this.occupied(x, y);
+  }
+  enemies(r: Rec): Rec[] { return this.recs.filter(e => e.side !== r.side && this.alive(e)); }
+
+  /** INT61_08: 1 = no monster left, 2 = no party member left, else 0. */
+  outcome(): 0 | 1 | 2 {
+    if (!this.recs.some(r => r.side === 1 && this.alive(r))) return 1;
+    if (!this.recs.some(r => r.side === 0 && this.alive(r))) return 2;
+    return 0;
+  }
+
+  /** P94 ovl_04a6, every round: undead rise with 1 HP; each living record gets 1 action, one more when dex·8+4 ≥ 50
+   *  (then −50), and one more if RndCo(100) is below the rest: dex 0 → 1, 6 → 2, 12 → 3. */
+  newRound() {
+    for (const r of this.recs) {
+      if (r.state & 0x80 && r.state & 2) { r.state &= 0x7f; r.health &= 0x7f; r.hp = 1; }
+      if (r.state & 0x90) { r.moves = 0; continue; }
+      let n = r.dex * 8 + 4;
+      r.moves = 1;
+      if (n >= 50) { r.moves++; n -= 50; }
+      if (rnd(100) < n) r.moves++;
+    }
+  }
+
+  /** A step of one square (`_RMove` in combat); the arena edge is not an exit here yet. */
+  move(r: Rec, dx: number, dy: number): boolean {
+    if (!this.free(r.x + dx, r.y + dy)) return false;
+    r.x += dx; r.y += dy; r.moves--;
+    return true;
+  }
+
+  /** In weapon range: Chebyshev 1, or anywhere with a bow (`_ChkRng`, `G_wrkamt` 1 or 100) and a clear line. */
+  inRange(a: Rec, t: Rec): boolean {
+    return this.weapon(a)?.type === 3 ? this.clear(a, t) : cheb(a, t.x, t.y) <= 1;
+  }
+
+  /** P94 ovl_1af1 `_PATHBLK`: no unwalkable square or living record between the two (a Bresenham line; assumed). */
+  private clear(a: Rec, t: Rec): boolean {
+    const n = cheb(a, t.x, t.y);
+    for (let i = 1; i < n; i++) {
+      const x = Math.round(a.x + (t.x - a.x) * i / n), y = Math.round(a.y + (t.y - a.y) * i / n);
+      if (!this.level.walkable(x, y) || this.occupied(x, y)) return false;
+    }
+    return true;
+  }
+
+  /** `_Attack` (P06 ovl_050a → ovl_0cde): one blow; returns the lines to print. Uses one action. */
+  attack(a: Rec, t: Rec, text: (n: number, vars?: Record<string, string | number>) => string): string[] {
+    const w = this.weapon(a), out: string[] = [];
+    a.moves--;
+    if (a.hero && w?.type === 3) {                        // a hero's bow needs arrows (_SearchInv, _DecObj0)
+      const s = a.hero.slot(ARROWS);
+      if (s < 0) return [text(0x4f, { h: a.name })];      // "%h has no arrows."
+      a.hero.dec(s);
+    }
+    // P06 ovl_0b2b: the attack direction, for the dodge step.
+    const dx = t.x - a.x, dy = a.y - t.y, ax = Math.abs(dx), ay = Math.abs(dy);
+    const dir = DIRTBL[(dx < 0 ? 8 : 0) | (dy < 0 ? 4 : 0) | (3 * ax >= ay + 2 ? 2 : 0) | (3 * ay <= ax + 1 ? 1 : 0)];
+    let result: number;
+    const sure = t.health & 0x70 || t.race === 32 || (w?.hitlist.includes(t.race) ?? false);
+    const skill = a.wskl + (w?.sklbonus ?? 0), thresh = (skill + 50 - 8 * t.agi) & 0xff;
+    if (!sure && (skill + 50 < 8 * t.agi || thresh === 0 || thresh < rnd(100))) {
+      result = 0;                                          // dodged: a side-step from D06 ptr10 (P06 ovl_0fcf)
+      for (const adj of [1, 0]) {
+        const d = this.data.d06.dodge[dir * 2 + adj];
+        if (this.free(t.x + DX[d], t.y + DY[d])) { t.x += DX[d]; t.y += DY[d]; break; }
+      }
+    } else {
+      let hit = w ? (w.stbonus + a.str - w.minst) * 2 + w.basedam : a.str;
+      if (t.race === 36 && a.weapon - 9 === 16) hit *= 4;  // Rhokadur against a Dreadknight
+      const dam = Math.max(0, hit - t.armor);
+      t.hp -= dam;
+      result = 1;
+      if (t.hp <= 0) { t.hp = 0; result = 0xff; t.state |= 0x80; }
+      else if (dam > 0 && !(t.health & 1) && t.race !== 28 && (a.wskl >> 3) + a.dex > rnd(100)) {
+        result = 2; t.health |= 1; t.agi = 0; t.dex = 0; t.moves = Math.min(t.moves, 1);   // knocked down
+        if (t.hero) t.hero.rec.h_cond1 = (t.hero.rec.h_cond1 as number) | 1;              // Wounded
+      }
+      if (t.hero) { t.hero.rec.h_hitpts = t.hp; if (result === 0xff) t.hero.rec.h_cond1 = (t.hero.rec.h_cond1 as number) | 0x80; }
+      // ovl_0bc2: "%a hits %a. -HIT" / "Dam:n (A-armour) HP:n", then "CRITICAL HIT!" and "%a is wounded." on a knockdown.
+      out.push(`${text(0x46, { a: a.name })}${text(0x47)}${text(0x46, { a: t.name })}${text(0x10)}${text(0x4a)}${hit}`,
+        `${text(0x4b)}${dam}${text(0x4c, { b: t.armor })}${text(0x4d)}${t.hp}`);
+      if (result === 2) { out.push(text(0x48)); if (t.race !== 36) out.push(text(0x49, { a: t.name })); }
+    }
+    if (a.hero) out.push(...this.afterHeroBlow(a, w, result, text));
+    // ovl_050a: a target that was hit turns on its attacker unless RndCo(100) ≤ its c_intel.
+    if (result !== 0 && this.alive(t) && t.int < rnd(100)) t.target = a.recno;
+    if (result === 0xff) for (const r of this.recs) if (r.target === t.recno) r.target = NONE;
+    return out;
+  }
+
+  /** After a hero's blow: a landed one may raise the weapon skill (FAR_SKILLUP) and may break the weapon; any blow but a
+   *  dodge wears it (combat.md, Weapon wear); every attack costs 2 energy (`h_energy −= 2`, _IsHeTr). */
+  private afterHeroBlow(a: Rec, w: Weapon | null, result: number, text: (n: number, v?: Record<string, string | number>) => string): string[] {
+    const h = a.hero!, r = h.rec as Record<string, number> & typeof h.rec, out: string[] = [];
+    if (result !== 0) {
+      const idx = w ? w.type - 1 : 4, field = ['h_sword', 'h_axe', 'h_archry', 'h_magic', 'h_fist'][idx];
+      const skill = r[field], base = [30, 15, 25, 20, 25][idx];
+      const chance = base + (skill < 50 ? (50 - skill) >> 2 : -Math.max(1, (skill - 50) >> 1));
+      const key = `${a.recno}:${idx}`;
+      if (!this.skilled.has(key) && skill < this.data.maxtbl[idx * 6 + r.h_race] && rnd(100) < chance) {
+        this.skilled.add(key);
+        r[field] = skill + 1;
+        a.wskl = Fight.wpnSkl(h);
+        out.push(text(0x60, { h: a.name, l: ['Sword', 'Axe', 'Archery', 'Magic', 'Fist'][idx] }));
+      }
+      if (w && !w.unbreakable && r.h_inhand !== NONE) {
+        const wear = r.h_invamt[r.h_inhand] & 0x7f;
+        if (wear >= 90 || (wear >= 25 && wear >> 1 >= rnd(100))) {
+          r.h_invamt[r.h_inhand] = 0xe2; r.h_inhand = NONE; a.weapon = NONE; a.wskl = Fight.wpnSkl(h);
+          out.push(text(0x76, { h: a.name }));            // "%h's weapon breaks!"
+        }
+      }
+    }
+    if (result !== 0 && r.h_inhand !== NONE && w && !w.unbreakable && (r.h_invamt[r.h_inhand] & 0x7f) < 0x7f) r.h_invamt[r.h_inhand]++;
+    r.h_energy = Math.max(0, r.h_energy - 2);
+    h.isHeTr();
+    return out;
+  }
+
+  /** `_blobmap` (V06 0x25): steps from (x, y) to every square over free squares (8-way); the goal may be occupied. */
+  private distances(x: number, y: number): number[] {
+    const d = new Array(W * H).fill(0x7e);
+    d[y * W + x] = 0;
+    const q = [[x, y]];
+    while (q.length) {
+      const [cx, cy] = q.shift()!;
+      for (let k = 0; k < 8; k++) {
+        const nx = cx + DX[k], ny = cy + DY[k];
+        if (nx < 0 || ny < 0 || nx >= W || ny >= H || d[ny * W + nx] !== 0x7e) continue;
+        d[ny * W + nx] = d[cy * W + cx] + 1;
+        if (this.free(nx, ny)) q.push([nx, ny]);
+      }
+    }
+    return d;
+  }
+
+  /** P94 ovl_124a: the candidates best meeting criterion `c` (table at file 0x122A), ties broken at random. */
+  private pick(r: Rec, c: number, ldrace: number): Rec | undefined {
+    const foes = this.enemies(r);
+    const best = (score: (e: Rec) => number, ok: (e: Rec) => boolean = () => true) => {
+      const pool = foes.filter(ok);
+      if (!pool.length) return undefined;
+      const m = Math.min(...pool.map(score));
+      const top = pool.filter(e => score(e) === m);
+      return top[rnd(top.length)];
+    };
+    const dist = c === 1 ? this.distances(r.x, r.y) : [];
+    switch (c) {
+      case 0: return best(() => 0);
+      case 1: return best(e => dist[e.y * W + e.x], e => dist[e.y * W + e.x] < 0x7e);
+      case 2: return best(e => e.hp);
+      case 3: return best(e => e.agi);
+      case 4: return undefined;                                         // magic-users: no spells cast yet
+      case 5: return best(() => 0, e => this.weapon(e)?.type === 3);
+      case 6: return best(() => 0, e => e.race === this.data.d06.prey[ldrace]);
+      case 7: return best(() => 0, e => !!(e.state & 4));
+      case 8: { const l = this.recs.find(o => o.side === r.side && o.state & 4); return best(() => 0, e => !!l && e.target === l.recno); }
+      case 9: return best(e => e.hp, e => e.target === r.recno);
+    }
+    return undefined;
+  }
+
+  /** One action of a monster (P94 ovl_0b4b → ovl_0db1): keep or choose a target by the leader race's D06 criteria,
+   *  then shoot, strike when adjacent, or step toward it (a random lower-distance neighbour), else a random move.
+   *  The spell roll (D06 ptr0) is skipped until spells exist. */
+  monsterAct(r: Rec, text: (n: number, v?: Record<string, string | number>) => string): string[] {
+    const lead = this.recs.find(o => o.side === r.side && this.alive(o) && o.state & 4);
+    const ldrace = lead ? lead.race : r.race;
+    let t = this.recs[r.target === NONE ? -1 : this.recs.findIndex(o => o.recno === r.target)];
+    if (!t || !this.alive(t) || t.side === r.side) {
+      const [a, chance, b] = this.data.d06.crit.slice(3 * ldrace, 3 * ldrace + 3);
+      t = this.pick(r, rnd(100) < chance ? a : b, ldrace) ?? this.pick(r, this.data.d06.crit2[3 * ldrace + 2], ldrace)!;
+      r.target = t ? t.recno : NONE;
+    }
+    if (t && this.inRange(r, t)) return this.attack(r, t, text);
+    if (t) {
+      const d = this.distances(t.x, t.y), here = d[r.y * W + r.x];
+      const steps = [...Array(8).keys()].filter(k => this.free(r.x + DX[k], r.y + DY[k]) && d[(r.y + DY[k]) * W + r.x + DX[k]] < here);
+      if (here < 0x7e && steps.length) { const k = steps[rnd(steps.length)]; this.move(r, DX[k], DY[k]); return []; }
+    }
+    const k = rnd(8);                                                   // "Random move"
+    if (!this.move(r, DX[k], DY[k])) r.moves--;
+    return [];
+  }
+}

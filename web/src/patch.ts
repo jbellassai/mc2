@@ -19,7 +19,7 @@ export class Patches {
   /** P92 ovl_02cb, on a new day with `_juldate & 7 == 0`. */
   regrow() { this.left.forEach((n, i) => { if (n < 15) this.left[i]++; }); }
 
-  /** P04 ovl_0441: on the patch map (Level.patch), `count` mushrooms placed from the last growing place to the first,
+  /** P04 ovl_0441: on the patch map (Level.wild), `count` mushrooms placed from the last growing place to the first,
    *  each by _PlacePerson around the party (mushrooms do not block each other). */
   open(id: number, lv: Level, party: { x: number; y: number }[]): Patch {
     const item = this.kinds[id], k = item - 0x33;
