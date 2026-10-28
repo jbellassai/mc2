@@ -62,6 +62,8 @@ Evidence: `_Magic` (EXE, FF module, `out/decomp/MC2_all.c`), tables in the data 
 7. The memorised count `h_spells[spell]` (HERO+0x7B+spell) is decremented; at 0 the readied spell is cleared (`h_rdyspl = 0xFF`).
 8. `_DecSta(hero, h_energy, cost)` subtracts the energy (floors at 0); `_IsHeTr` updates the "tired" flags: energy 0 → flag 0x10 in HERO+0xBD; energy < 15 → flag 0x20 in HERO+0xBE; `_SumStat` refreshes the status display.
 
+Memorised copies: `h_spells` (HERO+0x7B) is 42 counts, read as spell id = index (the TDInfo type is `[6][7]`, so row·7 + column). Spell names: DS:3EDC, 42 NUL-terminated strings in id order. Combat Recall (`_RecSpl`, menu value 0x23) only sets `h_rdyspl` and takes no action.
+
 ## Casting in combat — P94 (`ovl_1721` → `ovl_1740`)
 A combatant record (`CMBTNT`, 33 bytes) may cast `G_curspl` when: state flags (`c_state` +5) & 0x98 == 0; `c_invis` (+14) == 0; it is a hero (`c_recno` +31 < 6); `_EneUsg(spell, hero) ≤ c_energy` (+13); and the hero has the spell memorised (`h_spells[spell] != 0`). The effect is then dispatched through P94's jump table (slot = `SPLVECS` offset / 3): each P94 spell entry is a 3-instruction stub `call prolog; mov ah,N; int 61h; jmp epilog`, and INT 61h is **V06.MCO** (see *Combat spell effects* below).
 

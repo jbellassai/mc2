@@ -7,6 +7,7 @@ export interface HeroRecord {
   h_name: string; h_fullnm: string; h_sex: number; h_strngth: number; h_dextrty: number; h_charm: number;
   h_lockpck: number; h_hitpts: number; h_hpmax: number; h_energy: number; h_gold: number;
   h_invitem: number[]; h_invamt: number[]; h_wears: number[]; h_inhand: number;
+  h_magic: number; h_spells: number[][]; h_rdyspl: number;   // spell id = row·7 + column
   [field: string]: unknown;
 }
 

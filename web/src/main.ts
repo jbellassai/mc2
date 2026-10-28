@@ -14,6 +14,7 @@ import { Party, type Member } from './party';
 import { World } from './world';
 import { Patches, type Patch } from './patch';
 import { Fight, type Rec } from './combat';
+import { aim as spellAim, BUILT, cost as spellCost, effect } from './spells';
 import type { Icon } from './view';
 
 const status = document.getElementById('status')!;
@@ -355,7 +356,8 @@ async function main() {
     actor = fight!.recs.find(r => !r.side && fight!.alive(r) && r.moves > 0) ?? null;
     if (!actor) return void monsterPhase();
     message = `${actor.name}: ${actor.moves}`;
-    panel.set([{ label: cmd[7], act: aim }, { label: cmd[14], act: drawWeapon }, { label: cmd[30], act: () => { actor!.moves = 0; partyTurn(); } }]);
+    panel.set([{ label: cmd[7], act: aim }, { label: cmd[27], act: magic }, { label: cmd[35], act: recall },
+      { label: cmd[14], act: drawWeapon }, { label: cmd[30], act: () => { actor!.moves = 0; partyTurn(); } }]);
     render();
   };
   const report = (lines: string[]) => { for (const l of lines) panel.line(l); };
@@ -366,6 +368,40 @@ async function main() {
     panel.set([...foes.map(t => ({ label: `${t.name} (${t.x},${t.y})`, act: () => strike(t) })), { label: cmd[0], act: partyTurn }]);
   };
   const strike = (t: Rec) => { report(fight!.attack(actor!, t, ctext)); partyTurn(); };
+  /** Recall (_RecSpl): ready one of the spells the hero has memorised (`h_spells`, `h_rdyspl`). Takes no action. */
+  const recall = () => {
+    const r = actor!.hero!.rec, known = r.h_spells.flat().map((n, i) => [n, i]).filter(([n]) => n > 0);
+    panel.set([...known.map(([n, i]) => ({ label: `${cdata.spells.names[i]} (${n})`, act: () => {
+      r.h_rdyspl = i; partyTurn();
+    } })), { label: cmd[0], act: partyTurn }]);
+  };
+  /** Magic (_Magic in combat, spells.md): the readied spell, if it may be cast in combat (`_splocs` & 16), was not
+   *  already cast this encounter (30-35, `_magbits`) and the hero has the energy (`_EneUsg`); then its target, the
+   *  effect, the energy, one memorised copy, and a magic skill roll for the SKLSPLS spells. Uses one action. */
+  const magic = () => {
+    const a = actor!, r = a.hero!.rec, sp = r.h_rdyspl, f = fight!;
+    if (sp === 0xff) return void panel.line(ctext(0x40, { h: a.name }));                  // "%h must recall a spell first."
+    if (!(cdata.spells.where[sp] & 0x10)) return void panel.line(ctext(0x56, { h: a.name }));   // "%h can't do that here!"
+    if (sp >= 30 && sp <= 35 && f.magbits.has(sp)) return void panel.line(comtxt[0x42]);
+    const need = spellCost(f, sp, r.h_magic);
+    if (r.h_energy < need) return void panel.line(comtxt[0x41]);                          // "Not enough energy!"
+    const go = (t: Rec | null) => {
+      panel.line(`${a.name}: ${cdata.spells.names[sp]}`);
+      report(BUILT.has(sp) ? effect(f, a, sp, t, ctext) : [comtxt[0x119]]);
+      r.h_energy -= need; a.hero!.isHeTr();
+      const row = Math.floor(sp / 7), col = sp % 7;
+      if (--r.h_spells[row][col] <= 0) { r.h_spells[row][col] = 0; r.h_rdyspl = 0xff; }
+      if (cdata.spells.skill.includes(sp)) report(f.skillUp(a, 3, ctext));
+      if (sp >= 30 && sp <= 35) f.magbits.add(sp);
+      a.moves--;
+      partyTurn();
+    };
+    const side = spellAim(f, sp);
+    if (!side) return go(null);
+    const pool = sp === 40 ? f.recs.filter(t => t.side && (t.state & 0x82) === 0x82 && !(t.state & 8))
+      : f.recs.filter(t => (side === 'own' ? t.side === a.side : t.side !== a.side) && f.visible(t));
+    panel.set([...pool.map(t => ({ label: `${t.name} (${t.x},${t.y})`, act: () => go(t) })), { label: cmd[0], act: partyTurn }]);
+  };
   /** Draw (_DrawWeap): a weapon 9-0x1E from the pack; refused for another race (comtxt 0x103), broken (0x39) or too
    *  heavy (0x69). Takes no action. */
   const drawWeapon = () => {
@@ -395,7 +431,8 @@ async function main() {
   const monsterPhase = async () => {
     actor = null;
     panel.set([]);
-    for (const m of fight!.recs.filter(r => r.side)) {
+    fight!.endSide(0);
+    for (const m of fight!.timestop ? [] : fight!.recs.filter(r => r.side)) {
       while (fight && m.moves > 0 && fight.alive(m) && !fight.outcome()) {
         report(fight.monsterAct(m, ctext));
         render();
@@ -403,6 +440,7 @@ async function main() {
       }
     }
     if (finished()) return;
+    fight!.endSide(1);
     fight!.newRound();
     partyTurn();
   };

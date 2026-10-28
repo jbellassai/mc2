@@ -1,10 +1,12 @@
 // Combat (rules/combat.md, encounters.md): up to 24 CMBTNT records on an 11×9 arena, party slots first. Built so far:
 // the wilderness arena (P96 formation 0, random monster squares), rounds and actions (P94 ovl_04a6), melee and bow
 // attacks with dodge, knockdown, armour, weapon wear and skill gains (P06 ovl_050a/ovl_0cde, FAR_SKILLUP), and the
-// monster AI's targeting and movement (P94 ovl_0b4b). Not yet: spells, parley, fleeing, Use, auto-combat, Doombeast images.
+// monster AI's targeting and movement (P94 ovl_0b4b), magic damage and missiles for the heroes' spells (spells.ts).
+// Monsters cast their two spells by the leader race's D06 chance (spells.ts). Not yet: parley, fleeing, Use, auto-combat, Doombeast images.
 import { json } from './pack';
 import type { Hero } from './hero';
 import type { Level } from './level';
+import { effect, monsterSpell } from './spells';
 
 interface Monster { name: string; hp: number; shield: number; weapon: number; armor: number; bravery: number; str: number;
   dex: number; agi: number; res: number; int: number; wskl: number; mskl: number; spells: number[]; tile: number;
@@ -14,13 +16,17 @@ interface Weapon { minst: number; basedam: number; type: number; unbreakable: nu
 export interface CombatData { monsters: Monster[]; groups: number[][]; weapons: Weapon[]; setupxy: number[]; maxtbl: number[];
   ranges: { x: number[][]; y: number[][] }; guarddiff: number[];
   loot: { thresholds: number[]; items: number[]; amounts: number[][]; an: number[] };
-  d06: { cast: number[]; crit: number[]; crit2: number[]; prey: number[]; counts: number[]; armor: number[]; dodge: number[] } }
+  d06: { cast: number[]; crit: number[]; crit2: number[]; prey: number[]; counts: number[]; armor: number[]; dodge: number[] };
+  spells: { names: string[]; energy: number[]; where: number[]; side: number[]; skill: number[] } }
 
 /** A CMBTNT record. `side` 0 = party (`c_alignmnt` 0), 1 = monsters. */
 export interface Rec {
   recno: number; side: 0 | 1; name: string; race: number; hero?: Hero; num: number; tile: number;
   x: number; y: number; hp: number; shield: number; armor: number; bravery: number; str: number; dex: number;
-  agi: number; int: number; wskl: number; weapon: number;
+  agi: number; int: number; wskl: number; weapon: number; res: number; mskl: number; maxhp: number;
+  invis: number;    // c_invis: turns left invisible
+  fear: number;     // c_itspc1 high nibble: turns left feared (c_state 0x20)
+  freeze: number;   // c_itspc1 low nibble: turns left frozen (c_health 0x20)
   state: number;    // c_state: 0x80 dead, 0x10 removed, 4 leader, 2 undead
   health: number;   // c_health: 1 knocked down
   target: number;   // c_target, 0xFF none
@@ -39,6 +45,8 @@ const cheb = (a: Rec, x: number, y: number) => Math.max(Math.abs(a.x - x), Math.
 export class Fight {
   readonly recs: Rec[] = [];
   private skilled = new Set<string>();   // G_sklbits: one gain per hero and combat skill per fight
+  timestop = false;                       // _timestop: monsters cannot act, blows cannot miss; cleared each round
+  readonly magbits = new Set<number>();   // _magbits: spells 30-35 cast this encounter
 
   private constructor(readonly data: CombatData, readonly level: Level) {}
 
@@ -53,7 +61,7 @@ export class Fight {
       f.recs.push({ recno: m, side: 0, name: hero.name, race: r.h_race, hero, num, tile: 0,
         x: data.setupxy[m], y: data.setupxy[24 + m], hp: r.h_hitpts, shield: r.h_shield, armor: f.heroArmor(hero),
         bravery: r.h_bravery, str: r.h_strngth, dex: r.h_dextrty, agi: r.h_agility, int: r.h_intellg,
-        wskl: Fight.wpnSkl(hero), weapon: item, state: r.h_cond1 & 0x80 ? 0x80 : 0, health: 0, target: NONE, moves: 0 });
+        wskl: Fight.wpnSkl(hero), weapon: item, res: r.h_resist, mskl: r.h_magic, maxhp: r.h_hpmax, invis: 0, fear: 0, freeze: 0, state: r.h_cond1 & 0x80 ? 0x80 : 0, health: 0, target: NONE, moves: 0 });
     });
     for (const code of f.roster(group, diff)) {
       const s = data.monsters[(code & 0x7f) - 5], recno = 6 + f.recs.length - heroes.length;
@@ -61,7 +69,7 @@ export class Fight {
       while (f.occupied(i % 99 % W, Math.floor(i % 99 / W)) || !level.walkable(i % 99 % W, Math.floor(i % 99 / W))) i++;
       f.recs.push({ recno, side: 1, name: s.name, race: code & 0x7f, num: NONE, tile: s.tile, x: i % 99 % W,
         y: Math.floor(i % 99 / W), hp: s.hp, shield: s.shield, armor: s.armor, bravery: s.bravery, str: s.str, dex: s.dex,
-        agi: s.agi, int: s.int, wskl: s.wskl, weapon: s.weapon, state: s.undead ? 2 : 0, health: 0, target: NONE, moves: 0 });
+        agi: s.agi, int: s.int, wskl: s.wskl, weapon: s.weapon, res: s.res, mskl: s.mskl, maxhp: s.hp, invis: 0, fear: 0, freeze: 0, state: s.undead ? 2 : 0, health: 0, target: NONE, moves: 0 });
     }
     const lead = f.recs.filter(r => r.side && data.monsters[r.race - 5].leader !== NONE)
       .sort((a, b) => data.monsters[b.race - 5].leader - data.monsters[a.race - 5].leader)[0];
@@ -96,12 +104,13 @@ export class Fight {
 
   private weapon(r: Rec): Weapon | null { return r.weapon >= 9 && r.weapon <= 0x1e ? this.data.weapons[r.weapon - 9] : null; }
   alive(r: Rec): boolean { return !(r.state & 0x90); }
+  visible(r: Rec): boolean { return this.alive(r) && !r.invis; }
   at(x: number, y: number): Rec | undefined { return this.recs.find(r => this.alive(r) && r.x === x && r.y === y); }
   private occupied(x: number, y: number) { return !!this.at(x, y); }
   free(x: number, y: number): boolean {
     return x >= 0 && y >= 0 && x < W && y < H && this.level.walkable(x, y) && !this.occupied(x, y);
   }
-  enemies(r: Rec): Rec[] { return this.recs.filter(e => e.side !== r.side && this.alive(e)); }
+  enemies(r: Rec): Rec[] { return this.recs.filter(e => e.side !== r.side && this.visible(e)); }
 
   /** INT61_08: 1 = no monster left, 2 = no party member left, else 0. */
   outcome(): 0 | 1 | 2 {
@@ -141,12 +150,59 @@ export class Fight {
   newRound() {
     for (const r of this.recs) {
       if (r.state & 0x80 && r.state & 2) { r.state &= 0x7f; r.health &= 0x7f; r.hp = 1; }
-      if (r.state & 0x90) { r.moves = 0; continue; }
+      if (r.state & 0xb0 || r.health & 0x20) { r.moves = 0; continue; }   // removed, dead, feared, frozen
       let n = r.dex * 8 + 4;
       r.moves = 1;
       if (n >= 50) { r.moves++; n -= 50; }
       if (rnd(100) < n) r.moves++;
     }
+  }
+
+  /** P94 ovl_0655, after a side's phase: its records' invisibility, freeze and fear turns count down. */
+  endSide(side: 0 | 1) {
+    for (const r of this.recs.filter(o => o.side === side)) {
+      if (r.invis) r.invis--;
+      if (r.freeze && !--r.freeze) r.health &= ~0x20;
+      if (r.fear && !--r.fear) r.state &= ~0x20;
+    }
+    if (side) this.timestop = false;
+  }
+
+  /** P06 ovl_1144: a missile flies the line from `a` toward `t` and stops on the first unwalkable or occupied square;
+   *  true when it reaches the target. (The line is a Bresenham walk as in `clear`.) */
+  missile(a: Rec, t: Rec): boolean { return this.clear(a, t); }
+
+  /** `_MDamage` (P06 ovl_0fa9): shield points absorb first, then HP; death, and the knockdown roll with the caster's
+   *  weapon skill and dexterity. Returns the blow's lines (the ovl_0bc2 format with " (SH:%b)"). */
+  mdamage(c: Rec, t: Rec, n: number, text: (n: number, v?: Record<string, string | number>) => string): string[] {
+    const shield = t.shield, dam = Math.max(0, n - shield);
+    t.shield -= Math.min(n, shield);
+    t.hp -= dam;
+    let result = 1;
+    if (t.hp <= 0) { t.hp = 0; result = 0xff; t.state |= 0x80; for (const r of this.recs) if (r.target === t.recno) r.target = NONE; }
+    else if (dam > 0 && !(t.health & 1) && t.race !== 28 && (c.wskl >> 3) + c.dex > rnd(100)) {
+      result = 2; t.health |= 1; t.agi = 0; t.dex = 0;
+      if (t.hero) t.hero.rec.h_cond1 = (t.hero.rec.h_cond1 as number) | 1;
+    }
+    if (t.hero) { t.hero.rec.h_hitpts = t.hp; t.hero.rec.h_shield = t.shield; if (result === 0xff) t.hero.rec.h_cond1 = (t.hero.rec.h_cond1 as number) | 0x80; }
+    const out = [`${text(0x46, { a: c.name })}${text(0x47)}${text(0x46, { a: t.name })}${text(0x10)}${text(0x4a)}${n}`,
+      `${text(0x4b)}${dam}${text(0x57, { b: t.shield })}${text(0x4d)}${t.hp}`];
+    if (result === 2) { out.push(text(0x48)); if (t.race !== 36) out.push(text(0x49, { a: t.name })); }
+    return out;
+  }
+
+  /** FAR_SKILLUP for skill `idx` (0 sword … 3 magic, 4 fist): once per hero, skill and fight; chance base[idx] +
+   *  (50 − skill)/4 below 50, else − (skill − 50)/2 (at least 1); never above _MaxSkill. */
+  skillUp(a: Rec, idx: number, text: (n: number, v?: Record<string, string | number>) => string): string[] {
+    const h = a.hero, key = `${a.recno}:${idx}`;
+    if (!h || this.skilled.has(key)) return [];
+    const r = h.rec as Record<string, number> & typeof h.rec, field = ['h_sword', 'h_axe', 'h_archry', 'h_magic', 'h_fist'][idx];
+    const skill = r[field], chance = [30, 15, 25, 20, 25][idx] + (skill < 50 ? (50 - skill) >> 2 : -Math.max(1, (skill - 50) >> 1));
+    if (skill >= this.data.maxtbl[idx * 6 + r.h_race] || rnd(100) >= chance) return [];
+    this.skilled.add(key);
+    r[field] = skill + 1;
+    a.wskl = Fight.wpnSkl(h); a.mskl = r.h_magic;
+    return [text(0x60, { h: a.name, l: ['Sword', 'Axe', 'Archery', 'Magic', 'Fist'][idx] })];
   }
 
   /** A step of one square (`_RMove` in combat); the arena edge is not an exit here yet. */
@@ -184,8 +240,8 @@ export class Fight {
     const dx = t.x - a.x, dy = a.y - t.y, ax = Math.abs(dx), ay = Math.abs(dy);
     const dir = DIRTBL[(dx < 0 ? 8 : 0) | (dy < 0 ? 4 : 0) | (3 * ax >= ay + 2 ? 2 : 0) | (3 * ay <= ax + 1 ? 1 : 0)];
     let result: number;
-    const sure = t.health & 0x70 || t.race === 32 || (w?.hitlist.includes(t.race) ?? false);
-    const skill = a.wskl + (w?.sklbonus ?? 0), thresh = (skill + 50 - 8 * t.agi) & 0xff;
+    const sure = t.health & 0x70 || a.invis || t.race === 32 || this.timestop || (w?.hitlist.includes(t.race) ?? false);
+    const skill = (a.wskl + (w?.sklbonus ?? 0)) >> (t.invis ? 1 : 0), thresh = (skill + 50 - 8 * t.agi) & 0xff;
     if (!sure && (skill + 50 < 8 * t.agi || thresh === 0 || thresh < rnd(100))) {
       result = 0;                                          // dodged: a side-step from D06 ptr10 (P06 ovl_0fcf)
       for (const adj of [1, 0]) {
@@ -221,16 +277,7 @@ export class Fight {
   private afterHeroBlow(a: Rec, w: Weapon | null, result: number, text: (n: number, v?: Record<string, string | number>) => string): string[] {
     const h = a.hero!, r = h.rec as Record<string, number> & typeof h.rec, out: string[] = [];
     if (result !== 0) {
-      const idx = w ? w.type - 1 : 4, field = ['h_sword', 'h_axe', 'h_archry', 'h_magic', 'h_fist'][idx];
-      const skill = r[field], base = [30, 15, 25, 20, 25][idx];
-      const chance = base + (skill < 50 ? (50 - skill) >> 2 : -Math.max(1, (skill - 50) >> 1));
-      const key = `${a.recno}:${idx}`;
-      if (!this.skilled.has(key) && skill < this.data.maxtbl[idx * 6 + r.h_race] && rnd(100) < chance) {
-        this.skilled.add(key);
-        r[field] = skill + 1;
-        a.wskl = Fight.wpnSkl(h);
-        out.push(text(0x60, { h: a.name, l: ['Sword', 'Axe', 'Archery', 'Magic', 'Fist'][idx] }));
-      }
+      out.push(...this.skillUp(a, w ? w.type - 1 : 4, text));
       if (w && !w.unbreakable && r.h_inhand !== NONE) {
         const wear = r.h_invamt[r.h_inhand] & 0x7f;
         if (wear >= 90 || (wear >= 25 && wear >> 1 >= rnd(100))) {
@@ -299,6 +346,11 @@ export class Fight {
       const [a, chance, b] = this.data.d06.crit.slice(3 * ldrace, 3 * ldrace + 3);
       t = this.pick(r, rnd(100) < chance ? a : b, ldrace) ?? this.pick(r, this.data.d06.crit2[3 * ldrace + 2], ldrace)!;
       r.target = t ? t.recno : NONE;
+    }
+    // D06 ptr0: the leader race's chance to cast instead (ovl_1553); a monster's spells cost it nothing here.
+    if (rnd(100) < this.data.d06.cast[ldrace]) {
+      const s = monsterSpell(this, r, this.data.monsters[r.race - 5].spells);
+      if (s) { r.moves--; return [`${r.name}: ${this.data.spells.names[s.spell]}`, ...effect(this, r, s.spell, s.target, text)]; }
     }
     if (t && this.inRange(r, t)) return this.attack(r, t, text);
     if (t) {
