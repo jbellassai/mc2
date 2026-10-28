@@ -577,8 +577,9 @@ async function main() {
     if (talking) { talking = false; void talkAt(lead.x + k[0], lead.y + k[1]).then(render); return; }
     queue = queue.then(() => step(...k)).catch(err => { status.textContent = String(err); console.error(err); });
   });
-  if (import.meta.env.DEV && q.has('world')) {                 // dev aid: ?world=x,y starts on the world map
-    const [x, y] = q.get('world')!.split(',').map(Number);
+  const [wx, wy] = (q.get('world') ?? '').split(',').map(n => parseInt(n));
+  if (import.meta.env.DEV && wx >= 0 && wy >= 0) {             // dev aid: ?world=x,y starts on the world map
+    const [x, y] = [wx, wy];
     go(await Level.load('D01'), x, y);
     await world.at(x, y, clock);
     message = '';
