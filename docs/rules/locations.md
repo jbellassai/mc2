@@ -7,7 +7,7 @@ A `Dnn.MCV` starts with 20 u16 pointers in `LOCTYPE` order. An **unused table ha
 
 | table | record | meaning |
 |---|---|---|
-| `lkdata` | `{x, y, id}` ×n, 0-terminated | positions of lockable/special spots with an id (D30: `(35,87)→11, (54,50)→1, (47,40)→150`) |
+| `lkdata` | `{x, y, text}` ×n, 0-terminated | **Look spots** (FFFAR look, file 0x2C5D): looking at `(x, y)` outside combat, with line of sight, appends `loctext[text & 0x7F]` to the description; with bit 0x80 only while a non-companion NPC (number ≥ 0x20) stands there. The Dark Candle rooms start the table `(type − 1) · 4` bytes in, so each room shows its own inscription (`P07 ovl_069e`) |
 | `hroomptr` | `HROOM` 13 bytes `{hrmid, hrmgrp, hrmreward, hrmrewamt, hrmmap, hrmxy[4]}` | **dungeon rooms** (see below) |
 | `spetbl` (towns and dungeon levels, P02) | `{x, y, type, d1, d2, d3}` ×n, 0-terminated | special spots: 0 ambush, 1 teleportal, 2/3 lockpick/search spots (`d2` = `treasptr` group and its `_chests` bit, `d3 ≠ 0` → trapped, V02 service 0x15), 4 pit (unused), 5 hidden chute, 6 companion remark — *Dungeon levels* below |
 | `spetbl` (P09 puzzle rooms) | `{x1, y1, x2, y2}` rectangles | — |
@@ -131,4 +131,4 @@ Ships and captains: `ships.md`.
 30 patches (feature ids 0–29) across 14 regions; the item grown at patch `id` is `D04.gwrds[id]` (0x33 Sermin, 0x34 Gonshi, 0x35 Nift, 0x36 Mirget, 0x37 Luffin, 0x3C Loka — Turpin is never grown). The patch map is variant `_curter` (terrain under the party) of the 16 11×9 maps in `G00E00.MCM`. State: `_mushsta` (DS:7067, 32 bytes, one **nibble per patch**: even id = high nibble) = mushrooms left, 0–15, all 15 in a new game; **regrowth** +1 every 8th day (`_juldate & 7 == 0`, `P92 ovl_02cb`). Entering draws `count` mushrooms at the first `count` of 15 fixed positions (P04 file 0x88/0x97: x `[3,3,4,6,7,7,8,8,8,7,6,3,2,2,1]`, y `[2,1,1,1,1,2,2,3,5,7,7,6,6,5,4]`, placed with `_PlacePerson` so occupied cells shift); stepping on one asks "%h may pick %b %as" and gives `amount[kind]` = Sermin 6, Gonshi 4, Nift 3, Mirget 2, Luffin 3, Turpin 2, Loka 2 (file 0x72) to the acting member (`_IncObj`; a full pack refuses and the mushroom stays), then `count−1` is written back. Empty patch: "No more mushrooms are growing here."
 
 ## Still to extract
-lock types 2–5 and the `lkdata` 4-byte stride in P07; the exit special case for `_curvar 0x39`; the `notyet0` pointer. (Engraved words — temple names, gate passwords — are in `special_rooms.md`.)
+the exit special case for `_curvar 0x39`; the `notyet0` pointer. (Engraved words — temple names, gate passwords — are in `special_rooms.md`.)

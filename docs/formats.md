@@ -81,7 +81,7 @@ Sub-table `maps`: byte **before** the pointer target is the count *n* (0xFF = no
 | `weathr` | 4 seasons × 4 × `{threshold%,weather,dur}` | only meaningful in **R** (region) records |
 | (R records) `roomptr`, `exitptr`, `locptr`, `gwrds`, `newsr` | features / town entrances / `LOCSPOT` 10-byte spots / 8 guard spots / guard groups | world map only — `docs/rules/locations.md`, *World map*; `tools/worldspots.py` |
 | `loctext` | NUL-separated strings | location texts (signs, messages) |
-| `spetbl`, `treasptr`, `spdoors`, `lkdata`, `hroomptr`, `locptr`, `locevptr` | | TODO |
+| `spetbl`, `treasptr`, `spdoors`, `lkdata`, `hroomptr`, `locptr`, `locevptr` | | see `rules/locations.md`, *Pointer table conventions* |
 
 Some `D` files (`D06, D15–D18, D36, D55, D60`) are not `LOCTYPE` images (garbage names, size 0) — different record kind, TODO.
 
