@@ -39,7 +39,9 @@ export class View {
   }
 
   /** `phase` counts animation steps: tile cycles advance every step, animated NPCs flip every few (_NPCANIMATE). */
-  draw(lv: Level, cx: number, cy: number, figures: Figure[], party: { x: number; y: number; num: number }[], phase = 0) {
+  /** `icons`: E00 frames on the map under the figures (mushrooms, P04 ovl_055a). */
+  draw(lv: Level, cx: number, cy: number, figures: Figure[], party: { x: number; y: number; num: number }[], phase = 0,
+       icons: { x: number; y: number; frame: number }[] = []) {
     const ox = cx - (COLS >> 1), oy = cy - (ROWS >> 1);
     const ctx = this.ctx;
     ctx.fillStyle = '#000';
@@ -52,6 +54,7 @@ export class View {
         if (t !== 0xff) ctx.drawImage(lv.tiles, (t % 16) * 16, (t >> 4) * 16, 16, 16, x * TILE, y * TILE, TILE, TILE);
       }
     const cols = this.sprites.columns;
+    for (const i of icons) this.sheet(this.heroes, i.frame, cols, i.x - ox, i.y - oy);
     for (const f of figures) {
       // _SingleNPCDraw: companions (num < 0x20) use their hero frames; anyone else the E02 sprite `tile`.
       if (f.num < 0x20) this.hero(f.num, f.x - ox, f.y - oy);

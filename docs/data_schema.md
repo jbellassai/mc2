@@ -23,7 +23,8 @@ Built by `.venv/bin/python -I tools/export_json.py original out/pack`; never com
 | `npctypes.json` | what *Look* calls a person, by GEN/KNPC `type` (DS:2296: man, woman, wizard, …) |
 | `commands.json` | command words (`_menucommands`: End, Quit, None, Yes, No, … Knock, … Pick …) |
 | `p90.json` | trade tables: `haggle[item] = [step, div]`, `lots[item] = lot size` (`rules/economy.md`) |
-| `p01.json` | world map: `terraintime[curter]`, `weathertime[weather]` (signed: Clear/Overcast −1), `terrainenergy[curter]`, `clothing[row][weather]` (rows Elvenspun…Furs, then none), `regions[16]` `{x0,y0,x1,y1}` (first containing rectangle = `_curreg`) |
+| `p01.json` | world map: `terraintime[curter]`, `weathertime[weather]` (signed: Clear/Overcast −1), `terrainenergy[curter]`, `clothing[row][weather]` (rows Elvenspun…Furs, then none), `regions[16]` `{x0,y0,x1,y1}` (first containing rectangle = `_curreg`), `patchtiles[curter]` (mushroom-patch tileset, P01 0x36A) |
+| `p04.json` | mushroom patches, by kind = item − 0x33: `amount` picked per mushroom, `icon` (E00 frame); `x`/`y` the 15 growing places (`rules/locations.md`) |
 | `p05.json` | service rooms (`rules/services.md`), lists indexed by room id − kind base: `leave[_rmtyp]` (room text asked on leaving with a pupil, 255 = comtxt 0x23); `inn.price` (0x40–0x47); `school` `skill`/`cost`/`days` (0x48–0x5A), `gain`/`cap[skill][race]` by skill; `job.trade` (0x6C–); `library` `subjects[lib]` (word indexes), `research`/`days`/`task` per subject, `lists[task]` (book string numbers), `texts` (the V05 book strings); `lodge` `mask`, `cost` |
 | `p91text.json` | small talk: `lines` (P91 file 0x7F) and `weather` `[weather, line]` pairs (`rules/dialogue.md`) |
 | `p02text.json` | the town program's own texts (P02 file 0x67: locked doors, map flask, scrolls) |

@@ -62,6 +62,28 @@ export class Level {
     return lv;
   }
 
+  /** A mushroom patch (P04): G00 chunk `chunk` drawn with tileset `ts` (formats.md, Room maps). */
+  static async patch(ts: number, chunk: number): Promise<Level> {
+    const rec = await json<Location>('locations/D04.json');
+    const rooms = await json<Record<string, string[]>>('rooms.json');
+    const lv = await Level.make('D04', { ...rec, exits: [], townsfolk: [], npcs: [] }, ts);
+    lv.cells.set(hex(rooms.G00[chunk]));
+    return lv;
+  }
+
+  /** _PlacePerson: (x, y) if free (walkable, on the map, not `taken`), else the first free square on diamonds of
+   *  growing radius, each walked clockwise from its west corner (direction tables DS:0995/0999). */
+  place(x: number, y: number, taken: (x: number, y: number) => boolean): { x: number; y: number } {
+    const free = (a: number, b: number) => a >= 0 && b >= 0 && a < this.w && b < this.h && this.walkable(a, b) && !taken(a, b);
+    if (free(x, y)) return { x, y };
+    for (let r = 1; r < this.w + this.h; r++) {
+      let a = x - r, b = y;
+      for (const [dx, dy] of [[1, -1], [1, 1], [-1, 1], [-1, -1]])
+        for (let s = 0; s < r; s++, a += dx, b += dy) if (free(a, b)) return { x: a, y: b };
+    }
+    return { x, y };   // the original searches forever
+  }
+
   tile(x: number, y: number): number {
     return x < 0 || y < 0 || x >= this.w || y >= this.h ? 0xff : this.cells[y * this.w + x];
   }

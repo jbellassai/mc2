@@ -1,6 +1,6 @@
 // Drive the dev build in headless Chrome: press keys, then save a screenshot and print the status line and the open panel (log, buttons).
 // usage: node scripts/shot.mjs URL OUT.png [key ...]   keys: any key name (ArrowUp, Enter …); "xN" repeats the previous key;
-// "type:TEXT" types text into the focused field; "click:LABEL" clicks a button; "wait:MS" pauses;
+// "type:TEXT" types text into the focused field; "click:LABEL" clicks a visible button; "wait:MS" pauses;
 // "snap:FILE" saves a screenshot mid-script
 import { spawn } from 'node:child_process';
 import { writeFileSync, mkdtempSync } from 'node:fs';
@@ -44,7 +44,7 @@ try {
     }
     if (key.startsWith('click:')) {
       await sleep(300);
-      await evaluate(`[...document.querySelectorAll('button')].find(b => b.textContent === ${JSON.stringify(key.slice(6))})?.click()`);
+      await evaluate(`[...document.querySelectorAll('button')].find(b => b.offsetParent && b.textContent === ${JSON.stringify(key.slice(6))})?.click()`);
       continue;
     }
     const extra = key === 'Enter' ? { windowsVirtualKeyCode: 13, text: '\r' } : {};

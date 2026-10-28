@@ -12,6 +12,7 @@ import { ServiceRoom, noon, rent, INN } from './service';
 import { camp } from './camp';
 import { Party, type Member } from './party';
 import { World } from './world';
+import { Patches, type Patch } from './patch';
 
 const status = document.getElementById('status')!;
 const START = { level: 'D02', x: 97, y: 17 };   // new_game.md: window (93,14) + (4,3), formation cell 0; mutable for ?at=
@@ -26,6 +27,7 @@ async function main() {
   const tables = await json<{ hungerhours: number[]; nousetext: number[]; useall: number[]; lootvalues: number[]; weathers: string[] }>('exetables.json');
   const world = await World.create();
   const p92 = await json<string[]>('p92text.json');
+  const patches = await Patches.create();
   const hero = await Hero.profile(0);                        // profile A until character creation exists
   const clock = Clock.newGame();
   // Dev aids: ?hour=20 starts in the evening, ?at=74,25 starts on another square.
@@ -38,6 +40,7 @@ async function main() {
   let level = await Level.load(START.level);
   let outside: { level: Level; x: number; y: number } | null = null;   // where to return from a room
   let service: ServiceRoom | null = null;                               // the P05 room the party is in
+  let patch: Patch | null = null;                                        // the mushroom patch the party is in
   let roomStart = { x: 0, y: 0 };                                       // its formation origin (base square)
   let figures: Figure[] = level.figures(clock, events, party.away);
   let message = `${hero.name} has landed in Telermain.`;
@@ -47,12 +50,12 @@ async function main() {
   setInterval(() => { phase++; render(); }, 300);
   const render = () => {
     const room = level.loc.kind === 'room', wild = level.loc.kind === 'world';
-    view.draw(level, room ? 5 : lead.x, room ? 4 : lead.y, figures, wild ? [lead] : party.members, phase);   // world: the leader alone
-    const where = wild ? `${world.rec?.name.replace(/\s+[MX]$/, '') ?? ''}, ${tables.weathers[clock.weather]}` : place();
+    view.draw(level, room ? 5 : lead.x, room ? 4 : lead.y, figures, wild ? [lead] : party.members, phase, patch?.icons());   // world: the leader alone
+    const where = wild || patch ? `${world.rec?.name.replace(/\s*[MX]$/, '') ?? ''}, ${tables.weathers[clock.weather]}` : place();
     status.textContent = `${clock}  —  ${where}${message ? '  —  ' + message : ''}`;
   };
   /** School and job D-files have no location name: show the town's. */
-  const place = () => (level.loc.name.trim() || outside?.level.loc.name || '').replace(/\s+[MX]$/, '');
+  const place = () => (level.loc.name.trim() || outside?.level.loc.name || '').replace(/\s*[MX]$/, '');
   /** To a level with the formation origin at (x, y). */
   const go = (lv: Level, x: number, y: number) => {
     level = lv; party.place(x, y);
@@ -62,6 +65,7 @@ async function main() {
   /** The hour tick: who is about, and the inns' noon checkout (P92). */
   const hourly = () => {
     figures = level.figures(clock, events, party.away);
+    if (clock.hour === 0 && !(clock.juldate & 7)) patches.regrow();
     party.hunger(tables.hungerhours);
     world.hour(clock);
     // Hirelings' payday (P92 ovl_09ff): 17:00 warning when the week earns under 6, 18:00 settlement; then departures.
@@ -305,7 +309,9 @@ async function main() {
       if (pgm.program === 2) { go(await Level.load(`D${two(pgm.datafile)}`), entrance.tx + 4, entrance.ty + 3); message = ''; return; }
       message = `${level.tileName(x, y)}: not built yet.`; return;
     }
-    if (rec.doors.some(d => d.x === x && d.y === y)) { message = `${level.tileName(x, y)}: not built yet.`; return; }
+    const feature = rec.doors.find(d => d.x === x && d.y === y);
+    if (feature && rec.pgms[feature.pgm].program === 4) return enterPatch(feature.id, x, y);
+    if (feature) { message = `${level.tileName(x, y)}: not built yet.`; return; }
     if (!level.walkable(x, y)) { message = `Blocked by ${level.tileName(x, y)}.`; return; }
     party.shift(dx, dy);
     message = '';
@@ -313,6 +319,42 @@ async function main() {
     for (let n = world.stepTicks(ter, clock, party); n > 0; n--) tick();
     world.fatigue(ter, clock, party);
     await world.at(x, y, clock);
+  };
+  /** P01 ovl_0d01 onto a mushroom-patch feature: the step's time is spent and the window stays where it was, so leaving
+   *  the patch returns the party to the square it stepped from. P04 ovl_050f: the formation from (4,3), each member by
+   *  _PlacePerson; then the mushrooms (patch.ts). */
+  const enterPatch = async (id: number, x: number, y: number) => {
+    const ter = level.data.nameindex[level.tile(x, y)];
+    for (let n = world.stepTicks(ter, clock, party); n > 0; n--) tick();
+    outside = { level, x: lead.x, y: lead.y };
+    const lv = await Level.patch(world.patchTileset(ter), ter);
+    go(lv, 4, 3);
+    const placed: Member[] = [];
+    for (const m of party.members) { Object.assign(m, lv.place(m.x, m.y, (a, b) => placed.some(p => p.x === a && p.y === b))); placed.push(m); }
+    patch = patches.open(id, lv, party.members);
+    message = patch.count ? '' : patches.texts[1];                      // "No more mushrooms are growing here. …"
+  };
+  /** P04: stepping off the map (_RMove returns 2) asks "Do you want to leave now?" (comtxt 0x23). */
+  const leavePatch = () => {
+    panel.show();
+    panel.line(comtxt[0x23]);
+    panel.set([{ label: cmd[3], act: () => { go(outside!.level, outside!.x, outside!.y); outside = null; patch = null; close(); } },
+               { label: cmd[4], act: () => close() }]);
+  };
+  /** P04: stepping onto a mushroom asks "%h may pick %b %as." (D04 text 0); Yes gives `amount` of the patch's kind to
+   *  the acting member (_IncObj), and a refusal (comtxt 0x32 / 0x33) leaves it growing. Text 2 after picking is assumed
+   *  (P04 ovl_04dd, which prints both, is not decompiled). */
+  const pickAt = (x: number, y: number) => {
+    const p = patch!, i = p.find(x, y), h = lead.hero;
+    if (i < 0) return;
+    const vars = { a: items[p.item], b: p.amount };
+    panel.show();
+    panel.line(format(patches.texts[0], h, h.name, vars));
+    panel.set([{ label: cmd[3], act: () => {
+      if (!incObj(h, p.item, p.amount)) return close(format(comtxt[h.slot(p.item) >= 0 ? 0x32 : 0x33], h, h.name));
+      p.pick(i);
+      close(format(patches.texts[2], h, h.name, vars));
+    } }, { label: cmd[4], act: () => close() }]);
   };
   const step = async (dx: number, dy: number) => {
     if (level.loc.kind === 'world') { await worldStep(dx, dy); return render(); }
@@ -328,6 +370,7 @@ async function main() {
     if (unable) { message = `${unable.hero.name}: ${unable.hero.condition(conds)}.`; return render(); }
     for (const m of movers) {
       const x = m.x + dx, y = m.y + dy;
+      if (patch && (x < 0 || y < 0 || x >= level.w || y >= level.h)) { leavePatch(); return render(); }
       const exit = level.loc.exits.find(e => e.x === x && e.y === y);
       const other = figureAt(x, y);
       if (room && exit) {
@@ -346,6 +389,7 @@ async function main() {
     }
     for (const m of movers) { m.x += dx; m.y += dy; }
     message = '';
+    if (patch) pickAt(lead.x, lead.y);
     walked();
     render();
   };
@@ -533,6 +577,12 @@ async function main() {
     if (talking) { talking = false; void talkAt(lead.x + k[0], lead.y + k[1]).then(render); return; }
     queue = queue.then(() => step(...k)).catch(err => { status.textContent = String(err); console.error(err); });
   });
+  if (import.meta.env.DEV && q.has('world')) {                 // dev aid: ?world=x,y starts on the world map
+    const [x, y] = q.get('world')!.split(',').map(Number);
+    go(await Level.load('D01'), x, y);
+    await world.at(x, y, clock);
+    message = '';
+  }
   render();
 }
 

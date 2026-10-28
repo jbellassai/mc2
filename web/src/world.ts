@@ -5,7 +5,7 @@ import { json, hex, type Location } from './pack';
 import type { Party } from './party';
 import type { Clock } from './clock';
 
-interface P01 { terraintime: number[]; weathertime: number[]; terrainenergy: number[]; clothing: number[][]; regions: number[][] }
+interface P01 { terraintime: number[]; weathertime: number[]; terrainenergy: number[]; clothing: number[][]; regions: number[][]; patchtiles: number[] }
 const SEASON = [0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 0];   // P92 file 0x24D, by month
 const rnd = (n: number) => Math.floor(Math.random() * n);
 
@@ -41,6 +41,9 @@ export class World {
     clock.weather = cur.weather = this.ssn[3 * i + 1];
     cur.hours = hi + rnd((dur & 15) - hi + 2);
   }
+
+  /** P01 ovl_09bf: a mushroom patch's tileset by the terrain class under the party. */
+  patchTileset(ter: number): number { return this.p01.patchtiles[ter]; }
 
   /** P01 ovl_10f7: five-minute ticks for one step on terrain class `ter` (+1 at night, +1 if anyone has a condition). */
   stepTicks(ter: number, clock: Clock, party: Party): number {

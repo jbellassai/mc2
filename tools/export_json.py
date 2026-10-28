@@ -240,7 +240,11 @@ def main(src, dst):
     s8 = lambda o, n: [b - 256 if b > 127 else b for b in p01[o:o + n]]
     dump(f'{dst}/p01.json', {'terraintime': list(p01[0x276:0x280]), 'weathertime': s8(0x280, 12), 'terrainenergy': list(p01[0x298:0x2A4]),
                              'clothing': [list(p01[0x2A2 + 12 * k:0x2AE + 12 * k]) for k in range(7)],   # rows 0x2B-0x30, then none
-                             'regions': [list(p01[0x236 + 4 * k:0x23A + 4 * k]) for k in range(16)]})    # {x0,y0,x1,y1}, first match
+                             'regions': [list(p01[0x236 + 4 * k:0x23A + 4 * k]) for k in range(16)],    # {x0,y0,x1,y1}, first match
+                             'patchtiles': list(p01[0x36A:0x374])})   # mushroom-patch tileset by terrain class (ovl_09bf)
+    p04 = open(f'{src}/P04.MCO', 'rb').read()   # mushroom patches (rules/locations.md), lists by kind = item − 0x33
+    dump(f'{dst}/p04.json', {'amount': list(p04[0x72:0x7C]), 'icon': list(p04[0x7C:0x86]),   # picked per mushroom, E00 icon
+                             'x': list(p04[0x88:0x97]), 'y': list(p04[0x97:0xA6])})          # the 15 growing places
     p05 = open(f'{src}/P05.MCO', 'rb').read()   # service rooms (rules/services.md); lists indexed by room id − kind base
     u8 = lambda o, n: list(p05[o:o + n])
     v05 = open(f'{src}/V05.MCO', 'rb').read()    # library books: AddScrap counts NUL-terminated strings from V05 offset 7

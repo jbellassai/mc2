@@ -5,6 +5,7 @@ const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 
 
 export class Clock {
   weather = 0;   // _weather: new game starts Clear (_ssnwthrs = [100, 0, …]); regional weather comes with the world map
+  juldate = 0;   // _juldate: days since the start, 0 in a new game (FFSAVA)
   constructor(public minute: number, public hour: number, public date: number, public month: number) {}
 
   /** New game: 8:30, day 2 of month 6 (new_game.md). */
@@ -25,6 +26,7 @@ export class Clock {
     this.minute = 0;
     if (++this.hour > 23) {
       this.hour = 0;
+      this.juldate++;
       if (++this.date > 30) { this.date = 1; this.month = (this.month + 1) % 12; }
     }
     return true;
