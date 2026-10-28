@@ -2,21 +2,22 @@
 
 Numbered, never reused. Status: DECIDED (not yet built) or IMPLEMENTED (with commit).
 
-## 1. The web port ships no game data; the player's own copy is imported in the browser
+## 1. The engine reads a converted data pack; the public site never serves game data
 
-**Decision:** Host the port publicly (GitHub Pages) with code only; on first run the player selects their own Magic Candle II folder, a TypeScript importer parses the original files in the browser into the engine's JSON game data, and the result is cached locally (IndexedDB).
+**Decision:** The engine reads only a friendly **data pack** (JSON for data, PNG for graphics) converted from the original files. For now the pack is built locally by the Python exporter (`tools/export_json.py`) and never committed or published. Before a public launch, an in-browser TypeScript converter builds the same pack from the player's own MC2 folder, so the public site (GitHub Pages) ships code only.
 
-**Context:** The repository is public and the game data is copyrighted (`original/` is gitignored, renders stay out of git). The goal is a URL a fan can open and play, which rules out any step that needs Python or a command line on the player's machine.
+**Context:** The repository is public and the game data is copyrighted (`original/` is gitignored, renders stay out of git). Converting to another format does not change ownership, so what matters is who distributes the pack. Requiring the in-browser converter up front would block the first playable slice on rewriting every parser in TS.
 
 **Alternatives rejected:**
-- *Ship the extracted data or renders on Pages* — redistributes the game; the repo is public.
-- *Server-side import or a backend holding the data* — the same redistribution problem, plus hosting cost.
-- *Run the Python tools in the browser (Pyodide)* — ~10 MB runtime and slow start for a few hundred lines of parsing.
-- *A local CLI that builds a data pack for the player* — too much friction for a casual player.
+- *The engine parses the original binary formats directly* — couples the engine to 1991 file layouts; the pack is the clean contract.
+- *Publish the converted pack on Pages* — redistributes the game; the repo is public.
+- *Build the in-browser converter first* — delays the first playable slice; the engine does not care who built the pack.
+- *Run the Python tools in the browser (Pyodide)* — ~10 MB runtime for a few hundred lines of parsing.
+- *Replace the content with original art/text/maps* — freely shareable but an enormous effort, and no longer Magic Candle II.
 
-**Consequences:** Every format parser exists twice: the Python tools in `tools/` stay the reverse-engineering reference and emit **golden JSON** locally; the TS importer must reproduce it exactly. That parity test needs `original/`, so it runs locally only; CI can run unit tests on synthetic fixtures. The importer reads a directory via `<input webkitdirectory>` / drag-and-drop (works in all major browsers; the File System Access API is Chromium-only). The JSON schema becomes the contract between data and engine.
+**Consequences:** The pack schema (`docs/data_schema.md`) is the contract between converter and engine. Until the TS converter exists the game is playable only where the pack was built (local dev, screen share, private sharing among owners). When it is written, the Python exporter's output is its golden test (local only, needs `original/`).
 
-**Status:** DECIDED.
+**Status:** DECIDED (amended 2026-10-27: in-browser import moved from prerequisite to pre-launch step).
 
 ## 2. First milestone: walk around Telermain from a fresh start
 
