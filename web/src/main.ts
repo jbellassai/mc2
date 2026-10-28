@@ -353,11 +353,15 @@ async function main() {
       message = level.loc.name.replace(/\s*[MX]$/, '').trim(); return;
     }
     if (pgm?.program !== 1) { message = 'This way leads somewhere not built yet.'; return; }
-    go(await Level.load('D01'), exit.tx + 5, exit.ty + 4);
+    await toWorldAt(exit.tx, exit.ty);
+  };
+  /** Onto the world map with the window at (tx, ty) (exits, teleportals). */
+  const toWorldAt = async (tx: number, ty: number) => {
+    go(await Level.load('D01'), tx + 5, ty + 4);
     await world.at(lead.x, lead.y, clock);
     world.movePatrols(level, lead.x, lead.y, clock.month);              // P01 start: ovl_169e, then ovl_0a94
     world.engage(lead.x, lead.y);
-    outside = null; service = null; message = '';
+    outside = null; service = null; special = null; message = '';
   };
   /** A world-map step (P01): a town entrance of the current region (`exitptr`) loads that town with the window at
    *  (tx, ty); a mushroom patch opens; a boat is boarded or, aboard, water is sailed and land disembarks (ships.md);
@@ -1204,6 +1208,13 @@ async function main() {
       // The Conch (ovl_1349, the original's K command): aboard on row 100 it calms the rough sea (event 102)
       if (item === 0x4b) return done(world.ships.sailing && lead.y === 100
         ? (events.add(102), format(world.rec!.texts[0x2a], who, who.name)) : comtxt[0x83]);
+      if (special?.piece(item)) {                                      // a teleportal piece on a pedestal (P09)
+        close();
+        return mark(say(comtxt[0x0d]), (x, y) => {
+          const to = adjacent(x, y) ? special!.place(item, x, y, who) : null;
+          if (to) void toWorldAt(to.x, to.y).then(render);
+        });
+      }
       if (chamber && item === 0x50 && chamber.hr.reward && !(chamber.hr.reward & 0x80)) return openChest(who);
       if (level.loc.kind === 'level' && (item === 0x50 || item === 0x46)) { close(); return item === 0x50 ? lockpick(who) : dig(who); }
       if (!tables.useall.includes(item) || party.members.length < 2) return done(once(who, item));

@@ -255,7 +255,9 @@ def main(src, dst):
                              'ships': {'weather': s8(0x28C, 12), 'rate': list(p01[0x34A:0x350]),
                                        'homex': list(p01[0x350:0x356]), 'homey': list(p01[0x356:0x35C])}})
     p09 = open(f'{src}/P09.MCO', 'rb').read()   # special rooms (rules/special_rooms.md)
-    dump(f'{dst}/p09.json', {'altars': list(p09[0x3A:0x3D]),      # altar tiles (world temples, ovl_1413)
+    dump(f'{dst}/p09.json', {'pieces': list(p09[0x4B:0x50]),      # teleportal pieces (items) and their pedestal tiles
+                             'piecetiles': list(p09[0x50:0x55]),
+                             'altars': list(p09[0x3A:0x3D]),      # altar tiles (world temples, ovl_1413)
                              'icons': list(p09[0x3D:0x45]),       # icon name indexes, by god (statue look)
                              'wake': list(p09[0xC86:0xC8E]),      # members checked for a missing blessing, by god
                              'offer': [x.decode('latin1') for x in p09[0x92:0xA1].split(b'\0')[:2]],   # %o for Balene / Fronnoxx

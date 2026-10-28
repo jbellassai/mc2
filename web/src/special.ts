@@ -10,7 +10,7 @@ import type { Level } from './level';
 import type { Exit } from './pack';
 import type { Party, Member } from './party';
 
-export const CASINO = 7, TEMPLE = 12, SHRINE = 13, GATE = 14;
+export const CASINO = 7, TELEPORTAL = 10, TEMPLE = 12, SHRINE = 13, GATE = 14;
 
 export interface SpecialCtx {
   hero: Hero; clock: Clock; cmd: string[]; comtxt: string[]; party: Party;
@@ -23,7 +23,7 @@ export interface SpecialCtx {
   close(msg?: string): void;
 }
 
-interface P09 { altars: number[]; icons: number[]; wake: number[]; offer: string[]; texts: string[] }
+interface P09 { pieces: number[]; piecetiles: number[]; altars: number[]; icons: number[]; wake: number[]; offer: string[]; texts: string[] }
 let p09: P09;
 /** HERO fields from offset 13 (structs.h), the order of `attribs`. */
 const FIELDS = ['h_bravery', 'h_strngth', 'h_dextrty', 'h_endur', 'h_agility', 'h_loyalty', 'h_charm', 'h_intellg', 'h_resist',
@@ -39,6 +39,8 @@ export const gates = new Set<number>();
 const rnd = (n: number) => Math.floor(Math.random() * n);
 
 export class Special {
+  /** OV_0x155-0x157: the pieces set on the three pedestals at (4,3)-(6,3), this visit only. */
+  private pedestals = [0, 0, 0];
   private constructor(private ctx: SpecialCtx, readonly kind: number, readonly index: number, private level: Level) {
     if (kind === GATE && gates.has(index)) this.openGate();       // ovl_15ee: an opened gate stays open
   }
@@ -225,6 +227,27 @@ export class Special {
         panel.line(format(this.texts[22], hero, hero.name, { a: this.ctx.attribs[pairs[k] - 13], b: n, i: old + n }));
       }
     }
+  }
+
+  /** Is `item` a teleportal piece that can be set here (Cylinder, Cone, Cube, Sphere, Pyramid; P09 file 0x4B)? */
+  piece(item: number): boolean { return this.kind === TELEPORTAL && p09.pieces.includes(item); }
+
+  /** A piece used on the marked square (P09 @0x0390): off the pedestals → "Nothing happens." (`_comtxtptr`, assumed
+   *  0x83); else the piece is used up, drawn (P09 file 0x50) and, once all three are set, the triple is looked up in
+   *  D61 `hroomptr` (13-byte rows {p0, p1, p2, curlev, curseg, locspec, currm, curmpg, curtils, curvar, ?, x, y}).
+   *  A hit returns the world-map window; a miss prints the same text and clears the pedestals (pieces lost). */
+  place(item: number, x: number, y: number, from: Hero): { x: number; y: number } | null {
+    if (y !== 3 || x < 4 || x > 6) return this.ctx.close(this.ctx.comtxt[0x83]), null;
+    this.pedestals[x - 4] = item;
+    from.dec(from.slot(item));
+    this.level.set(x, 3, p09.piecetiles[p09.pieces.indexOf(item)]);
+    if (this.pedestals.includes(0)) return null;
+    const t = hex(this.level.loc.tables.hroomptr);
+    for (let k = 0; k + 13 <= t.length && t[k] !== 0xff; k += 13)
+      if (t[k] === this.pedestals[0] && t[k + 1] === this.pedestals[1] && t[k + 2] === this.pedestals[2]) return { x: t[k + 11], y: t[k + 12] };
+    for (let i = 0; i < 3; i++) this.level.set(4 + i, 3, 0x70);
+    this.pedestals = [0, 0, 0];
+    return this.ctx.close(this.ctx.comtxt[0x83]), null;
   }
 
   private done() { panel.set([{ label: this.ctx.cmd[0], act: () => this.ctx.close() }]); }

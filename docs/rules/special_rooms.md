@@ -17,7 +17,7 @@ Sources: `P09.MCO` (`decomp/overlays/P09.c`, asm via `tools/dis.py`), room files
 
 ## Teleportals (`_rmtyp 10`, D61, 17 rooms: towns Wanasol 0xAA, 0xAB…, dungeons Cellars 1 0xA8, Shann 6 0xAB, Katarra 0xAC, Dorak 2 0xAE, Dorak 7 0xAF, Catacombs 0xB0, Maratul 1 0xB1, Namaz 2 0xB2, Drakhelm 1 0xB7, Ruz 1 0xB8; world map 0xA9 Krum, 0xAD Tundra, 0xB3 Altesia, 0xB4 Kar'lomug, 0xB5 Isle of Winds, 0xB6 Rhon)
 
-Three pedestals at `(4,3) (5,3) (6,3)`. *Use* one of the five pieces — Cylinder 0x3A, Cone 0x3B, Cube 0x41, Sphere 0x42, Pyramid 0x43 — and *Mark* a pedestal within reach (`ChkRng 1`): the piece is consumed (`DecObj0`) and drawn (tiles file 0x50). When all three are set the triple `{left, middle, right}` is looked up in **D61's `hroomptr`** (13-byte rows `{p0,p1,p2, curlev, curseg, locspec, currm, curmpg, curtils, curvar, ?, x, y}`); a hit plays the tile-explosion effect and teleports the party; a miss prints the common "nothing happens" text and clears the pedestals (pieces lost). All 20 combinations lead to the **world map** (`locspec 1`, program 1):
+Three pedestals at `(4,3) (5,3) (6,3)`. *Use* one of the five pieces — Cylinder 0x3A, Cone 0x3B, Cube 0x41, Sphere 0x42, Pyramid 0x43 — and *Mark* a pedestal within reach (`ChkRng 1`): the piece is consumed (`DecObj0`) and drawn (tiles file 0x50). When all three are set the triple `{left, middle, right}` is looked up in **D61's `hroomptr`** (13-byte rows `{p0,p1,p2, curlev, curseg, locspec, currm, curmpg, curtils, curvar, ?, x, y}`); a hit plays the tile-explosion effect and teleports the party; a miss prints the common "nothing happens" text and clears the pedestals to tile 0x70 (pieces lost). Pieces are drawn with tiles `[115, 116, 39, 51, 50]` (P09 file 0x50, same order as the items at 0x4B); setting a piece on an occupied pedestal replaces it (the old one is lost). The table has **24** rows (312 bytes, no terminator before the next table) and every one leads to the **world map** (`locspec 1`, program 1) with the window at `x, y`, so the leader lands at `x + 5, y + 4`:
 
 | left,middle,right | x,y | | left,middle,right | x,y |
 |---|---|---|---|---|
@@ -31,6 +31,8 @@ Three pedestals at `(4,3) (5,3) (6,3)`. *Use* one of the five pieces — Cylinde
 | Cone Cone Sphere | 210,25 | | Cube Cylinder Pyramid | 212,5 |
 | Cone Cube Pyramid | 121,48 | | Cylinder Pyramid Cone | 121,36 |
 | Pyramid Cylinder Pyramid | 211,54 | | Pyramid Cone Cone | 203,35 |
+| Sphere Sphere Pyramid | 52,62 | | Cone Cone Cone | 135,41 |
+| Cube Cube Cylinder | 99,28 | | Cylinder Cube Cylinder | 193,62 |
 
 (`curseg` in the row = destination region, used to pick the region record.) Meeting-hall rumour: "Dulgamir … knows a teleportal combination!"
 
@@ -88,7 +90,7 @@ Rumour rooms: ordinary NPC dialogue from the hall's text block (D74 texts 1–13
 
 ## Port notes
 
-Built in the web port (`web/src/special.ts`): entering from town doors and world features, placement, leaving, the casino (with the monthly refill), the gates (Whisper is the port's H key) and the temples (looks, awakening, offerings, blessings; a member taken into a god's service is removed and kept out of the location tables, standing in for the task-100 assignment record). Talk in a casino starts the game unless it is aimed at one of the gamblers, who keep their rumours (an assumption: where the original's Talk goes is not traced). A whispered word nothing answers prints "Nothing happens." (comtxt 0x83; P09 prints `_comtxtptr`, value not traced). Not yet: teleportals, the elven prince, the awakening's tile animation.
+Built in the web port (`web/src/special.ts`): entering from town doors and world features, placement, leaving, the casino (with the monthly refill), the gates (Whisper is the port's H key) and the temples (looks, awakening, offerings, blessings; a member taken into a god's service is removed and kept out of the location tables, standing in for the task-100 assignment record). Talk in a casino starts the game unless it is aimed at one of the gamblers, who keep their rumours (an assumption: where the original's Talk goes is not traced). A whispered word nothing answers prints "Nothing happens." (comtxt 0x83; P09 prints `_comtxtptr`, value not traced). Teleportals: *Use* a piece, then mark the pedestal next to the acting member. Not yet: the elven prince, the awakening's tile animation.
 
 ## Elven prince (NPC 113, `ovl_0611`)
 
