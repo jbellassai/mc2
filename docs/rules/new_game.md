@@ -10,7 +10,7 @@ There is no stat rolling. The player picks one of **five pre-built heroes** (the
 3. "Do you want to disclose %p true name?" — No keeps the profile's names. Yes: "Please type in the full name (up to 12 letters):" → `h_fullnm`, "Now type in a nickname (up to 5 letters):" → `h_name`; "Are these names correct?" loops. Typed names keep their first letter and lower-case the rest (`@0x220C`).
 4. For an imported hero: "Was %h a woman in disguise?" → `h_sex = 1` on Yes (the profile records carry their own sex: B and D are women).
 5. Coins: the record's `h_gold` bytes are `hundreds, units` → `h_gold = b0·100 + b1` (A 500, B 300, C 350, D 800, E 600).
-6. Intro story (Rebnard on Castle Oshcrun, Captain Garlin's ship), then "%h has landed in Telermain."
+6. Intro story, then "%h has landed in Telermain." (string 19). P81's texts are one NUL-separated table from file 0x15 (string 0 = "IBM/Tandy Version 2.00"; `ModTxt(n)` / `AddScrap(n)` index it), and **string 40 is the intro script**: scenes of string numbers separated by 0xFF — `[5,6,7,18] [10,4,31,32] [12,33,34,36,35,37,38] [] [11,8,9]` (Rebnard on the parapet, the ship in the harbour, Chilek and the news of Captain Garlin and the hero, an empty scene — presumably where an imported hero's line 27 goes —, the king's reply). The code that walks it was not traced; the port shows one scene per screen.
 
 ## The five profiles
 All are Human, bravery 12, loyalty 10, 51 hp, energy 99, no god seen, no carpentry/smith/gemcut/tailor. Pack amounts in `[n]` are the equipment byte (`0x80|n`, the wear count repaired by camp *Fix*, `camp.md`); worn items = `h_wears` slots (armour + clothing).

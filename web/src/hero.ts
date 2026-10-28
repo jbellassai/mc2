@@ -25,7 +25,7 @@ export class Hero {
 
   /** Profile `profile` (0-4 = A-E). Profile gold is {hundreds, units} bytes (new_game.md). */
   static async profile(n: number): Promise<Hero> {
-    const rec = { ...(await json<HeroRecord[]>('heroes.json'))[n] };
+    const rec = structuredClone((await json<HeroRecord[]>('heroes.json'))[n]);
     rec.h_gold = (rec.h_gold & 0xff) * 100 + (rec.h_gold >> 8);
     return new Hero(rec, await json<string[]>('items.json'));
   }

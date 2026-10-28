@@ -15,6 +15,7 @@ import { World } from './world';
 import { Patches, type Patch } from './patch';
 import { Fight, type Rec } from './combat';
 import { Chamber } from './chamber';
+import { newGame, landed } from './newgame';
 import { aim as spellAim, BUILT, cost as spellCost, effect } from './spells';
 import type { Icon } from './view';
 
@@ -33,10 +34,19 @@ async function main() {
   const p92 = await json<string[]>('p92text.json');
   const patches = await Patches.create();
   const cdata = await Fight.data();
-  const hero = await Hero.profile(0);                        // profile A until character creation exists
-  const clock = Clock.newGame();
-  // Dev aids: ?hour=20 starts in the evening, ?at=74,25 starts on another square.
+  // Dev aids: ?hour=20 starts in the evening, ?at=74,25 starts on another square; any of them skips the new-game
+  // screens (?profile=0-4 picks the hero).
   const q = new URLSearchParams(location.search);
+  const dev = import.meta.env.DEV && ['at', 'world', 'level', 'hour', 'profile'].some(k => q.has(k));
+  const savedSlots = Array.from({ length: 3 }, (_, i) => i + 1).flatMap(n => {
+    try { const sv = JSON.parse(localStorage.getItem(`mc2.save.${n}`) ?? 'null'); return sv ? [{ slot: n, label: `${sv.place}, ${new Date(sv.when).toLocaleString()}` }] : []; }
+    catch { return []; }
+  });
+  const start = dev ? { hero: await Hero.profile(Math.min(4, Math.max(0, Number(q.get('profile')) || 0))) }
+    : await newGame(savedSlots, await json<string[]>('commands.json'));
+  const hero = 'hero' in start ? start.hero : await Hero.profile(0);   // a continued game replaces it on restore
+  panel.hide();
+  const clock = Clock.newGame();
   if (import.meta.env.DEV && q.has('hour')) clock.hour = Math.min(23, Math.max(0, Number(q.get('hour')) || 0));
   if (import.meta.env.DEV && q.has('at')) [START.x, START.y] = q.get('at')!.split(',').map(Number);
   if (import.meta.env.DEV && /^D\d\d$/.test(q.get('level') ?? '')) START.level = q.get('level')!;   // ?level=D23
@@ -51,7 +61,7 @@ async function main() {
   let fight: Fight | null = null;                                        // the fight in progress
   let roomStart = { x: 0, y: 0 };                                       // its formation origin (base square)
   let figures: Figure[] = level.figures(clock, events, party.away);
-  let message = `${hero.name} has landed in Telermain.`;
+  let message = await landed(hero);
   const say = (s: string, other = '') => format(s, hero, other);
 
   let phase = 0;   // animation step; 300 ms is a guess (the original's timer unit is not traced)
@@ -1151,6 +1161,9 @@ async function main() {
     if (talking) { talking = false; void talkAt(lead.x + k[0], lead.y + k[1]).then(render); return; }
     queue = queue.then(() => step(...k)).catch(err => { status.textContent = String(err); console.error(err); });
   });
+  if ('slot' in start) {                                       // Continue: the chosen slot
+    try { await restore(JSON.parse(localStorage.getItem(`mc2.save.${start.slot}`)!)); } catch (e) { message = String(e); }
+  }
   const [wx, wy] = (q.get('world') ?? '').split(',').map(n => parseInt(n));
   if (import.meta.env.DEV && wx >= 0 && wy >= 0) {             // dev aid: ?world=x,y starts on the world map
     const [x, y] = [wx, wy];
