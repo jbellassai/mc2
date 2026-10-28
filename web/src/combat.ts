@@ -17,7 +17,8 @@ export interface CombatData { monsters: Monster[]; groups: number[][]; weapons: 
   ranges: { x: number[][]; y: number[][] }; guarddiff: number[];
   loot: { thresholds: number[]; items: number[]; amounts: number[][]; an: number[] };
   d06: { cast: number[]; crit: number[]; crit2: number[]; prey: number[]; counts: number[]; armor: number[]; dodge: number[] };
-  spells: { names: string[]; energy: number[]; where: number[]; side: number[]; skill: number[] } }
+  spells: { names: string[]; energy: number[]; where: number[]; side: number[]; skill: number[] };
+  songs: { instruments: number[]; races: number[][]; names: string[][] } }
 
 /** A CMBTNT record. `side` 0 = party (`c_alignmnt` 0), 1 = monsters. */
 export interface Rec {
@@ -27,6 +28,7 @@ export interface Rec {
   invis: number;    // c_invis: turns left invisible
   fear: number;     // c_itspc1 high nibble: turns left feared (c_state 0x20)
   freeze: number;   // c_itspc1 low nibble: turns left frozen (c_health 0x20)
+  nift: number;     // c_renspl3: Nift charges left (blows fully absorbed)
   state: number;    // c_state: 0x80 dead, 0x10 removed, 4 leader, 2 undead
   health: number;   // c_health: 1 knocked down
   target: number;   // c_target, 0xFF none
@@ -61,7 +63,8 @@ export class Fight {
       f.recs.push({ recno: m, side: 0, name: hero.name, race: r.h_race, hero, num, tile: 0,
         x: data.setupxy[m], y: data.setupxy[24 + m], hp: r.h_hitpts, shield: r.h_shield, armor: f.heroArmor(hero),
         bravery: r.h_bravery, str: r.h_strngth, dex: r.h_dextrty, agi: r.h_agility, int: r.h_intellg,
-        wskl: Fight.wpnSkl(hero), weapon: item, res: r.h_resist, mskl: r.h_magic, maxhp: r.h_hpmax, invis: 0, fear: 0, freeze: 0, state: r.h_cond1 & 0x80 ? 0x80 : 0, health: 0, target: NONE, moves: 0 });
+        wskl: Fight.wpnSkl(hero), weapon: item, res: r.h_resist, mskl: r.h_magic, maxhp: r.h_hpmax, invis: 0, fear: 0, freeze: 0,
+        nift: r.h_inuse & 0x40 ? 3 : 0, state: r.h_cond1 & 0x80 ? 0x80 : 0, health: 0, target: NONE, moves: 0 });
     });
     for (const code of f.roster(group, diff)) {
       const s = data.monsters[(code & 0x7f) - 5], recno = 6 + f.recs.length - heroes.length;
@@ -69,7 +72,7 @@ export class Fight {
       while (f.occupied(i % 99 % W, Math.floor(i % 99 / W)) || !level.walkable(i % 99 % W, Math.floor(i % 99 / W))) i++;
       f.recs.push({ recno, side: 1, name: s.name, race: code & 0x7f, num: NONE, tile: s.tile, x: i % 99 % W,
         y: Math.floor(i % 99 / W), hp: s.hp, shield: s.shield, armor: s.armor, bravery: s.bravery, str: s.str, dex: s.dex,
-        agi: s.agi, int: s.int, wskl: s.wskl, weapon: s.weapon, res: s.res, mskl: s.mskl, maxhp: s.hp, invis: 0, fear: 0, freeze: 0, state: s.undead ? 2 : 0, health: 0, target: NONE, moves: 0 });
+        agi: s.agi, int: s.int, wskl: s.wskl, weapon: s.weapon, res: s.res, mskl: s.mskl, maxhp: s.hp, invis: 0, fear: 0, freeze: 0, nift: 0, state: s.undead ? 2 : 0, health: 0, target: NONE, moves: 0 });
     }
     const lead = f.recs.filter(r => r.side && data.monsters[r.race - 5].leader !== NONE)
       .sort((a, b) => data.monsters[b.race - 5].leader - data.monsters[a.race - 5].leader)[0];
@@ -172,6 +175,7 @@ export class Fight {
       r.moves = 1;
       if (n >= 50) { r.moves++; n -= 50; }
       if (rnd(100) < n) r.moves++;
+      if (r.hero && (r.hero.rec.h_inuse as number) & 0x80) r.moves = 4;   // Gonshi
     }
   }
 
@@ -222,6 +226,23 @@ export class Fight {
     return [text(0x60, { h: a.name, l: ['Sword', 'Axe', 'Archery', 'Magic', 'Fist'][idx] })];
   }
 
+  /** V06 INT61_1d, an instrument used in combat: no music skill → comtxt 0x117; no song known for it (`h_songs`
+   *  bits 0/1) → "The Happy Traveller" (0x118); else each known song (0xF3) charms every living monster of its race
+   *  (V06 0x4EC) when RndCo(200) ≤ music + 100: `c_state |= 0x21`, feared with no turn count, so for the whole fight. */
+  song(a: Rec, item: number, text: (n: number, v?: Record<string, string | number>) => string): string[] {
+    const r = a.hero!.rec as Record<string, number> & Hero["rec"], k = this.data.songs.instruments.indexOf(item);
+    if (!r.h_music) return [text(0x117, { h: a.name })];
+    const known = (r.h_songs as unknown as number[])[k] & 3;
+    if (!known) return [text(0x118, { h: a.name })];
+    const out: string[] = [];
+    for (const n of [0, 1]) if (known & 1 << n) {
+      out.push(text(0xf3, { h: a.name, a: this.data.songs.names[k][n] }));
+      for (const m of this.recs.filter(o => o.side && this.alive(o) && o.race === this.data.songs.races[k][n]))
+        if (rnd(200) <= r.h_music + 100) { m.state |= 0x21; m.moves = 0; }
+    }
+    return out;
+  }
+
   /** A step of one square (`_RMove` in combat); the arena edge is not an exit here yet. */
   move(r: Rec, dx: number, dy: number): boolean {
     if (!this.free(r.x + dx, r.y + dy)) return false;
@@ -257,7 +278,9 @@ export class Fight {
     const dx = t.x - a.x, dy = a.y - t.y, ax = Math.abs(dx), ay = Math.abs(dy);
     const dir = DIRTBL[(dx < 0 ? 8 : 0) | (dy < 0 ? 4 : 0) | (3 * ax >= ay + 2 ? 2 : 0) | (3 * ay <= ax + 1 ? 1 : 0)];
     let result: number;
-    const sure = t.health & 0x70 || a.invis || t.race === 32 || this.timestop || (w?.hitlist.includes(t.race) ?? false);
+    const inuse = (a.hero?.rec.h_inuse as number | undefined) ?? 0;
+    if (inuse & 0x10) a.hero!.rec.h_inuse = inuse & ~0x10;               // Luffin: this blow cannot be dodged
+    const sure = inuse & 0x10 || t.health & 0x70 || a.invis || t.race === 32 || this.timestop || (w?.hitlist.includes(t.race) ?? false);
     const skill = (a.wskl + (w?.sklbonus ?? 0)) >> (t.invis ? 1 : 0), thresh = (skill + 50 - 8 * t.agi) & 0xff;
     if (!sure && (skill + 50 < 8 * t.agi || thresh === 0 || thresh < rnd(100))) {
       result = 0;                                          // dodged: a side-step from D06 ptr10 (P06 ovl_0fcf)
@@ -268,7 +291,12 @@ export class Fight {
     } else {
       let hit = w ? (w.stbonus + a.str - w.minst) * 2 + w.basedam : a.str;
       if (t.race === 36 && a.weapon - 9 === 16) hit *= 4;  // Rhokadur against a Dreadknight
-      const dam = Math.max(0, hit - t.armor);
+      if (a.hero && w?.type !== 3 && (a.hero.rec.h_inuse as number) & 0x20) {   // Mirget: a melee hit triples
+        hit += 2 * hit; a.hero.rec.h_inuse = (a.hero.rec.h_inuse as number) & ~0x20;
+      }
+      const nift = t.nift > 0;                             // Nift: the blow is fully absorbed (G_SWNIFT)
+      if (nift && !--t.nift && t.hero) t.hero.rec.h_inuse = (t.hero.rec.h_inuse as number) & ~0x40;
+      const dam = nift ? 0 : Math.max(0, hit - t.armor);
       t.hp -= dam;
       result = 1;
       if (t.hp <= 0) { t.hp = 0; result = 0xff; t.state |= 0x80; }
@@ -279,7 +307,7 @@ export class Fight {
       if (t.hero) { t.hero.rec.h_hitpts = t.hp; if (result === 0xff) t.hero.rec.h_cond1 = (t.hero.rec.h_cond1 as number) | 0x80; }
       // ovl_0bc2: "%a hits %a. -HIT" / "Dam:n (A-armour) HP:n", then "CRITICAL HIT!" and "%a is wounded." on a knockdown.
       out.push(`${text(0x46, { a: a.name })}${text(0x47)}${text(0x46, { a: t.name })}${text(0x10)}${text(0x4a)}${hit}`,
-        `${text(0x4b)}${dam}${text(0x4c, { b: t.armor })}${text(0x4d)}${t.hp}`);
+        `${text(0x4b)}${dam}${nift ? text(0x58, { b: t.nift }) : text(0x4c, { b: t.armor })}${text(0x4d)}${t.hp}`);
       if (result === 2) { out.push(text(0x48)); if (t.race !== 36) out.push(text(0x49, { a: t.name })); }
     }
     if (a.hero) out.push(...this.afterHeroBlow(a, w, result, text));

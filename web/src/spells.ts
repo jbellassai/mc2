@@ -21,7 +21,7 @@ export const BUILT = new Set([0, 2, 5, 6, 8, 9, 11, 12, 14, 16, 18, 19, 20, 21, 
 export const cost = (f: Fight, spell: number, magic: number) => Math.max(1, f.data.spells.energy[spell] - (magic >> 2));
 
 /** INT61_43 spell power: max(0, magic/8 − target resist). */
-const power = (c: Rec, t: Rec) => Math.max(0, (c.mskl >> 3) - t.res);
+const power = (c: Rec, t: Rec, m = c.mskl) => Math.max(0, (m >> 3) - t.res);
 
 /** P94 ovl_15f8, the spell AI's "worth it" test for target `t` (spells.md, Spell AI). */
 function worth(f: Fight, c: Rec, spell: number, t: Rec): boolean {
@@ -58,7 +58,11 @@ export function monsterSpell(f: Fight, c: Rec, spells: number[]): { spell: numbe
 
 /** The effect of `spell` cast by `c` on `t` (null for untargeted spells); returns the lines to print. */
 export function effect(f: Fight, c: Rec, spell: number, t: Rec | null, text: Text): string[] {
-  const m = c.mskl, out: string[] = [];
+  const out: string[] = [];
+  // INT61_01: a hero who used Turpin casts this spell with magic 99 (the flag is spent).
+  const turpin = c.hero && (c.hero.rec.h_inuse as number) & 8;
+  if (turpin) c.hero!.rec.h_inuse = (c.hero!.rec.h_inuse as number) & ~8;
+  const m = turpin ? 99 : c.mskl;
   const foes = () => f.recs.filter(r => r.side !== c.side && f.visible(r));
   const mine = () => f.recs.filter(r => r.side === c.side && f.alive(r));
   const resists = (r: Rec) => [text(0x93, { a: r.name })];               // "%a resists the spell!"
@@ -84,13 +88,13 @@ export function effect(f: Fight, c: Rec, spell: number, t: Rec | null, text: Tex
     } return [text(0x5b)];
     case 9: t!.armor = 0; t!.shield = 0; return [text(0x5b)];                              // Weaken
     case 0: {                                                                               // Fear
-      const p = power(c, t!);
+      const p = power(c, t!, m);
       if (!p) return resists(t!);
       t!.fear = Math.min(15, p); t!.state |= 0x20; t!.moves = 0;
       return [text(0x59, { a: t!.name, b: t!.fear })];
     }
     case 11: {                                                                              // Freeze
-      const p = power(c, t!);
+      const p = power(c, t!, m);
       if (!p) return resists(t!);
       t!.freeze = Math.min(15, (p >> 1) + 1); t!.health |= 0x20;
       return [text(0x5a, { a: t!.name, b: t!.freeze })];
@@ -120,7 +124,7 @@ export function effect(f: Fight, c: Rec, spell: number, t: Rec | null, text: Tex
     case 40: if ((t!.state & 0x82) !== 0x82) return [text(0x95)];                           // Restsoul
       t!.state = (t!.state & ~2) | 8; t!.x = t!.y = -1; return [text(0x94, { l: t!.name })];
     case 35: f.timestop = true; return [];                                                  // Timestop
-    case 33: for (const r of foes()) if (rnd(12) < power(c, r)) { r.bravery = 0; r.state |= 0x40; }   // Terrify
+    case 33: for (const r of foes()) if (rnd(12) < power(c, r, m)) { r.bravery = 0; r.state |= 0x40; }   // Terrify
       return [text(0x97, { a: c.name })];                                                  // Timestop
     case 5: return f.recs.filter(r => r.side && f.alive(r)).map(r => `${r.name}: HP ${r.hp}, A ${r.armor}, SH ${r.shield}`);   // Assess
     // FFFAR: Heal / Zengrl set HP to the maximum and stand a downed target up; Energy = a Sermin; Shield = the caster's

@@ -13,7 +13,7 @@ Hero skill bytes (`HERO+0x17…0x29`, `docs/structs.h`). "Best in party" = `_Hig
 | soul reading | 20 | — | **no reader found** (trainable at Wanasol, `services.md`) |
 | lockpick | 21 | `P02`, `P07` | `min(99, dex/2 + lockpick)` vs d100 to pick doors/chests/search spots; a failed roll breaks the Pick; improves on success (`locations.md`) |
 | track | 22 | `P02 ovl_1690` (best in party) | town ambush: `RndCo(200) < track` → "%o detects an ambush!" and the fight is not an ambush |
-| music | 23 | `V06 0x2860/INT61_1d` (combat) | each known song of the instrument charms every monster of its race with chance `RndCo(200) ≤ music + 100`, repeated `music/20 + 1` times (`encounters.md`, *Combat songs*) |
+| music | 23 | `V06 INT61_1d` (combat), V06 0x2860 (Horn) | each known song of the instrument charms every monster of its race with chance `RndCo(200) ≤ music + 100`, once per use (`encounters.md`, *Combat songs*); the Horn's effect repeats `music/20 + 1` times |
 | carpentry | 24 | `P93 ovl_1137` (best in party), `P05` jobs | open-camp shelter: sleep caps raised by `carpentry/2` (`camp.md`); carpenter job wage |
 | smith | 25 | `P93` Fix, `P05` jobs | each 5-min tick `RndCo(100) ≤ smith` repairs one damage point (`camp.md`); metalsmith job wage |
 | gemcut | 26 | `P05` jobs | daily wage of a gemcutter job (`services.md`); otherwise unused |

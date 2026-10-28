@@ -356,7 +356,7 @@ async function main() {
     actor = fight!.recs.find(r => !r.side && fight!.alive(r) && r.moves > 0) ?? null;
     if (!actor) return void monsterPhase();
     message = `${actor.name}: ${actor.moves}`;
-    panel.set([{ label: cmd[7], act: aim }, { label: cmd[27], act: magic }, { label: cmd[35], act: recall },
+    panel.set([{ label: cmd[7], act: aim }, { label: cmd[27], act: magic }, { label: cmd[35], act: recall }, { label: cmd[43], act: fightUse },
       { label: cmd[14], act: drawWeapon }, { label: cmd[30], act: () => { actor!.moves = 0; partyTurn(); } }]);
     render();
   };
@@ -368,6 +368,31 @@ async function main() {
     panel.set([...foes.map(t => ({ label: `${t.name} (${t.x},${t.y})`, act: () => strike(t) })), { label: cmd[0], act: partyTurn }]);
   };
   const strike = (t: Rec) => { report(fight!.attack(actor!, t, ctext)); partyTurn(); };
+  /** Use in combat (P94 `_mnusel` 0x2B → _UseItem for the acting member): the consumables' handlers, synced onto the
+   *  combat record (Potion also stands a downed member up; Gonshi gives 4 actions now; Nift 3 charges now); the
+   *  instruments play their songs (INT61_1d) and are never used up. One action (assumed). The Horn and Fireglobe
+   *  (globe traps, INT61_1f) are not built. */
+  const fightUse = () => {
+    const a = actor!, h = a.hero!, r = h.rec;
+    const codes = [...new Set(r.h_invitem.filter(c => c > 0x30 && c < 0x51 || c === 0x5b))];
+    const fmt = (s: string, item: number) => format(s.replace(/%l/g, items[item]), h, h.name);
+    const done = () => { a.moves--; partyTurn(); };
+    panel.line(comtxt[0x2b]);                                                     // "Select."
+    panel.set([...codes.map(item => ({ label: items[item], act: () => {
+      if (cdata.songs.instruments.includes(item)) { report(fight!.song(a, item, ctext)); return done(); }
+      const down = (r.h_cond1 as number) & 1;
+      if (!h.use(item, tables.hungerhours[r.h_race as number])) { panel.line(fmt(comtxt[tables.nousetext[item]], item)); return partyTurn(); }
+      h.dec(h.slot(item));
+      a.hp = r.h_hitpts;
+      if (item === 0x32 && down && !((r.h_cond1 as number) & 8)) {
+        r.h_cond1 = (r.h_cond1 as number) & ~1; a.health &= ~1; a.agi = r.h_agility as number; a.dex = r.h_dextrty;
+      }
+      if (item === 0x35) a.nift = 3;
+      if (item === 0x34) a.moves = 4;                                              // then this Use spends one of them
+      panel.line(fmt(comtxt[0x38], item));                                        // "%o uses a %l."
+      done();
+    } })), { label: cmd[0], act: partyTurn }]);
+  };
   /** Recall (_RecSpl): ready one of the spells the hero has memorised (`h_spells`, `h_rdyspl`). Takes no action. */
   const recall = () => {
     const r = actor!.hero!.rec, known = r.h_spells.flat().map((n, i) => [n, i]).filter(([n]) => n > 0);
@@ -462,6 +487,7 @@ async function main() {
     if (o === 3) { panel.set([{ label: cmd[0], act: endFight }]); render(); return true; }   // fled: the guard stays
     panel.line(comtxt[0x4e]);
     onWin();
+    for (const { hero: h } of party.members) h.rec.h_inuse = (h.rec.h_inuse as number) & ~0xc0;   // P95: Gonshi and Nift end
     // P95 ovl_072d: loot for every slain monster, its value to each hireling's partybucks (ovl_164e, cap 30000).
     const value = fight!.rollLoot(fightDiff, events, tables.lootvalues);
     for (const { hero: h } of party.members)

@@ -267,6 +267,7 @@ def main(src, dst):
     # Combat (rules/combat.md, encounters.md): monsters by code − 5, groups by number − 60, weapons by item − 9.
     p96 = open(f'{src}/P96.MCO', 'rb').read()
     p95 = open(f'{src}/P95.MCO', 'rb').read()
+    v06 = open(f'{src}/V06.MCO', 'rb').read()
     d06 = open(f'{src}/D06.MCV', 'rb').read()
     ptr = struct.unpack_from('<14H', d06)   # D06 header words are file offsets
     names = [x.decode('latin1') for x in exe[ds + 0x40A4:ds + 0x4204].split(b'\0')[:37]]   # _w_monstrs
@@ -296,6 +297,9 @@ def main(src, dst):
                    'where': list(exe[ds + 0x2BF0:ds + 0x2BF0 + 42]),    # _splocs (16 = combat)
                    'side': list(open(f'{src}/P94.MCO', 'rb').read()[0x1529:0x1529 + 42]),   # TALIGN: 0 own, 1 enemy
                    'skill': list(exe[ds + 0x390C:ds + 0x390C + 20])},   # SKLSPLS
+        'songs': {'instruments': list(v06[0x28FF:v06.index(0, 0x28FF)]),                 # INT61_1d: item per instrument
+                  'races': [list(v06[0x4EC + 8 * k:0x4EE + 8 * k]) for k in range(4)],       # song 0/1 → monster race
+                  'names': [[x.decode('latin1') for x in exe[ds + 0x4014:ds + 0x4200].split(b'\0')[8 * k:8 * k + 2]] for k in range(4)]},
         'maxtbl': list(exe[ds + 0x2C7E:ds + 0x2C7E + 120]),   # _MaxSkill: skill·6 + race
         'guarddiff': list(open(f'{src}/P01.MCO', 'rb').read()[0x33A:0x34A]),       # world fights' difficulty by region
         'd06': {'cast': list(d06[ptr[0]:ptr[1]]), 'crit': list(d06[ptr[1]:ptr[2]]), 'crit2': list(d06[ptr[2]:ptr[3]]),
