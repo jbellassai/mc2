@@ -14,7 +14,7 @@ A `Dnn.MCV` starts with 20 u16 pointers in `LOCTYPE` order. An **unused table ha
 | `treasptr` (towns) | `id, {item, amount}…, 0xFF` groups | contents of search spot `id`; `item 0x80` prints the special text (local 0x10 + loctext) instead |
 | `spdoors` | `{?, x, y, newtile, ?}` ×n, 0xFF-terminated | doors opened with a key item: every record's tile is replaced by `newtile` (`P02 ovl_0d70`, key = `_useditem & 0x7F`) — exact first/last byte TODO |
 | `locevptr` (P01) | per world-map entrance *n*: a 0xFF-terminated list of event bits | the entrance exists only while one of the listed events is set (`P01 ovl_0f21`) |
-| `hroomptr` word pairs `{npc, text}` (P91) | — | a companion's remark on entering this location (`dialogue.md`); conflicts with the HROOM use in dungeons — probably a per-program reuse of the slot, TODO verify |
+| `hroomptr` word pairs `{npc, text}` (P91) | — | what a party member says when talked to in this room (`dialogue.md`). Read only when `_curmpg > 2` (room programs: services, scenes, P07…), so it never meets the HROOM records of program-2 dungeon levels — the slot is reused per program |
 
 ## Dungeon rooms (`HROOM`, program P07)
 Entering a room from a dungeon map copies its record to `_hroomrec` (P01 does it for wilderness entrances: `{entrno, grpno, 0…, hrmmap = OV_0x1C1}`):

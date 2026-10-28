@@ -21,7 +21,7 @@ Example (C10 slot 0, Tomak's tribute collector): `tribute → "All visitors are 
 ## Greetings, farewells, side effects
 - Greeting (`ovl_045d`): marks `_met[npcno]`, then prints the slot's **greet** text = first byte of the C-file region at pointer 34+slot (`{greet, bye}`, 0xFF = use the location default `loc+60`, else "%o says nothing" style common text). Farewell (`ovl_0546`) uses the second byte (default `loc+61`).
 - Talking to one of ten key NPCs sets an event bit (`ovl_05af`, P91 table @0x16/@0x20): npc 113→event 24, 164→38, 168→50, 169→53, 170→56, 172→60, 163→79, 171→82, 21→95, 175→100.
-- A party member spoken to inside a location (`ovl_0a95`) may have a location-specific remark: `loc+26` word pairs `{npc, loctext}` (0-terminated).
+- A party member spoken to (`_npcno` = that member, not the player) inside a **room** location (`_curmpg > 2`; never in towns, dungeon levels or the wilderness) may have a location-specific remark (`ovl_0a95`): `loc+26` byte pairs `{npc, loctext}` until npc 0; the match prints `loctext[n]` instead of the normal conversation.
 - Player's own lines: `_PlaSays`/`_TypSays`/`_KNPCSays` are the room-program entries 0–2 of P91 (text output helpers).
 
 ## Text format codes
