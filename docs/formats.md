@@ -55,7 +55,7 @@ Loaded by `_LoadVar('D', n)` straight into `_loc`; the first 20 words are offset
 
 | off | field | notes |
 |---|---|---|
-| 0 | 20 × u16 | `roomptr genptr knpcptr resids maps loctext lkdata pgmptr exitptr gwrds newsr weathr peopr hroomptr spetbl treasptr spdoors locptr locevptr notyet0` |
+| 0 | 20 × u16 | `roomptr genptr knpcptr resids maps loctext lkdata pgmptr exitptr gwrds newsr weathr peopr hroomptr spetbl treasptr spdoors locptr locevptr notyet0` (`notyet0` is never read) |
 | 40 | `locnum` | |
 | 41 | `roomno` | |
 | 42 | `locname[11]` | e.g. `Telermain M`, `Oshcrun`, `Dorak 3   X` (trailing letter looks like a class code: M town, X dungeon) |

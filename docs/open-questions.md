@@ -22,4 +22,4 @@ Still open, roughly by value for a port:
 4. ~~P08 ghost / Wanasol Hall / ending; P07 room types~~ → `quest_scenes.md`, `locations.md` *Dark Candle rooms* (`_hroomtype` from V02 service 0x12). P06 is the combat room program (an earlier note here called it the dungeon level program — wrong; dungeon levels run P02, see `locations.md` *Dungeon levels*).
 5. ~~E80 maps, `_ChkDepartures`, inn wait, C-file unknowns~~ → E80 = unreferenced cut content (`formats.md`); `_ChkDepartures` = any companion with attitude 0xFF (`npcs.md`); there is no inn "wait here" option (`_capdays` belongs to ships); C-file words 10–17 are unread, +0x64 = unknown-keyword reply text (`formats.md`).
 
-Still open after this pass (lower value): `locations.md` *Still to extract* (`notyet0`; dungeon levels, `spetbl`, key doors and engraved words are done); MC1/Keys import field mapping (`new_game.md`); ship quirks list (`ships.md`).
+Still open after this pass (lower value): MC1/Keys import field mapping (`new_game.md`); ship quirks list (`ships.md`).
