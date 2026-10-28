@@ -70,6 +70,7 @@ async function main() {
     const room = level.loc.kind === 'room', wild = level.loc.kind === 'world';
     const icons: Icon[] = fight ? fight.recs.filter(r => r.side && fight!.alive(r)).map(r => ({ x: r.x, y: r.y, frame: r.tile, sheet: 'E01' }))
       : wild ? [...world.guards(), ...world.patrols(lead.x, lead.y, events.has(105))].map(g => ({ x: g.x, y: g.y, frame: 0x0f }))
+          .concat(world.ships.boats().map(b => ({ ...b, frame: 0x12 })))
       : patch?.icons() ?? [];
     const people = fight ? fight.recs.filter(r => !r.side && fight!.alive(r)) : wild ? [lead] : party.members;   // world: the leader alone
     view.draw(level, room ? 5 : lead.x, room ? 4 : lead.y, figures, people, phase, icons);
@@ -88,6 +89,7 @@ async function main() {
   const hourly = () => {
     figures = level.figures(clock, events, party.away);
     if (clock.hour === 0 && !(clock.juldate & 7)) patches.regrow();
+    if (clock.hour === 0 && world.ships.daily()) for (const m of party.members) m.hero.rec.h_gold = 0;   // Amos (P92 ovl_0447)
     party.hunger(tables.hungerhours);
     world.hour(clock);
     // Hirelings' payday (P92 ovl_09ff): 17:00 warning when the week earns under 6, 18:00 settlement; then departures.
@@ -340,10 +342,13 @@ async function main() {
     outside = null; service = null; message = '';
   };
   /** A world-map step (P01): a town entrance of the current region (`exitptr`) loads that town with the window at
-   *  (tx, ty); features and spots are later milestones; otherwise walkable tiles only. A step costs ticks and energy. */
+   *  (tx, ty); a mushroom patch opens; a boat is boarded or, aboard, water is sailed and land disembarks (ships.md);
+   *  otherwise walkable tiles only. */
   const worldStep = async (dx: number, dy: number) => {
-    const x = lead.x + dx, y = lead.y + dy, rec = world.rec!;
+    const x = lead.x + dx, y = lead.y + dy, rec = world.rec!, ships = world.ships;
+    if (level.tile(x, y) === 0xff) { message = rec.texts[0x14]; return; }   // ovl_147c: "…unsafe to sail in that direction!"
     const entrance = rec.exits.find(e => e.x === x && e.y === y);
+    if ((entrance || rec.doors.some(d => d.x === x && d.y === y)) && ships.sailing) return;   // a ship can't enter either
     if (entrance) {
       const pgm = rec.pgms[entrance.pgm];
       if (pgm.program === 2) { go(await Level.load(`D${two(pgm.datafile)}`), entrance.tx + 4, entrance.ty + 3); message = ''; return; }
@@ -352,13 +357,31 @@ async function main() {
     const feature = rec.doors.find(d => d.x === x && d.y === y);
     if (feature && rec.pgms[feature.pgm].program === 4) return enterPatch(feature.id, x, y);
     if (feature) { message = `${level.tileName(x, y)}: not built yet.`; return; }
-    if (!level.walkable(x, y)) { message = `Blocked by ${level.tileName(x, y)}.`; return; }
+    const ter = level.data.nameindex[level.tile(x, y)];
+    if (ships.sailing && level.walkable(x, y)) return disembark(dx, dy);
+    if (ships.sailing && ter !== 13) return;                             // @0xEA1: only water, silently
+    if (ships.sailing && y === 101 && !events.has(102)) { message = shipText(ships.cur, 0x29); return; }   // ovl_0f3b
+    if (!ships.sailing && !level.walkable(x, y)) {
+      const i = ships.boatAt(x, y);                                      // ovl_1070
+      if (i < 0) { message = `Blocked by ${level.tileName(x, y)}.`; return; }
+      return board(i, dx, dy);
+    }
+    return worldMove(dx, dy);
+  };
+  /** The step itself (P01 ovl_147c / ovl_10f7), then the per-step states, patrols and guards. */
+  const worldMove = async (dx: number, dy: number) => {
+    const x = lead.x + dx, y = lead.y + dy, ships = world.ships, ter = level.data.nameindex[level.tile(x, y)];
     party.shift(dx, dy);
     message = '';
-    const ter = level.data.nameindex[level.tile(x, y)];
-    for (let n = world.stepTicks(ter, clock, party); n > 0; n--) tick();
-    world.fatigue(ter, clock, party);
+    if (ships.sailing) {                                                 // ovl_10f7 @0x114D: the boat moves, no energy
+      ships.x[ships.cur] = x; ships.y[ships.cur] = y;
+      for (let n = 4 + ships.d.weather[clock.weather]; n > 0; n--) tick();
+    } else {
+      for (let n = world.stepTicks(ter, clock, party); n > 0; n--) tick();
+      world.fatigue(ter, clock, party);
+    }
     await world.at(x, y, clock);
+    shipEvents();
     world.movePatrols(level, x, y, clock.month);
     // ovl_0846: a live guard spot under the party, else a live patrol (which may just have walked onto it)
     const guard = world.guards().find(g => g.x === x && g.y === y), n = guard ? -1 : world.patrolAt(x, y);
@@ -369,6 +392,68 @@ async function main() {
         () => guard ? world.cleared.add(guard.bit) : world.dead.add(n));
     }
     world.engage(x, y);
+  };
+
+  // ---- ships (rules/ships.md; ships.ts) ----
+  /** Region text n with "Captain <name>" in front for the captain's lines (ovl_126a), `%f` = the ship (ovl_1098). */
+  const shipText = (i: number, n: number, v: Record<string, string | number> = {}) => {
+    const t = world.rec!.texts, s = [0x0f, 0x15, 0x16, 0x23, 0x24, 0x25, 0x27].includes(n) ? t[8] + t[9 + i] + t[n] : t[n];
+    return format(s, lead.hero, lead.hero.name, { f: t[2 + i], ...v });
+  };
+  const shipYesNo = (yes: () => void, no: () => void) => panel.set([{ label: cmd[3], act: yes }, { label: cmd[4], act: no }]);
+  /** ovl_0fcc: "…%b coins a day. How many days?" (GetNum 0-99, 0 cancels), at most 99 with the credit left (0x15),
+   *  "That will be %i coins. Do you accept?" (No asks again), then the acting member pays or `cancel` runs. */
+  const buyDays = (i: number, ok: (n: number) => void, cancel: () => void) => {
+    const rate = world.ships.d.rate[i];
+    panel.line(shipText(i, 0x12, { b: rate }));
+    panel.set([{ label: cmd[0], act: cancel }], w => {
+      const n = Number(w);
+      panel.line(`> ${w}`, 'you');
+      if (!Number.isInteger(n) || n < 0 || n > 99) return buyDays(i, ok, cancel);
+      if (n === 0) return cancel();
+      if (n + world.ships.days[i] > 99) { panel.line(shipText(i, 0x15)); return buyDays(i, ok, cancel); }
+      panel.line(shipText(i, 0x13, { i: n * rate }));
+      shipYesNo(() => {
+        if (lead.hero.rec.h_gold < n * rate) { panel.line(format(comtxt[0x25], lead.hero, lead.hero.name)); return cancel(); }
+        lead.hero.rec.h_gold -= n * rate;
+        ok(n);
+      }, () => buyDays(i, ok, cancel));
+    }, '0–99');
+  };
+  /** Boarding (ovl_0cb2 @0xEDB): the party's anchored boat (state 1) at once, "…welcomes %h on board" (0x0F); any other
+   *  "…available for hire. Will %h hire her?" (0x23, ovl_0f5c) and days bought, "…ready to sail" (0x24). Then the step. */
+  const board = (i: number, dx: number, dy: number) => {
+    const sail = (text: number) => { world.ships.board(i); panel.hide(); void worldMove(dx, dy).then(() => { message = shipText(i, text); render(); }); };
+    if (world.ships.sta[i] === 1) return sail(0x0f);
+    panel.show();
+    panel.line(shipText(i, 0x23));
+    shipYesNo(() => buyDays(i, n => { world.ships.days[i] = n; sail(0x24); }, () => close()), () => close());
+  };
+  /** Landing (@0xD7D): "Do you want to disembark?" (0x10); with credit "…your credit is %b days. Do you want him to wait
+   *  longer?" (0x16), else "…drop anchor here and wait?" (0x11); Yes buys days (cancel = No). Then the step ashore. */
+  const disembark = (dx: number, dy: number) => {
+    const s = world.ships, i = s.cur;
+    const ashore = (n: number) => { s.land(n); panel.hide(); void worldStep(dx, dy).then(render); };
+    panel.show();
+    panel.line(shipText(i, 0x10));
+    shipYesNo(() => {
+      panel.line(s.days[i] ? shipText(i, 0x16, { b: s.days[i] }) : shipText(i, 0x11));
+      shipYesNo(() => buyDays(i, ashore, () => ashore(0)), () => ashore(0));
+    }, () => close());
+  };
+  /** ovl_15e4 after a step: "Your time is up" (0x25, ovl_0f95) or Amos' theft (0x2C). */
+  const shipEvents = () => {
+    const s = world.ships, e = s.step();
+    if (e === 'stolen') message = shipText(s.cur, 0x2c);
+    if (e !== 'timeup') return;
+    const i = s.cur, paid = (n: number) => { s.days[i] = n; s.sta[i] = 5; close(); };
+    const work = () => {                                                // 0x26: No → back to buying days
+      panel.line(shipText(i, 0x26));
+      shipYesNo(() => { s.passage = 1; close(); }, () => buyDays(i, paid, work));
+    };
+    panel.show();
+    panel.line(shipText(i, 0x25));
+    shipYesNo(() => buyDays(i, paid, work), work);
   };
 
   // ---- combat (rules/combat.md; combat.ts) ----
@@ -1046,6 +1131,7 @@ async function main() {
   /** Camp (C). In a P05 inn room P05 first refuses the keeper's side (acting member at x ≥ 4 and y ≥ 5: comtxt 0x24);
    *  when camp ends with the rent used up, the party goes back to the base square and the keeper speaks (ovl_19b0/167f). */
   const campCmd = () => {
+    if (world.ships.passage === 1 && world.ships.sailing) { message = shipText(world.ships.cur, 0x27); return render(); }   // working for passage
     const inn = service?.kind === INN && service.room < 0x5c ? service.room - 0x40 : -1;
     if (inn >= 0 && lead.x >= 4 && lead.y >= 5) { message = say(comtxt[0x24]); return render(); }
     camp({ party, clock, cmd, p93, items, use: () => useCmd(), tick, rent: () => inn >= 0 ? rent[inn] : null, done: () => {
@@ -1078,6 +1164,9 @@ async function main() {
     }).join(' ');
     const pick = (who: Hero, item: number) => {
       panel.line(`> ${items[item]}`, 'you');
+      // The Conch (ovl_1349, the original's K command): aboard on row 100 it calms the rough sea (event 102)
+      if (item === 0x4b) return done(world.ships.sailing && lead.y === 100
+        ? (events.add(102), format(world.rec!.texts[0x2a], who, who.name)) : comtxt[0x83]);
       if (chamber && item === 0x50 && chamber.hr.reward && !(chamber.hr.reward & 0x80)) return openChest(who);
       if (level.loc.kind === 'level' && (item === 0x50 || item === 0x46)) { close(); return item === 0x50 ? lockpick(who) : dig(who); }
       if (!tables.useall.includes(item) || party.members.length < 2) return done(once(who, item));
@@ -1245,6 +1334,7 @@ async function main() {
     await world.at(x, y, clock);
     message = '';
   }
+  if (import.meta.env.DEV) Object.assign(window, { dbg: { party, world, clock } });   // for scripts/shot.mjs eval:
   render();
 }
 

@@ -72,8 +72,8 @@ Moving onto a tile that is not walkable on foot (`_ChkWlk == 0`) and is not a to
 
 ## Sailing
 
-- Only tiles that are **not** walkable on foot can be entered while `_sailsw` (the inverse of the walking rule, so a ship can also sit on any coast tile a walker is refused). Leaving the loaded map area is refused with "The captain says it's unsafe to sail in that direction!" (0x14; the same text answers a walker at the world edge).
-- Each step moves the boat with the party (`boatx/y[curcap] = party x,y`), costs `4 + sailing_weather[weather]` five-minute ticks (`time_weather.md`), and **no** energy; the land fatigue loop is skipped.
+- A ship enters only **water** (terrain class 13, `B01` name "water"). Every other tile a walker is refused (river 12, mountains, chasm, settlements) is refused silently (`ovl_0cb2` @0xEA1 → `stc`), and so are town entrances (@0xD1C) and features (@0xD49) while `_sailsw`. A walkable tile starts the landing (below). Leaving the loaded map area is refused with "The captain says it's unsafe to sail in that direction!" (0x14, `ovl_147c` returning −1; the same text answers a walker at the world edge).
+- Each step moves the boat with the party (`boatx/y[curcap] = party x,y`), costs `4 + sailing_weather[weather]` five-minute ticks (`ovl_10f7` @0x114D; the table byte is added to 4 as a byte, so Clear and Overcast cost 3), none while a camp is running, and **no** energy; the land fatigue loop is skipped.
 - Camping is an open camp with `CAMPSITE` bit 4 (`camp.md`). A **Dwarf** (`h_race == 4`) aboard is seasick: "%o is too seasick to do anything!" (P93 text 0x15) and cannot take a camp activity.
 - Teleport spells: "It's impossible to teleport from a moving ship." (0x1A).
 - **Rough sea barrier**: terrain class 13 on row `y == 101` is impassable while sailing — "The sea is unnaturally rough! The *ship* cannot sail to the south!" (0x29) — until event byte 12 bit 0x40 is set. Using the **Conch** (item 0x4B, command key 'K', `ovl_1349`) while aboard on row `y == 100` sets that bit: "When %h blows the conch, the seas calm!" (0x2A). Anywhere else the conch answers "Nothing happens." (comtxt 0x83).
@@ -95,7 +95,8 @@ So an anchored boat waits exactly its prepaid days; when they run out it heads h
 
 The daily tick turns state 5 into 4; at the next step (`ovl_15e4`, `ovl_0f95`): "Captain *N* approaches. 'Your time is up. Will you pay for more days?'" (0x25).
 - Yes → buy days; success → `capdays = days`, state 5.
-- No, or cancelling the purchase → "'Then you'll have to work for your passage. Agreed?'" (0x26). No → back to the payment prompt (the loop only ends by paying or agreeing).
+- Success replaces the credit (`capdays = days`, @0xF80; it was 0 anyway). Hiring (`ovl_0f5c`) shares that code.
+- No, or cancelling the purchase → "'Then you'll have to work for your passage. Agreed?'" (0x26). No → straight back to "How many days?" (@0xFC1 → 0xFA8; the loop only ends by paying or agreeing).
 - Agreed → passage mode 1: sailing continues free of charge with state 4, but the camp command is refused with "Captain *N* has too much work for %h to do." (0x27). Landing then ends the hire (the captain sails home). Passage mode is overlay-private, so after a save/reload the "time is up" prompt returns.
 
 ## Amos (captain 2, the cheap one)
@@ -107,6 +108,8 @@ Hiring Amos sets state 6. At the next daily tick (`P92 ovl_0447`): state 7, `cap
 EXE `_CapAtLiberty`: a KNPC row of type 0x1D is shown only while the matching captain is in state 3; the row's `tile` byte is mapped to the captain index through the 6-byte key `35 51 52 8E 8F 94` (DS:0838). No shipped location file contains such a row, so this is dead data.
 
 ## Port notes
+
+Built in the web port (`web/src/ships.ts`, `main.ts` *ships*): hiring, buying days, sailing, landing and anchoring, the daily countdown, time is up / working for passage, Amos, the rough sea and the Conch (on Use; the original's K command). Not yet: the seasick Dwarf and the ship campsite (the port has no open camp), the teleport refusal (no teleport spells yet), swimming.
 
 - Only `_capsta`, `_boatx/y`, `_capdays`, `_sailsw`, `_curcap` need to persist; everything else is derivable.
 - Quirks a port may want to fix: passage mode not saved; the hire prompt for state 4/5 boats found at sea (unreachable in practice); the "unsafe to sail" text on foot; Amos' theft being irreversible and unexplained.

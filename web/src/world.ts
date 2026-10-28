@@ -5,10 +5,12 @@ import { json, hex, type Location } from './pack';
 import type { Party } from './party';
 import type { Clock } from './clock';
 import type { Level } from './level';
+import { Ships, type ShipData } from './ships';
 
 interface P01 {
   terraintime: number[]; weathertime: number[]; terrainenergy: number[]; clothing: number[][]; regions: number[][]; patchtiles: number[];
   patrols: number[][]; respawn: number[]; steps: { dirs: number[][]; side1: number[][]; side2: number[][]; order: number[] };
+  ships: ShipData;
 }
 const SEASON = [0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 0];   // P92 file 0x24D, by month
 const rnd = (n: number) => Math.floor(Math.random() * n);
@@ -31,7 +33,10 @@ export class World {
   /** `_curseg`: the world-map block the party is in. */
   private seg = 0;
 
-  private constructor(private p01: P01) { this.ptrl = p01.patrols.map(p => [...p]); }
+  /** The six captains and their boats (ships.ts). */
+  readonly ships: Ships;
+
+  private constructor(private p01: P01) { this.ptrl = p01.patrols.map(p => [...p]); this.ships = new Ships(p01.ships); }
   static async create(): Promise<World> { return new World(await json<P01>('p01.json')); }
 
   /** P01 ovl_14d6 / ovl_14fd: entering another region loads its record and its season's weather table. */
@@ -59,7 +64,8 @@ export class World {
   /** Saved state (save.ts). */
   snapshot() {
     return { region: this.region, wthrs: this.wthrs.map(w => ({ ...w })), ssn: [...this.ssn], cleared: [...this.cleared],
-      ptrl: this.ptrl.map(p => [...p]), dead: [...this.dead], engaged: [...this.engaged], lastgen: [...this.lastgen], seg: this.seg };
+      ptrl: this.ptrl.map(p => [...p]), dead: [...this.dead], engaged: [...this.engaged], lastgen: [...this.lastgen], seg: this.seg,
+      ships: this.ships.snapshot() };
   }
   async restore(s: ReturnType<World['snapshot']>) {
     this.region = s.region; this.ssn = [...s.ssn];
@@ -69,6 +75,7 @@ export class World {
     this.ptrl = (s.ptrl ?? this.p01.patrols).map(p => [...p]); this.lastgen = [...(s.lastgen ?? this.lastgen)]; this.seg = s.seg ?? 0;
     this.dead.clear(); for (const b of s.dead ?? []) this.dead.add(b);
     this.engaged.clear(); for (const b of s.engaged ?? []) this.engaged.add(b);
+    if (s.ships) this.ships.restore(s.ships);
     this.rec = await json<Location>(`locations/R${32 + this.region}.json`);
   }
 

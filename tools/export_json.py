@@ -247,7 +247,10 @@ def main(src, dst):
                              'patrols': [list(p01[0x136 + 2 * k:0x138 + 2 * k]) for k in range(128)],
                              'respawn': list(p01[0x32A:0x33A]),
                              'steps': {k: [s8(o + 2 * i, 2) for i in range(8)] for k, o in (('dirs', 0x1790), ('side1', 0x17A0), ('side2', 0x17B0))}
-                                      | {'order': [b // 2 for b in p01[0x18B7:0x18C1]]}})
+                                      | {'order': [b // 2 for b in p01[0x18B7:0x18C1]]},
+                             # ships (ships.md): sailing ticks by weather (+4), the six captains' daily rates and home ports
+                             'ships': {'weather': s8(0x28C, 12), 'rate': list(p01[0x34A:0x350]),
+                                       'homex': list(p01[0x350:0x356]), 'homey': list(p01[0x356:0x35C])}})
     p81 = open(f'{src}/P81.MCO', 'rb').read()   # new game (rules/new_game.md): string table from 0x15, string 40 = intro scenes
     parts = p81[0x15:0x7B1].split(b'\0')
     scenes = [list(x) for x in parts[40].split(b'\xff')[:5]]
