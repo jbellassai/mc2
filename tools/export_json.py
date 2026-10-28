@@ -1,7 +1,7 @@
 """Build the web port's data pack from the original files (decision 1). Never commit or publish the output.
 usage: export_json.py ORIGDIR OUTDIR -> OUTDIR/locations/*.json, tiledata/Bnn.json, tilesets/Vnn.png, sprites/E0n.png, conversations/Cnn.json,
        blocks.json, rooms.json, sprites.json, comtxt.json, items.json, heroes.json,
-       commands.json, npctypes.json, p90.json, p02text.json, p91text.json, p05.json
+       commands.json, npctypes.json, p90.json, p02text.json, p91text.json, p05.json, p97text.json, companions.json
 Schema: docs/data_schema.md. Byte strings are lowercase hex; every list is in file order."""
 import json, os, struct, sys
 sys.path.insert(0, os.path.dirname(__file__))
@@ -214,6 +214,8 @@ def main(src, dst):
     dump(f'{dst}/items.json', [x.decode('latin1') for x in exe[ds + 0x3BB7:ds + 0x4000].split(b'\0')[:0x5D]])   # _w_objects
     p81, hero = open(f'{src}/P81.MCO', 'rb').read(), struct_fields('HERO')
     dump(f'{dst}/heroes.json', [decode_struct(p81[0x82D + 220 * i:], hero) for i in range(5)])   # new-game profiles A-E
+    r90 = open(f'{src}/R90.MCV', 'rb').read()   # companions 1-31 (h_orinum), the new game's _member6.. records
+    dump(f'{dst}/companions.json', [decode_struct(r90[220 * i:], hero) for i in range(len(r90) // 220)])
     dump(f'{dst}/npctypes.json', [x.decode('latin1') for x in exe[ds + 0x2296:ds + 0x2471].split(b'\0')[:60]])   # Look names by type
     dump(f'{dst}/commands.json', [x.decode('latin1') for x in exe[ds + 0x2471:ds + 0x2800].split(b'\0')[:51]])   # _menucommands
     p90 = open(f'{src}/P90.MCO', 'rb').read()   # trade: {step, div} per item at 0x038, {item, lot} pairs at 0x0F2 (economy.md)
@@ -222,6 +224,8 @@ def main(src, dst):
                              'lots': {str(lots[i]): lots[i + 1] for i in range(0, len(lots) - 1, 2)}})
     p02 = open(f'{src}/P02.MCO', 'rb').read()
     dump(f'{dst}/p02text.json', [x.decode('latin1') for x in p02[0x67:0x28A].split(b'\0')[:17]])   # town program's own texts
+    p97 = open(f'{src}/P97.MCO', 'rb').read()
+    dump(f'{dst}/p97text.json', [x.decode('latin1') for x in p97[0x17:0x1BA].split(b'\0')[:7]])   # hire / dismiss texts
     p91 = open(f'{src}/P91.MCO', 'rb').read()   # small talk: {weather, line} pairs at 0x48, 0xFF, then the lines
     end = p91.index(0xFF, 0x48); pairs = p91[0x48:end]
     dump(f'{dst}/p91text.json', {'lines': [x.decode('latin1') for x in p91[end + 1:0x2E0].split(b'\0')[:16]],

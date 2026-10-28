@@ -69,7 +69,7 @@ At a `spetbl` spot of type 2/3: same pick formula as chests (`dex/2 + lockpick` 
 - **Map flask** (`ovl_13c4`, locations with `pearlsw`): the *Map* command needs a Pearl (or asks to use a Blu Pearl); the pearl is dropped into the flask and the minimap is shown. With a plain Pearl there is a 1-in-10 roll where `h_dextrty ≤ RndCo(20)` shatters the flask ("The map flask shatters!", −1 Map Flask).
 
 ## Dungeon levels (`P02` movement, `spetbl` spots, room doors)
-Dungeon levels ("Cellars 1 X", "Dorak 3 X"…) are ordinary **program-2 locations** (`P02` + `V02` via INT 60h, `_InDungeon()` true); there is no separate dungeon-level program. Everything below also runs in towns. Positions are absolute map coordinates; the party occupies one square per member (`_p1x/_p1y[6]`), the leader at window cell (5,4).
+Dungeon levels ("Cellars 1 X", "Dorak 3 X"…) are ordinary **program-2 locations** (`P02` + `V02` via INT 60h, `_InDungeon()` true); there is no separate dungeon-level program. Everything below also runs in towns. Positions are absolute map coordinates; the party occupies one square per member (`_p1x/_p1y[6]`), each member at window + (4 + c mod 3, 3 + c div 3) where c is their cell in the 3×3 formation `_formatn` (`_NewPXY`, DS:0x91C/0x925); the shipped saves keep the leader in cell 0, so a lone leader stands at window + (4,3) (`FFSAVA`: window (93,14), leader (97,17)). Inside a P05 room the same cell offsets are added to the room's base square (`FFSAVE`: base (4,5), members at (4,5) (5,5) (6,5)). `_Invite` puts a recruit in the first free cell whose square is walkable and has no NPC (`_ChkForm`).
 
 ### A step (`P02` 0x45E → direction routine → `ovl_067d`)
 For each occupied party slot (5…0) the target square is tested in order:

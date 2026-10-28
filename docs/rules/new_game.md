@@ -63,7 +63,7 @@ Profiles A/B/E are the ranger-mage build (bow, Confuse/Locate/Heal charges, 50 A
 |---|---|
 | clock | 8:30, day 2 of month 6, year 10, season 2, `_daynite = 'L'`, temperature 6 |
 | `_remdays` | 1000 (days left before the game ends) |
-| location | Telermain (`_curvar = 2`, town program 2, tileset 2), hero at (14,3), window (93,14); world position `_wildxy = (29,56)` |
+| location | Telermain (`_curvar = 2`, town program 2, tileset 2), window (93,14), leader at (97,17) = window + (4,3), formation cell 0 (`FFSAVA`; the init also writes (14,3), purpose not traced); world position `_wildxy = (29,56)` |
 | party | slot 0 = hero, slots 1–5 empty (`_party = 0xFF`), `_formatn` 0xFF |
 | `_beenflg` | bit for entry 0 set |
 | events | bits 10, 88, 117 set (`events.md`: 10 and 88 are P92 daily tests, 117 gates P97 hiring) |

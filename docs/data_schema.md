@@ -13,6 +13,8 @@ Built by `.venv/bin/python -I tools/export_json.py original out/pack`; never com
 | `conversations/Cnn.json` | `texts`, `words`, `slots[8]` = `{script, gifts[{item, min, fewer, enough, event}], shop[{item, pays, charges}], greet, bye, skill, nobuy, unknown}` (`formats.md`, *Cnn.MCV*; NPC *n* = file `n >> 3`, slot `n & 7`) |
 | `comtxt.json` | the EXE's common message texts, message *n* at index *n* |
 | `items.json` | item names by code (`_w_objects`, 0x00–0x5C) |
+| `companions.json` | the 31 companions' starting `HERO` records from `R90.MCV` (index = `h_orinum` − 1, plain gold) |
+| `p97text.json` | P97 hire/dismiss texts (file 0x17): 0 the King's refusal, 1 the hireling's offer, 2–6 dismissal replies |
 | `heroes.json` | the five new-game profiles A–E as `HERO` records (field names from `structs.h`; `h_gold` is `{hundreds, units}` here) |
 | `npctypes.json` | what *Look* calls a person, by GEN/KNPC `type` (DS:2296: man, woman, wizard, …) |
 | `commands.json` | command words (`_menucommands`: End, Quit, None, Yes, No, … Knock, … Pick …) |
