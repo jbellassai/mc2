@@ -22,10 +22,13 @@ export async function resolveRoom(door: Door, pgm: Pgm): Promise<RoomRef | null>
   if (pgm.program === 5 && rmtyp === 2 && door.id > 0x5b) { rmtyp = 1; idx -= 0x14; }   // P05 ovl_1315: camps use the inn kind
   if (bank) rmtyp = 0;                                                                   // P05 ovl_12bc
   if (bank) idx = 0;
+  if (pgm.program === 9 && rmtyp === 13) idx += 8;                   // P09 OV_0x158: dungeon temples use entries 8-15
   const chunk = pgm.program === 8 ? rm.chunks[0] : rm.chunks[idx];
   if (chunk === undefined) return null;
-  // P05's base table covers rmtyp 0-8; P08/P09 placement is not traced yet, so they use the store base.
+  // P05's base table covers rmtyp 0-8; P09 ovl_1720 uses (4,5), a gate (4,6) (P09 file 0x0F / 0x18 by rmtyp); P08
+  // placement is not traced yet, so it uses the store base.
   const k = pgm.program === 5 && rmtyp < BASE_X.length ? rmtyp : 0;
+  const start = pgm.program === 9 ? { x: 4, y: rmtyp === 14 ? 6 : 5 } : { x: BASE_X[k], y: BASE_Y[k] };
   // `start` = formation origin; members stand at start + (cell mod 3, cell div 3) (P05 ovl_19b0, FFSAVE).
-  return { id, pgm, index: idx, room: door.id, kind: rmtyp, map: { g: rm.g, chunk }, start: { x: BASE_X[k], y: BASE_Y[k] } };
+  return { id, pgm, index: idx, room: door.id, kind: rmtyp, map: { g: rm.g, chunk }, start };
 }

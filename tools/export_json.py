@@ -286,7 +286,9 @@ def main(src, dst):
         'nousetext': list(exe[ds + 0x2D9A:ds + 0x2D9A + 0x5C]),                                # _NoUse comtxt per item
         'weathers': [x.decode('latin1') for x in exe[ds + 0x424E:ds + 0x4300].split(b'\0')[:12]],   # _w_weather
         'lootvalues': list(struct.unpack_from('<93H', exe, ds + 0x2E72)),                      # item values (economy.md)
-        'useall': [i + 0x31 for i in range(32) if struct.unpack_from('<H', exe, ds + 0x8AE + 2 * i)[0]]})   # _AllDoit asks
+        'useall': [i + 0x31 for i in range(32) if struct.unpack_from('<H', exe, ds + 0x8AE + 2 * i)[0]],   # _AllDoit asks
+        # _SetTxtToD: the time-of-day words (morning … night) and TODWORDS, the word by hour
+        'tod': {'words': [x.decode('latin1') for x in exe[ds + 0x41E0:ds + 0x4204].split(b'\0')[:5]], 'hour': list(exe[ds + 0x38F2:ds + 0x390A])}})
     # Combat (rules/combat.md, encounters.md): monsters by code − 5, groups by number − 60, weapons by item − 9.
     p96 = open(f'{src}/P96.MCO', 'rb').read()
     p95 = open(f'{src}/P95.MCO', 'rb').read()

@@ -2,10 +2,18 @@
 
 Sources: `P09.MCO` (`decomp/overlays/P09.c`, asm via `tools/dis.py`), room files `D13` (casino), `D61` (teleportal), `D59` (temple), `D14` (gate), `D74` (meeting hall). Room ids come from the door/feature record (`services.md`, *How a door becomes a room*); P09 uses the same boundary table as P05 (file 0x66) so `_rmtyp` = 7 casino (ids 0x90–0x97), 10 teleportal (0xA8–0xBA), 11 meeting hall (0xBB–0xBF), 12 world temple (0xC0–0xC7), 13 dungeon temple (0xC8–0xCF), 14 gate (0xD0–0xD7); index-in-kind = `id − base`.
 
+## Entering and leaving (`ovl_0202`)
+
+- `OV_0x181` = `id − base` (the index within the kind). The room map is G-file chunk `maps[OV_0x181 + 1]`, plus 8 for a dungeon temple (`OV_0x158`, `_rmtyp 13`); the exit, NPC and townsfolk lists are skipped the same way (`ovl_16cd`), so dungeon temples use entries 8–15 of D59's lists.
+- Party placement (`ovl_1720`): base `(P09[0x0F + rmtyp], P09[0x18 + rmtyp])` = (4,5) for every kind except the gate, (4,6), plus the formation cell offsets (file 0x28 / 0x31, as in P05).
+- World-map rooms (temples, gates) are features of the region record (`roomptr`, program 9); their exit records name pgm 1 (the world) with the window `tx, ty`, so the party comes back at `tx + 5, ty + 4`, not necessarily where it went in.
+- Stepping onto an exit (`_RMove` 2) asks "Do you want to leave now?" (`_comtxtptr`, comtxt 0x23); Yes follows the exit record.
+
 ## Casino (`_rmtyp 7`, D13 "Gambling H", ids 0x90 Telermain, 0x91 Ussa, 0x92 Glusaga, 0x93 Deadwood, 0x94 Hugda-Hag, 0x95 Drakhelm)
 
 - House bank `_casino[idx]` (8 words): +200 per month up to 1000 (`P92 ovl_02ac`). Bank 0 → "The house tables are closed."; player gold 0 → "You can't be bold without some gold."
 - Bet `b` = `GetNum(1 … min(gold, bank))`. Dealer rolls `RndCo(6)+1 + RndCo(6)+1`, player rolls the same 2d6. **Player wins if player == 2 or player > dealer**: `gold += b, bank −= b`; else `gold −= b, bank += b`. Bank reaching 0 → "%h has broken the bank!"; gold 0 → "So goes the last of %h's gold." Loop "Will %h play again?".
+- It runs on *Talk* (`_swgreet == −3`, L_066f) with the acting member's gold. Order: no gold → text 2; bank 0 → text 1; else "Good %a, sport. Care to try your luck?" (0; No ends silently), Yes → the rules (3), then "How much will %h bet (0-%i)?" (4, 0 stops), "The gambler rolls %i." (5), "%h rolls %i." (6), wins/loses (7/8). Leaving the table: "Good %a, sport." (12) plus " Come again soon!" (13) when the hero has less gold than on sitting down. `%a` = `_SetTxtToD`: the word `TODWORDS[hour]` (EXE DS:0x38F2: hours 1–11 morning, 12–17 afternoon, 18–23 and 0 evening) from the list at DS:0x41E0 (morning, afternoon, evening, day, night).
 
 ## Teleportals (`_rmtyp 10`, D61, 17 rooms: towns Wanasol 0xAA, 0xAB…, dungeons Cellars 1 0xA8, Shann 6 0xAB, Katarra 0xAC, Dorak 2 0xAE, Dorak 7 0xAF, Catacombs 0xB0, Maratul 1 0xB1, Namaz 2 0xB2, Drakhelm 1 0xB7, Ruz 1 0xB8; world map 0xA9 Krum, 0xAD Tundra, 0xB3 Altesia, 0xB4 Kar'lomug, 0xB5 Isle of Winds, 0xB6 Rhon)
 
@@ -72,9 +80,15 @@ Unmet demand → "You dare to waken me without offering <X>! 'Begone, mortals!' 
 
 *Whisper* the password (its word index must equal the gate index): `_dnggates` (DS:7425) bit set, the door tiles slide open ("The gate of the %a slowly creaks open!"), and the gate stays open for the rest of the game (`ovl_15ee` re-opens it on entry). Otherwise "The gate is magically locked." Entering: "Will the party enter the %a?" → the room's exit record leads into the dungeon.
 
+The gate is the room's exit records 1 and 2 (record 0, at (4,8), leads back to the world). Opening writes D14 `hroomptr` (4 bytes per gate: tile, ?, tile, ?; every gate uses 0x2E) onto those two squares; `spetbl` (4 bytes per gate) is the screen rectangle the opening scroll animates (`_ScrlUD`). While shut, stepping onto them prints text 10 (`OV_0x159 == 1`); open, text 9 and Yes/No (`ovl_15c9`).
+
 ## Meeting halls (`_rmtyp 11`, D74, ids 0xBB Ketrop, 0xBC Glusaga, 0xBD Drakhelm, 0xBE Llendora)
 
 Rumour rooms: ordinary NPC dialogue from the hall's text block (D74 texts 1–13: Delfina's song, Bolumar's pearl plate, the three magic axes, Darkfinder in Deadwood catacombs, Munaks, Eldens in Tfarcdnim…).
+
+## Port notes
+
+Built in the web port (`web/src/special.ts`): entering from town doors and world features, placement, leaving, the casino (with the monthly refill) and the gates (Whisper is the port's H key). Talk in a casino starts the game unless it is aimed at one of the gamblers, who keep their rumours (an assumption: where the original's Talk goes is not traced). A whispered word nothing answers prints "Nothing happens." (comtxt 0x83; P09 prints `_comtxtptr`, value not traced). Not yet: teleportals, temples, the elven prince.
 
 ## Elven prince (NPC 113, `ovl_0611`)
 

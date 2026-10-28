@@ -9,6 +9,7 @@ import { Hero, PICK, STATS, SKILLS } from './hero';
 import { panel, type Button } from './panel';
 import { loadTrade, lot, single, prices, incObj, sellable } from './shop';
 import { ServiceRoom, noon, rent, INN } from './service';
+import { Special, casino, refill, gates } from './special';
 import { camp } from './camp';
 import { Party, type Member } from './party';
 import { World } from './world';
@@ -29,7 +30,8 @@ async function main() {
   const [cmd, p02, comtxt, npctypes, items, p93, conds] = await Promise.all(['commands', 'p02text', 'comtxt', 'npctypes',
     'items', 'p93text', 'conds'].map(n => json<string[]>(`${n}.json`)));
   const p97 = await json<{ texts: string[]; events: Record<string, number> }>('p97.json');
-  const tables = await json<{ hungerhours: number[]; nousetext: number[]; useall: number[]; lootvalues: number[]; weathers: string[] }>('exetables.json');
+  const tables = await json<{ hungerhours: number[]; nousetext: number[]; useall: number[]; lootvalues: number[]; weathers: string[];
+    tod: { words: string[]; hour: number[] } }>('exetables.json');
   const world = await World.create();
   const p92 = await json<string[]>('p92text.json');
   const patches = await Patches.create();
@@ -57,6 +59,7 @@ async function main() {
   let level = await Level.load(START.level);
   let outside: { level: Level; x: number; y: number } | null = null;   // where to return from a room
   let service: ServiceRoom | null = null;                               // the P05 room the party is in
+  let special: Special | null = null;                                   // the P09 room the party is in
   let patch: Patch | null = null;                                        // the mushroom patch the party is in
   let fight: Fight | null = null;                                        // the fight in progress
   let roomStart = { x: 0, y: 0 };                                       // its formation origin (base square)
@@ -89,6 +92,7 @@ async function main() {
   const hourly = () => {
     figures = level.figures(clock, events, party.away);
     if (clock.hour === 0 && !(clock.juldate & 7)) patches.regrow();
+    if (clock.hour === 0 && clock.date === 1) refill();                 // new month: the casino banks (P92 ovl_02ac)
     if (clock.hour === 0 && world.ships.daily()) for (const m of party.members) m.hero.rec.h_gold = 0;   // Amos (P92 ovl_0447)
     party.hunger(tables.hungerhours);
     world.hour(clock);
@@ -234,8 +238,8 @@ async function main() {
   };
 
   // ---- doors (rules/locations.md, Towns; P02 ovl_196b) ----
-  const enterRoom = async (door: Door) => {
-    const ref = await resolveRoom(door, level.loc.pgms[door.pgm]);
+  const enterRoom = async (door: Door, pgms = level.loc.pgms) => {
+    const ref = await resolveRoom(door, pgms[door.pgm]);
     if (!ref) return void (message = 'This door leads somewhere not built yet.');
     outside = { level, x: lead.x, y: lead.y };
     roomStart = ref.start;
@@ -243,6 +247,8 @@ async function main() {
     message = level.loc.name.trim() ? `${hero.name} enters ${level.loc.name}.` : '';   // which of D08/D09's room names applies is not traced
     service = ref.pgm.program === 5 ? await ServiceRoom.open(ctx, ref.room, ref.kind, level.loc.texts, level.loc.words) : null;
     service?.greet();
+    special = ref.pgm.program === 9 ? new Special({ hero, clock, cmd, comtxt, tod: tables.tod, close }, ref.kind,
+      ref.kind === 13 ? ref.index - 8 : ref.index, level) : null;
   };
 
   const lockedDoor = (door: Door) => {
@@ -308,9 +314,11 @@ async function main() {
 
   /** Room exits {x,y,pgm,tx,ty,datafile}: back to town `datafile` with the window at (tx,ty), formation at window + (4,3). */
   const leave = async (exit: Exit) => {
-    const id = `D${String(exit.datafile).padStart(2, '0')}`;
+    const id = `D${String(exit.datafile).padStart(2, '0')}`, pgm = level.loc.pgms[exit.pgm];
+    special = null;
+    if (pgm?.program === 1) return toWorld(exit);                      // a P09 room on the world map
     if (exit.datafile !== undefined && exit.datafile !== 255)
-      go(outside?.level.id === id ? outside.level : await Level.load(id), exit.tx + 4, exit.ty + 3);
+      go(outside?.level.id === id ? outside.level : await Level.load(id, pgm?.tileset), exit.tx + 4, exit.ty + 3);
     else if (outside) go(outside.level, outside.x, outside.y);
     outside = null; service = null;
     message = '';
@@ -356,6 +364,10 @@ async function main() {
     }
     const feature = rec.doors.find(d => d.x === x && d.y === y);
     if (feature && rec.pgms[feature.pgm].program === 4) return enterPatch(feature.id, x, y);
+    if (feature && rec.pgms[feature.pgm].program === 9) {             // ovl_0d01: the step's time, then the room
+      for (let n = world.stepTicks(level.data.nameindex[level.tile(x, y)], clock, party); n > 0; n--) tick();
+      return enterRoom(feature, rec.pgms);
+    }
     if (feature) { message = `${level.tileName(x, y)}: not built yet.`; return; }
     const ter = level.data.nameindex[level.tile(x, y)];
     if (ships.sailing && level.walkable(x, y)) return disembark(dx, dy);
@@ -915,7 +927,9 @@ async function main() {
       const exit = level.loc.exits.find(e => e.x === x && e.y === y);
       const other = figureAt(x, y);
       if (room && exit) {
-        if (service) service.leave(() => void leave(exit).then(render)); else await leave(exit);
+        if (service) service.leave(() => void leave(exit).then(render));
+        else if (special) special.exit(exit, () => void leave(exit).then(render));
+        else await leave(exit);
         return render();
       }
       if (other) { message = `Blocked by ${other.name ?? npctypes[other.type] ?? 'someone'}.`; return render(); }
@@ -1126,8 +1140,19 @@ async function main() {
     const who = figures.find(f => f.x === x && f.y === y);
     message = '';
     if (service?.talk()) return;
+    if (!who && special?.talk()) return;                               // the casino: Talk to anyone but the gamblers
     if (who) return talkTo(who);
     message = say(comtxt[0x11]) + level.tileName(x, y) + comtxt[0x10];
+  };
+  /** Whisper (H; the original's Whisper command): "What magic word will %h whisper?" (comtxt 0xCD), matched against
+   *  the location's `gwrds`. A word nothing answers gets "Nothing happens." (0x83; assumed, P09 prints `_comtxtptr`). */
+  const whisper = () => {
+    panel.show();
+    panel.line(say(comtxt[0xcd]));
+    panel.set([{ label: cmd[0], act: () => close() }], w => {
+      panel.line(`> ${w}`, 'you');
+      if (!special?.whisper(w)) close(comtxt[0x83]);
+    }, 'Word');
   };
   /** Camp (C). In a P05 inn room P05 first refuses the keeper's side (acting member at x ≥ 4 and y ≥ 5: comtxt 0x24);
    *  when camp ends with the rent used up, the party goes back to the base square and the keeper speaks (ovl_19b0/167f). */
@@ -1254,7 +1279,7 @@ async function main() {
     clock: { minute: clock.minute, hour: clock.hour, date: clock.date, month: clock.month, weather: clock.weather, juldate: clock.juldate },
     events: [...events], party: party.snapshot(), level: { id: level.id, ts: level.tileset }, at: { x: lead.x, y: lead.y },
     world: world.snapshot(), patches: [...patches.left], dunrms: [...dunrms], duntre: [...duntre], chests: [...chests],
-    ambushed: [...ambushed], rent: [...rent], walk: [walkSteps, walkTicks],
+    ambushed: [...ambushed], rent: [...rent], walk: [walkSteps, walkTicks], casino: [...casino], gates: [...gates],
   });
   type Save = ReturnType<typeof snapshot>;
   const canSave = () => !fight && !patch && !chamber && level.loc.kind !== 'room';
@@ -1267,8 +1292,10 @@ async function main() {
     for (const [set, vals] of [[dunrms, sv.dunrms], [duntre, sv.duntre], [chests, sv.chests]] as [Set<string>, string[]][]) { set.clear(); vals.forEach(v => set.add(v)); }
     ambushed.clear(); sv.ambushed.forEach(v => ambushed.add(v));
     rent.splice(0, rent.length, ...sv.rent);
+    casino.splice(0, 8, ...(sv.casino ?? casino.map(() => 1000)));
+    gates.clear(); (sv.gates ?? []).forEach(g => gates.add(g));
     [walkSteps, walkTicks] = sv.walk;
-    outside = null; service = null; patch = null; fight = null; chamber = null; chamberBack = null;
+    outside = null; service = null; special = null; patch = null; fight = null; chamber = null; chamberBack = null;
     go(await Level.load(sv.level.id, sv.level.id === 'D01' ? undefined : sv.level.ts), sv.at.x, sv.at.y);
     message = '';
   };
@@ -1316,6 +1343,7 @@ async function main() {
     if (e.key === 'l' || e.key === 'L') { looking = true; message = say(comtxt[0x0d]); render(); return; }   // "Mark the target."
     if (e.key === 'c' || e.key === 'C') { campCmd(); return; }
     if (e.key === 'u' || e.key === 'U') { useCmd(); return; }
+    if (e.key === 'h' || e.key === 'H') { whisper(); return; }
     if (e.key === 't' || e.key === 'T') { talking = true; message = say(comtxt[0x0d]); render(); return; }
     const k = KEYS[e.key];
     if (!k) return;
