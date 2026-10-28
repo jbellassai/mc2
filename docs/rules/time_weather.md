@@ -23,10 +23,10 @@ Sources: `P92.MCO` (hourly clock program, `decomp/overlays/P92.c`), `P01.MCO` (w
 ```
 steps_of_5min = terrain_time[curter] + 4 + weather_time[weather]
                 + 1 if daynite == 'D'
-                + 1 if any party member has h_cond1 != 0
+                + 1 if any party member has h_cond1 or h_cond2 != 0 (the test reads both bytes as a word)
 energy_loss(member) = terrain_energy[curter] + max(0, clothing[item][weather] − _tailorcharm)
 ```
-Tables (P01 file offsets): `terrain_time` @0x276 `[1,1,1,1,2,3,3,4,5,5]` (by terrain class `_curter`), `weather_time` @0x280 `[-,-,0,0,1,1,2,2,3,3,4,4]`, sailing `@0x28C [-,-,0,0,1,2,3,4,1,2,3,4]` (+4 base), `terrain_energy` @0x298 `[1,1,1,1,2,2,2,3,4,5,0,0]`. Energy is removed with `_DecSta(slot, h_energy, 1)` that many times, then `_IsHeTr`.
+`curter` = the world tile's **name index** in `B01` (`P01 ovl_13aa`: 1 bridge, 2 grassland, 3 tundra, 4 rough, 5 trees, 6 desert, 7 ice, 8 swamp, 9 jungle — every walkable world tile is one of these; 12–20 river, water, mountains, chasm and the settlements are not walkable). Tables (P01 file offsets): `terrain_time` @0x276 `[1,1,1,1,2,3,3,4,5,5]` (by terrain class `_curter`), `weather_time` @0x280 `[-1,-1,0,0,1,1,2,2,3,3,4,4]` (bytes FF FF…; the sum is taken as a byte, so Clear/Overcast **save** a tick: a grassland step in clear daylight = 4 ticks = 20 minutes), sailing `@0x28C [-,-,0,0,1,2,3,4,1,2,3,4]` (+4 base), `terrain_energy` @0x298 `[1,1,1,1,2,2,2,3,4,5]` (10 entries; the next bytes are the clothing table). Energy is removed with `_DecSta(slot, h_energy, 1)` that many times, then `_IsHeTr`.
 
 ### Clothing (P01 file 0x2A2, 7 rows × 12 weathers; row chosen by `ovl_1a47`)
 For each member the six `h_wears` slots are scanned for the first item in 0x2B–0x30; none → row "none" (0x31). Entry = energy penalty per step in that weather, minus `_tailorcharm` (floor 0).
