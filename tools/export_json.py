@@ -1,7 +1,7 @@
 """Build the web port's data pack from the original files (decision 1). Never commit or publish the output.
 usage: export_json.py ORIGDIR OUTDIR -> OUTDIR/locations/*.json, tiledata/Bnn.json, tilesets/Vnn.png, sprites/E0n.png, conversations/Cnn.json,
        blocks.json, rooms.json, sprites.json, comtxt.json, items.json, heroes.json,
-       commands.json, npctypes.json, p90.json, p02text.json, p91text.json, p05.json, p97text.json, p93text.json, conds.json, companions.json, exetables.json
+       commands.json, npctypes.json, p90.json, p02text.json, p91text.json, p05.json, p92text.json, p97.json, p93text.json, conds.json, companions.json, exetables.json
 Schema: docs/data_schema.md. Byte strings are lowercase hex; every list is in file order."""
 import json, os, struct, sys
 sys.path.insert(0, os.path.dirname(__file__))
@@ -228,7 +228,10 @@ def main(src, dst):
     dump(f'{dst}/p93text.json', [x.decode('latin1') for x in p93[0x3D:0x254].split(b'\0')])   # camp texts (rules/camp.md)
     dump(f'{dst}/conds.json', [x.decode('latin1') for x in exe[ds + 0x4204:ds + 0x4300].split(b'\0')[:12]])   # _w_conds: OK, then cond1<<8|cond2 bits 15…5
     p97 = open(f'{src}/P97.MCO', 'rb').read()
-    dump(f'{dst}/p97text.json', [x.decode('latin1') for x in p97[0x17:0x1BA].split(b'\0')[:7]])   # hire / dismiss texts
+    p92 = open(f'{src}/P92.MCO', 'rb').read()
+    dump(f'{dst}/p92text.json', [x.decode('latin1') for x in p92[0x39:0xC4].split(b'\0')[:2]])   # hireling payday texts
+    dump(f'{dst}/p97.json', {'texts': [x.decode('latin1') for x in p97[0x17:0x1BA].split(b'\0')[:7]],   # hire / dismiss texts
+                             'events': dict(zip(map(str, p97[0x68E:0x69D]), p97[0x69D:0x6AC]))})      # companion → event bit (ovl_06bc)
     p91 = open(f'{src}/P91.MCO', 'rb').read()   # small talk: {weather, line} pairs at 0x48, 0xFF, then the lines
     end = p91.index(0xFF, 0x48); pairs = p91[0x48:end]
     dump(f'{dst}/p91text.json', {'lines': [x.decode('latin1') for x in p91[end + 1:0x2E0].split(b'\0')[:16]],
@@ -249,6 +252,7 @@ def main(src, dst):
     dump(f'{dst}/exetables.json', {   # small EXE rule tables (rules/items.md, time_weather.md)
         'hungerhours': list(exe[ds + 0x3AA8:ds + 0x3AAE]),                                      # HUNGERHOURS by race
         'nousetext': list(exe[ds + 0x2D9A:ds + 0x2D9A + 0x5C]),                                # _NoUse comtxt per item
+        'lootvalues': list(struct.unpack_from('<93H', exe, ds + 0x2E72)),                      # item values (economy.md)
         'useall': [i + 0x31 for i in range(32) if struct.unpack_from('<H', exe, ds + 0x8AE + 2 * i)[0]]})   # _AllDoit asks
     ct = ds + 0x9F8   # common text, message n = n-th string
     dump(f'{dst}/comtxt.json', [x.decode('latin1') for x in exe[ct:ct + 0x4000].split(b'\0')[:400]])

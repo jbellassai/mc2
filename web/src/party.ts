@@ -9,10 +9,25 @@ export interface Member { hero: Hero; cell: number; x: number; y: number; num: n
 
 const num = (h: Hero) => h.rec.h_orinum as number;
 
+/** P92 ovl_0a9d/0af7: the week's attitude. Under 100 coins' worth of gifts: attitude·mybucks/120, capped at mybucks;
+ *  else against a quarter of the party's loot, unchanged when equal to within 32. Rounded; large inputs scaled down. */
+function fairShare(att: number, party: number, my: number): number {
+  const scaled = (dx: number, ax: number, cap: number) => {
+    if (dx >> 8) { const k = dx >> 8 < 0x10 ? 4 : 8; dx >>= k; ax >>= k; }
+    ax ||= 1;
+    return Math.min(Math.floor((dx * att + (ax >> 1)) / ax), 200, cap);
+  };
+  if (my < 100) return scaled(my, 120, my);
+  const share = party >> 2;
+  return (share & ~31) === (my & ~31) ? att : scaled(my, share, 200);
+}
+
 export class Party {
   readonly members: Member[] = [];
   /** `_npcsta`: companions taken out of the location tables (in the party). */
   readonly away = new Set<number>();
+  /** `_member6…`: a companion's record as they left the party (P97 copies it back on dismissal). */
+  private readonly roster = new Map<number, HeroRecord>();
 
   constructor(lead: Hero, x: number, y: number) {
     this.members.push({ hero: lead, cell: 0, x, y, num: num(lead) });
@@ -71,7 +86,51 @@ export class Party {
     }
   }
 
-  static async companion(num: number): Promise<HeroRecord> {
-    return structuredClone((await json<HeroRecord[]>('companions.json'))[num - 1]);
+  /** P92 ovl_09ff at 17:00 and 18:00 on a hireling's payday (`h_paydays`, rules/economy.md): the attitude the week earns.
+   *  Returns [member, new attitude] for each hireling paid today; at 18:00 it is applied and the counters reset. */
+  payday(date: number, apply: boolean): [Member, number][] {
+    const out: [Member, number][] = [];
+    for (const m of this.members) {
+      const r = m.hero.rec as Record<string, number>, days = m.hero.rec.h_paydays as number[];
+      if (r.h_relatn !== 2 || !days.includes(date)) continue;
+      const att = fairShare(r.h_attitude, r.h_partybucks, r.h_mybucks);
+      if (apply) { r.h_attitude = att < 4 ? 0xff : att; r.h_partybucks = r.h_mybucks = 0; }   // 0xFF: leaves (ovl_0a88)
+      out.push([m, att]);
+    }
+    return out;
+  }
+
+  /** _ChkDepartures → P97 ovl_05f7: members with attitude 0xFF leave; their attitude is reset to 5. */
+  departures(): Member[] {
+    const gone = this.members.filter(m => m.hero.rec.h_attitude === 0xff);
+    for (const m of gone) { m.hero.rec.h_attitude = 5; this.remove(m); }
+    return gone;
+  }
+
+  /** The record a companion joins with: as they last left, else their starting record (R90). */
+  async record(num: number): Promise<HeroRecord> {
+    return this.roster.get(num) ?? structuredClone((await json<HeroRecord[]>('companions.json'))[num - 1]);
+  }
+
+  /** P97 ovl_01fd: out of the party and its formation cell, back to the location tables, nothing in hand. */
+  remove(m: Member) {
+    this.members.splice(this.members.indexOf(m), 1);
+    this.away.delete(m.num);
+    m.hero.rec.h_inhand = 0xff;
+    this.roster.set(m.num, m.hero.rec);
+  }
+
+  /** P97 ovl_06ac/06bc on joining or leaving: the companion's paired event (`pairs`) set or cleared (Lady Subia joining
+   *  also sets event 33); then events 88 and 117 are set and cleared again while a Halfling (88) or Dwarf (117) is in
+   *  the party. On leaving this runs before the member is removed, so they still count. */
+  partyEvents(events: Set<number>, pairs: Record<string, number>, num: number, join: boolean) {
+    const e = pairs[num];
+    if (e !== undefined) { if (join) events.add(e); else events.delete(e); }
+    if (join && num === 29) events.add(33);
+    events.add(88); events.add(117);
+    for (const { hero } of this.members) {
+      if (hero.rec.h_race === 3) events.delete(88);
+      if (hero.rec.h_race === 4) events.delete(117);
+    }
   }
 }

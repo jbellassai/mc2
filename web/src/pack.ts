@@ -8,6 +8,7 @@ export interface Npc extends Townsfolk { name: number; appear: number; disappear
 export interface Block { block: number; tileset: number; x: number; y: number }
 
 export interface Location {
+  locnum: number;      // the location number, used as `_locspec` (assumption: equal for towns)
   kind: 'level' | 'room' | 'region' | 'world';
   name: string;
   mapsize: [number, number];

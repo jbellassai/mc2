@@ -66,7 +66,7 @@ Profiles A/B/E are the ranger-mage build (bow, Confuse/Locate/Heal charges, 50 A
 | location | Telermain (`_curvar = 2`, town program 2, tileset 2), window (93,14), leader at (97,17) = window + (4,3), formation cell 0 (`FFSAVA`; the init also writes (14,3), purpose not traced); world position `_wildxy = (29,56)` |
 | party | slot 0 = hero, slots 1–5 empty (`_party = 0xFF`), `_formatn` 0xFF |
 | `_beenflg` | bit for entry 0 set |
-| events | bits 10, 88, 117 set (`events.md`: 10 and 88 are P92 daily tests, 117 gates P97 hiring) |
+| events | bits 10, 88, 117 set (`events.md`: 10 is a P92 daily test; **88 = no Halfling in the party, 117 = no Dwarf in the party**, recomputed by P97 `ovl_06bc` on every join/leave, `npcs.md`) |
 | captains | all six `_capsta = 3` (at their home ports), `_curcap = 0xFF` (`ships.md`) |
 | casinos | all 8 banks 1000 coins (`special_rooms.md`) |
 | mushroom patches | `_mushsta` all nibbles 15 (`locations.md`) |

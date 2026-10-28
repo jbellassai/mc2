@@ -10,7 +10,7 @@ import { panel, type Button } from './panel';
 import { loadTrade, lot, single, prices, incObj, sellable } from './shop';
 import { ServiceRoom, noon, rent, INN } from './service';
 import { camp } from './camp';
-import { Party } from './party';
+import { Party, type Member } from './party';
 
 const status = document.getElementById('status')!;
 const START = { level: 'D02', x: 97, y: 17 };   // new_game.md: window (93,14) + (4,3), formation cell 0; mutable for ?at=
@@ -19,9 +19,11 @@ const rnd = (n: number) => Math.floor(Math.random() * n);   // RndCo(n): 0 … n
 
 async function main() {
   const view = await View.create(document.getElementById('view') as HTMLCanvasElement);
-  const [cmd, p02, comtxt, npctypes, items, p97, p93, conds] = await Promise.all(['commands', 'p02text', 'comtxt', 'npctypes',
-    'items', 'p97text', 'p93text', 'conds'].map(n => json<string[]>(`${n}.json`)));
-  const tables = await json<{ hungerhours: number[]; nousetext: number[]; useall: number[] }>('exetables.json');
+  const [cmd, p02, comtxt, npctypes, items, p93, conds] = await Promise.all(['commands', 'p02text', 'comtxt', 'npctypes',
+    'items', 'p93text', 'conds'].map(n => json<string[]>(`${n}.json`)));
+  const p97 = await json<{ texts: string[]; events: Record<string, number> }>('p97.json');
+  const tables = await json<{ hungerhours: number[]; nousetext: number[]; useall: number[]; lootvalues: number[] }>('exetables.json');
+  const p92 = await json<string[]>('p92text.json');
   const hero = await Hero.profile(0);                        // profile A until character creation exists
   const clock = Clock.newGame();
   // Dev aids: ?hour=20 starts in the evening, ?at=74,25 starts on another square.
@@ -58,6 +60,15 @@ async function main() {
   const hourly = () => {
     figures = level.figures(clock, events, party.away);
     party.hunger(tables.hungerhours);
+    // Hirelings' payday (P92 ovl_09ff): 17:00 warning when the week earns under 6, 18:00 settlement; then departures.
+    const speak = (m: Member, s: string) => { const t = `${m.hero.name}: ${format(s, m.hero, hero.name)}`; if (panel.open) panel.line(t); else message = t; };
+    if (clock.minute === 0 && (clock.hour === 17 || clock.hour === 18))
+      for (const [m, att] of party.payday(clock.date, clock.hour === 18)) {
+        if (clock.hour === 17 && att < 6) speak(m, p92[0]);
+        if (clock.hour === 18 && att < 4) speak(m, p92[1]);
+      }
+    for (const m of party.members.filter(p => p.hero.rec.h_attitude === 0xff)) party.partyEvents(events, p97.events, m.num, false);
+    if (party.departures().length) figures = level.figures(clock, events, party.away);
     if (clock.hour !== 12 || clock.minute !== 0) return;
     if (!noon().includes(service?.kind === INN ? service.room : -1)) return;
     if (panel.open) panel.line(level.loc.texts[9]); else message = level.loc.texts[9];   // "It's time to check out."
@@ -154,16 +165,17 @@ async function main() {
       const room = level.loc.kind === 'room';
       const cell = party.members.length < 6 ? party.freeCell((x, y) => room || level.walkable(x, y) && !figureAt(x, y)) : -1;
       if (cell < 0) return panel.line(comtxt[0x20]);                 // "No room!"
-      const rec = await Party.companion(who.num);
+      const rec = await party.record(who.num);
       const join = () => {
         party.add(rec, items, cell, who.x, who.y);
+        party.partyEvents(events, p97.events, who.num, true);
         if (!room) party.place(lead.x, lead.y);                       // _NewPXY: town programs only
         figures = level.figures(clock, events, party.away);
         close(`${who.name}: ${comtxt[0x21]}`);                        // "I am honored."
       };
-      if (rec.h_relatn === 3 && !events.has(65)) return speak(say(p97[0]));   // the King: `_events+8 & 2`
+      if (rec.h_relatn === 3 && !events.has(65)) return speak(say(p97.texts[0]));   // the King: `_events+8 & 2`
       if (rec.h_relatn !== 2) return join();
-      speak(say(p97[1], who.name));                                   // "…for a fair share… Will %h hire %o?"
+      speak(say(p97.texts[1], who.name));                                   // "…for a fair share… Will %h hire %o?"
       yesNo(() => {                                                   // ovl_0612: settlement every 7 days from hire day −1
         rec.h_partybucks = rec.h_mybucks = 0;
         const pay = rec.h_paydays as number[];
@@ -339,7 +351,10 @@ async function main() {
       ...chunks(who.pack().map(p => [p.name + (p.worn ? ' (worn)' : p.hand ? ' (in hand)' : ''), p.count] as [string, string]), 12)
         .map((rows, i) => table(i ? '' : 'Pack', rows)));
     panel.show(); panel.add(wrap);
+    const member = party.members.find(m => m.hero === who)!;
     panel.set([...(party.members.length > 1 ? party.members.map(m => ({ label: m.hero.name, act: () => sheet(m.hero) })) : []),
+               ...(party.members.length > 1 ? [{ label: cmd[42], act: () => transfer(member) }] : []),   // Transfr
+               ...(member !== lead ? [{ label: cmd[12], act: () => dismiss(member) }] : []),   // Dismiss
                { label: cmd[0], act: () => close(message) }]);   // End
   };
   /** Talk + direction: the person there, or "%h talks to" the square (comtxt 0x11). In a service room the keeper
@@ -400,6 +415,64 @@ async function main() {
     if (party.members.length < 2) return list(hero);
     panel.show();
     panel.set([...party.members.map(m => ({ label: m.hero.name, act: () => list(m.hero) })), { label: cmd[0], act: () => close() }]);
+  };
+  /** Transfr: an item or coins to another member. Assumption: like giving (economy.md), not what is in hand or worn.
+   *  Whatever a hireling receives adds lootvalue × count to h_mybucks (FFFAR ovl_2402, cap 30000). */
+  const transfer = (from: Member) => {
+    const r = from.hero.rec, back = () => sheet(from.hero);
+    const give = (to: Member, item: number, slot: number, n: number) => {
+      const t = to.hero.rec;
+      if (item === 0) { r.h_gold -= n; t.h_gold += n; }
+      else if (r.h_invamt[slot] & 0x80) {                                         // equipment keeps its wear byte
+        const e = t.h_invitem.indexOf(0xff);
+        if (e < 0) { panel.line(say(comtxt[0x20])); return; }
+        t.h_invitem[e] = item; t.h_invamt[e] = r.h_invamt[slot]; r.h_invitem[slot] = 0xff; r.h_invamt[slot] = 0;
+      } else {
+        if (!incObj(to.hero, item, n)) { panel.line(say(comtxt[0x20])); return; }
+        for (let k = 0; k < n; k++) from.hero.dec(slot);
+      }
+      if (t.h_relatn === 2) t.h_mybucks = Math.min(30000, (t.h_mybucks as number) + tables.lootvalues[item] * n);
+      back();
+      panel.line(`${from.hero.name} → ${to.hero.name}: ${n > 1 || item === 0 ? n + ' ' : ''}${item === 0 ? comtxt[0xb1] : items[item]}`);
+    };
+    const amount = (to: Member, item: number, slot: number, max: number) => {
+      if (max <= 1) return give(to, item, slot, 1);
+      panel.set([{ label: cmd[0], act: back }], w => { const n = Number(w); if (Number.isInteger(n) && n > 0 && n <= max) give(to, item, slot, n); }, `1–${max}`);
+    };
+    const target = (item: number, slot: number, max: number) =>
+      panel.set([...party.members.filter(m => m !== from).map(m => ({ label: m.hero.name, act: () => amount(m, item, slot, max) })), { label: cmd[0], act: back }]);
+    const slots = r.h_invitem.map((c, i) => i).filter(i => r.h_invitem[i] !== 0xff && r.h_invitem[i] !== 0 && i !== r.h_inhand && !r.h_wears.includes(i));
+    panel.set([...(r.h_gold > 0 ? [{ label: `${r.h_gold} ${comtxt[0xb1]}`, act: () => target(0, -1, r.h_gold) }] : []),
+               ...slots.map(i => ({ label: items[r.h_invitem[i]], act: () => target(r.h_invitem[i], i, r.h_invamt[i] & 0x80 ? 1 : r.h_invamt[i]) })),
+               { label: cmd[0], act: back }]);
+  };
+  /** Dismiss (P97 ovl_01fd, ovl_02e8). Buzbazgut pleads (text 3); Lady Subia without event 4 says text 4, with it in
+   *  `_locspec` 3, 20 or 21 thanks the party with three Emeralds for the leader and sets event 5, elsewhere asks for an
+   *  escort (text 5); a plea adds " Dismiss %d anyway?" and Yes dismisses silently. Otherwise the companion leaves with
+   *  "Good luck, %h, I'll be seeing you." (comtxt 6). */
+  const dismiss = (m: Member) => {
+    const name = m.hero.name, num = m.num, locspec = (level.loc.kind === 'room' ? outside?.level.loc : level.loc)?.locnum;
+    const fmt = (s: string) => format(s, hero, name).replace(/%d/g, m.hero.female ? 'her' : 'him');
+    let thanks = '';
+    const go = (farewell: boolean) => {
+      party.partyEvents(events, p97.events, num, false);
+      party.remove(m);
+      figures = level.figures(clock, events, party.away);
+      close(farewell ? `${name}: ${thanks}${say(comtxt[6])}` : '');
+    };
+    panel.show();
+    let plea = -1;
+    if (num === 0x15) plea = 3;
+    else if (num === 0x1d && !events.has(5)) {
+      if (!events.has(4)) plea = 4;
+      else if ([3, 0x14, 0x15].includes(locspec ?? -1)) {
+        thanks = fmt(p97.texts[6]) + ' ';
+        incObj(hero, 7, 3); events.add(5);                                     // three Emeralds (item 7) for the leader
+      } else plea = 5;
+    }
+    if (plea < 0) return go(true);
+    panel.line(`${name}: ${fmt(p97.texts[plea] + p97.texts[2])}`);
+    panel.set([{ label: cmd[3], act: () => go(false) }, { label: cmd[4], act: () => close() }]);
   };
   let looking = false, talking = false;
   view.canvas.addEventListener('click', e => {
