@@ -112,6 +112,19 @@ Loaded by `_LoadTiles(n)` right after `Vnn.MCT`; six leading u16 offsets are rel
 | `doorptr` | door tile pairs |
 | `colorptr` | 128 bytes: minimap colour per tile |
 
+## `E0n.MCI` + `E0n.MCC` — creature tiles (confirmed)
+
+`MCI` = u16 offsets into `MCC` (0xFFFF = no tile); each tile is RLE-packed (`_UnpackTile`, ≤ 0x81 bytes read): byte `c ≥ 0x80` → the next byte repeated `c − 0x7F` times, else `c + 1` literal bytes, until 128 bytes = 16×16 pixels at 4 bpp (high nibble first), drawn with palette entries 0–15; colour 2 is the transparent background. The `E` prefix is used in VGA mode too. `_LoadFolks` fills the creature-tile slots:
+
+| file | tiles | use |
+|---|---|---|
+| `E00` | 599 | 0–0x3A icons and spell effects; hero/companion *n* = 18 frames from `0x3B + 18n` (`_MCCPTile`; *n* = 0x18 for the player when `DS:4D75` is set) |
+| `E03` | 144 | companions with party index ≥ 0x18: 18 frames from `18(n − 0x18)` |
+| `E02` | 146 | town NPC sprites: sprite id *t* (the `tile` byte of GEN/KNPC/assignment records) has `_animtilecount[_npcanimtype[t]]` frames (1, or 3 for animated ones), stored in id order (tables at DS:373A / DS:3744) |
+| `E01` | 312 | combat: 3 × 9 weapon/missile tiles, then monster frames (`_monsttiles`) |
+
+On a map, `_SingleNPCDraw` draws a companion (`num < 0x20`) with slot `0x8E + num` (its standing frame) and anyone else with `_npctile[tile]` (the E02 sprite). `tools/export_json.py` writes the four sheets into the data pack.
+
 ## Filename templates in the EXE (DS = seg 15B5)
 
 `I00.MCT` tileset (first char → `V` VGA / `E` EGA; `I` = CGA/Tandy), `B00.MCV` tile data, `I00.MCI` + `.MCC` creature tiles via `_LoadFolks/_LoadCTile` (packed 129-byte tiles, index file of u16 offsets), `M00E00.MCM` map block, `P00.MCO` code overlay (`_LoadOvly`, loaded at 1CA8:0000 into a 16 KB buffer, entered via `_LocPgm`), `V00.MCO` variable overlay (`_LoadVvly`), `D00.MCV` location, `FFFAR.MCO` far code loaded once at startup (`_Hello`).

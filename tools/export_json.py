@@ -1,0 +1,140 @@
+"""Build the web port's data pack from the original files (decision 1). Never commit or publish the output.
+usage: export_json.py ORIGDIR OUTDIR -> OUTDIR/locations/*.json, tiledata/Bnn.json, tilesets/Vnn.png, sprites/E0n.png, blocks.json, rooms.json, sprites.json
+Schema: docs/data_schema.md. Byte strings are lowercase hex; every list is in file order."""
+import json, os, struct, sys
+sys.path.insert(0, os.path.dirname(__file__))
+from loc import PTRS
+from mc2fmt import load_mct
+from render import render_tileset
+
+def strings(b):
+    return [s.decode('latin1') for s in b.split(b'\0')[:-1]] if b else []
+
+def recs(b, size, stop=None):
+    """Fixed-size records; stop = predicate on a record that ends the list (terminator not included)."""
+    out = []
+    for i in range(0, len(b) - size + 1, size):
+        r = b[i:i + size]
+        if stop and stop(r): break
+        out.append(list(r))
+    return out
+
+def tables(d):
+    """The 20 header pointers and each sub-table's bytes, bounded by the next larger pointer.
+    A pointer equal to roomptr (other than roomptr itself) marks an unused table (locations.md)."""
+    p = dict(zip(PTRS, struct.unpack_from('<20H', d)))
+    ends = sorted(set(v for v in p.values() if v)) + [len(d)]
+    t = {}
+    for k, v in p.items():
+        if not v or v >= len(d) or (k != 'roomptr' and v == p['roomptr']): t[k] = b''; continue
+        t[k] = d[v:next(e for e in ends if e > v)]
+    return p, t
+
+def location(d, kind):
+    p, t = tables(d)
+    n = d[p['maps'] - 1] if p['maps'] else 0xFF
+    n = 0 if n == 0xFF else n
+    m = p['maps']
+    L = {'kind': kind, 'locnum': d[40], 'roomno': d[41], 'name': d[42:53].split(b'\0')[0].decode('latin1').rstrip(),
+         'lcharm': d[53], 'mapsize': [d[54], d[55]], 'doorstn': d[56], 'locdiff': d[57], 'pearlsw': d[58], 'greet': list(d[59:62]),
+         'pointers': [p[k] for k in PTRS], 'tables': {k: v.hex() for k, v in t.items()},
+         'blocks': [{'block': d[m + i], 'tileset': d[m + n + i], 'x': d[m + 2 * n + i], 'y': d[m + 3 * n + i]} for i in range(n)],
+         'words': strings(t['gwrds']), 'texts': strings(t['loctext'])}
+    if kind == 'room':
+        L['roommap'] = {'g': t['maps'][0], 'chunks': list(t['maps'][1:])} if t['maps'] else None
+    L['doors'] = [dict(zip(('x', 'y', 'pgm', 'id', 'type'), r)) for r in recs(t['roomptr'], 5, lambda r: r[0] == 0)]
+    L['pgms'] = [dict(zip(('program', 'tileset', 'datafile', 'disk'), r)) for r in recs(t['pgmptr'], 4)]
+    L['exits'] = [dict(zip(('x', 'y', 'pgm', 'tx', 'ty'), r)) for r in recs(t['exitptr'], 5, lambda r: r[0] in (0, 0xFF))]
+    if kind == 'region': return L
+    L['townsfolk'] = [dict(zip(('x', 'y', 'type', 'tile', 'num'), r)) for r in recs(t['genptr'], 5, lambda r: r[0] == 0xFF)]
+    L['npcs'] = [dict(zip(('x', 'y', 'type', 'tile', 'num', 'name', 'appear', 'disappear', 'ifevent', 'ifnevent'), r))
+                 for r in recs(t['knpcptr'], 10, lambda r: r[0] == 0xFF)]
+    L['residents'] = [dict(zip(('name', 'num', 'appear', 'disappear', 'ifevent', 'ifnevent'), r)) for r in recs(t['resids'], 6)]
+    L['people'] = [dict(zip(('word', 'npc', 'x'), r)) for r in recs(t['peopr'], 3, lambda r: r[0] == 0xFF)]
+    L['news'] = [dict(zip(('npctype', 'event', 'text'), r)) for r in recs(t['newsr'], 3, lambda r: r[0] == 0xFF)]
+    if kind == 'level':
+        L['look'] = [dict(zip(('x', 'y', 'text'), r)) for r in recs(t['lkdata'], 3, lambda r: r[0] == 0)]
+        L['spots'] = [dict(zip(('x', 'y', 'type', 'd1', 'd2', 'd3'), r)) for r in recs(t['spetbl'], 6, lambda r: r[0] == 0)]
+        L['keydoor'] = [dict(zip(('unused', 'x', 'y', 'newtile', 'text'), r)) for r in recs(t['spdoors'], 5, lambda r: r[0] == 0xFF)]
+        L['hrooms'] = [{'id': r[0], 'group': r[1], 'reward': r[2], 'amount': r[3], 'map': r[4],
+                        'xy': list(struct.unpack_from('<4H', bytes(r), 5))} for r in recs(t['hroomptr'], 13, lambda r: r[0] == 0xFF)]
+    return L
+
+def entries(src):
+    """(name, bytes, kind) for every location record: plain Dnn files, bank entries Dnn_r, regions Rnn."""
+    for f in sorted(os.listdir(src)):
+        if not f.endswith('.MCV') or f[0] not in 'DR' or f == 'D06.MCV': continue
+        d = open(f'{src}/{f}', 'rb').read(); k = struct.unpack_from('<H', d)[0]
+        if f[0] == 'R':
+            if f != 'R90.MCV': yield f[:3], d, 'region'
+            continue
+        if k < 0x1F:
+            offs = struct.unpack_from(f'<{k}H', d, 2)
+            for r, o in enumerate(offs):
+                yield f'{f[:3]}_{r:02d}', d[o:(offs[r + 1] if r + 1 < k else len(d))], 'room'
+            continue
+        kind = 'room' if (d[54], d[55]) == (11, 9) else 'world' if f == 'D01.MCV' else 'level'
+        yield f[:3], d, kind
+
+def tiledata(d):
+    p = struct.unpack_from('<6H', d)
+    seg = lambda i: d[p[i]:(p[i + 1] if i < 5 else len(d))]
+    walk = seg(2).split(b'\xff') + [b'']                     # list 2 is absent in B04, B05, B61
+    return {'names': strings(seg(0)), 'nameindex': list(seg(1)), 'walkable': list(walk[0]), 'walkable_los': list(walk[1]),
+            'anim': seg(3).hex(), 'doors': seg(4).hex(), 'colors': list(seg(5))}
+
+def unpack_ctile(b):
+    """Creature tile RLE (_UnpackTile): c >= 0x80 -> next byte repeated c-0x7F times, else c+1 literal bytes; 128 bytes out."""
+    out, i = bytearray(), 0
+    while len(out) < 128:
+        c = b[i]; i += 1
+        if c >= 0x80: out += bytes([b[i]]) * (c - 0x7F); i += 1
+        else: out += b[i:i + c + 1]; i += c + 1
+    return bytes(out[:128])
+
+def sprites(src, dst, palette, cols=32):
+    """E0n.MCI (u16 offsets into E0n.MCC, 0xFFFF = none) -> sprites/E0n.png, tile k at cell k, colour 2 transparent."""
+    from PIL import Image
+    counts = {}
+    for n in range(4):
+        idx = open(f'{src}/E{n:02d}.MCI', 'rb').read(); dat = open(f'{src}/E{n:02d}.MCC', 'rb').read()
+        offs = struct.unpack(f'<{len(idx) // 2}H', idx)
+        im = Image.new('RGBA', (cols * 16, (len(offs) + cols - 1) // cols * 16))
+        for k, o in enumerate(offs):
+            if o >= len(dat): continue
+            t = Image.new('RGBA', (16, 16))
+            t.putdata([(0, 0, 0, 0) if c == 2 else palette[c] + (255,) for b in unpack_ctile(dat[o:o + 129]) for c in (b >> 4, b & 15)])
+            im.paste(t, (k % cols * 16, k // cols * 16))
+        im.save(f'{dst}/sprites/E{n:02d}.png'); counts[f'E{n:02d}'] = len(offs)
+    exe = open(f'{src}/MC2.EXE', 'rb').read(); ds = 0x1800 + 0x15B50
+    atc, nat = exe[ds + 0x373A:ds + 0x3744], exe[ds + 0x3744:ds + 0x37C4]   # _animtilecount, _npcanimtype
+    npc, k = [], 0
+    for t in nat: npc.append({'start': k, 'frames': atc[t]}); k += atc[t]
+    return {'columns': cols, 'counts': counts, 'npc': npc}
+
+def main(src, dst):
+    for sub in ('locations', 'tiledata', 'tilesets', 'sprites'): os.makedirs(f'{dst}/{sub}', exist_ok=True)
+    dump = lambda path, obj: json.dump(obj, open(path, 'w'), indent=1, ensure_ascii=False)
+    n = 0
+    for name, d, kind in entries(src):
+        dump(f'{dst}/locations/{name}.json', location(d, kind)); n += 1
+    for f in sorted(os.listdir(src)):
+        if f[0] == 'B' and f.endswith('.MCV'): dump(f'{dst}/tiledata/{f[:3]}.json', tiledata(open(f'{src}/{f}', 'rb').read()))
+        if f[0] == 'V' and f.endswith('.MCT'):
+            render_tileset(load_mct(f'{src}/{f}')).save(f'{dst}/tilesets/{f[:3]}.png')
+    blocks = {}
+    for f in sorted(os.listdir(src)):
+        if f[0] == 'M' and f.endswith('.MCM'):
+            d = open(f'{src}/{f}', 'rb').read()
+            if d[:2] == b'**' and len(d) == 2 + 42 * 42: blocks[f[:6]] = d[2:].hex()
+    dump(f'{dst}/blocks.json', blocks)
+    rooms = {}
+    for f in sorted(os.listdir(src)):
+        if f[0] == 'G' and f.endswith('.MCM'):
+            d = open(f'{src}/{f}', 'rb').read()
+            rooms[f[:3]] = [d[i + 2:i + 101].hex() for i in range(0, len(d) - 100, 101) if d[i:i + 2] == b'\x0b\x09']
+    dump(f'{dst}/rooms.json', rooms)
+    dump(f'{dst}/sprites.json', sprites(src, dst, load_mct(f'{src}/V01.MCT').palette[:16]))
+    print(f'{n} locations, {len(blocks)} blocks, {sum(map(len, rooms.values()))} room chunks')
+
+if __name__ == '__main__': main(*sys.argv[1:3])
