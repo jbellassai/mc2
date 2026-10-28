@@ -12,6 +12,10 @@ Built by `.venv/bin/python -I tools/export_json.py original out/pack`; never com
 | `sprites/E0n.png` | creature tile *k* at cell *k*, 32 per row, 16×16 RGBA (colour 2 = transparent); E00 heroes/companions, E01 combat (weapons, monsters), E02 town NPCs, E03 companions from party index 0x18 |
 | `conversations/Cnn.json` | `texts`, `words`, `slots[8]` = `{script, gifts[{item, min, fewer, enough, event}], shop[{item, pays, charges}], greet, bye, skill, nobuy, unknown}` (`formats.md`, *Cnn.MCV*; NPC *n* = file `n >> 3`, slot `n & 7`) |
 | `comtxt.json` | the EXE's common message texts, message *n* at index *n* |
+| `items.json` | item names by code (`_w_objects`, 0x00–0x5C) |
+| `heroes.json` | the five new-game profiles A–E as `HERO` records (field names from `structs.h`; `h_gold` is `{hundreds, units}` here) |
+| `commands.json` | command words (`_menucommands`: End, Quit, None, Yes, No, … Knock, … Pick …) |
+| `p02text.json` | the town program's own texts (P02 file 0x67: locked doors, map flask, scrolls) |
 | `sprites.json` | `columns`, `counts` per sheet, `npc[tile] = {start, frames}` — the E02 frames of NPC sprite id `tile` (the `tile` byte of GEN/KNPC records) |
 
 ## Location record

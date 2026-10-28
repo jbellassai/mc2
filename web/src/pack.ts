@@ -11,6 +11,7 @@ export interface Location {
   kind: 'level' | 'room' | 'region' | 'world';
   name: string;
   mapsize: [number, number];
+  doorstn: number;
   blocks: Block[];
   words: string[];
   texts: string[];

@@ -1,6 +1,7 @@
 """Build the web port's data pack from the original files (decision 1). Never commit or publish the output.
 usage: export_json.py ORIGDIR OUTDIR -> OUTDIR/locations/*.json, tiledata/Bnn.json, tilesets/Vnn.png, sprites/E0n.png, conversations/Cnn.json,
-       blocks.json, rooms.json, sprites.json, comtxt.json
+       blocks.json, rooms.json, sprites.json, comtxt.json, items.json, heroes.json,
+       commands.json, p02text.json
 Schema: docs/data_schema.md. Byte strings are lowercase hex; every list is in file order."""
 import json, os, struct, sys
 sys.path.insert(0, os.path.dirname(__file__))
@@ -55,6 +56,32 @@ def conversation(d):
                       'shop': [{'item': r[0], 'pays': r[1] * 100 + r[2], 'charges': r[3] * 100 + r[4]} for r in recs(seg(26 + k), 5, lambda r: r[0] == 0xFF)],
                       'greet': gb[0], 'bye': gb[1], 'skill': d[0x54 + k], 'nobuy': d[0x5C + k], 'unknown': d[0x64 + k]})
     return {'texts': strings(seg(0)), 'words': d[p[1]:p[2]].split(b'\xff')[0].decode('latin1').split('\0')[:-1] or [], 'slots': slots}
+
+def struct_fields(name):
+    """(field, offset, kind, dims) for one struct of docs/structs.h (from the TDInfo export)."""
+    import re
+    txt = open(os.path.join(os.path.dirname(__file__), '..', 'docs', 'structs.h')).read()
+    body = txt[txt.index(f'struct {name} {{'):]; body = body[:body.index('};')]
+    out = []
+    for m in re.finditer(r'^\s+(.+?)\s+(\w+)\s+/\*\s*\+\s*(\d+)', body, re.M):
+        typ, field, off = m.group(1), m.group(2), int(m.group(3))
+        dims = [int(x) for x in re.findall(r'\[(\d+)\]', typ)]
+        kind = 'str' if typ.startswith('char[') else 'u16' if 'int' in typ else 'u8'
+        out.append((field, off, kind, dims))
+    return out
+
+def decode_struct(d, fields):
+    obj = {}
+    for field, off, kind, dims in fields:
+        if kind == 'str': obj[field] = d[off:off + dims[0]].split(b'\0')[0].decode('latin1'); continue
+        size = 2 if kind == 'u16' else 1
+        n = 1
+        for x in dims: n *= x
+        vals = list(struct.unpack_from(f'<{n}{"H" if size == 2 else "B"}', d, off))
+        if not dims: obj[field] = vals[0]
+        elif len(dims) == 1: obj[field] = vals
+        else: obj[field] = [vals[i:i + dims[1]] for i in range(0, n, dims[1])]
+    return obj
 
 def tables(d):
     """The 20 header pointers and each sub-table's bytes, bounded by the next larger pointer.
@@ -183,7 +210,14 @@ def main(src, dst):
     for f in sorted(os.listdir(src)):
         if f[0] == 'C' and f[1:3].isdigit() and f.endswith('.MCV'):
             dump(f'{dst}/conversations/{f[:3]}.json', conversation(open(f'{src}/{f}', 'rb').read()))
-    exe = open(f'{src}/MC2.EXE', 'rb').read(); ct = 0x1800 + 0x15B50 + 0x9F8   # common text, message n = n-th string
+    exe = open(f'{src}/MC2.EXE', 'rb').read(); ds = 0x1800 + 0x15B50
+    dump(f'{dst}/items.json', [x.decode('latin1') for x in exe[ds + 0x3BB7:ds + 0x4000].split(b'\0')[:0x5D]])   # _w_objects
+    p81, hero = open(f'{src}/P81.MCO', 'rb').read(), struct_fields('HERO')
+    dump(f'{dst}/heroes.json', [decode_struct(p81[0x82D + 220 * i:], hero) for i in range(5)])   # new-game profiles A-E
+    dump(f'{dst}/commands.json', [x.decode('latin1') for x in exe[ds + 0x2471:ds + 0x2800].split(b'\0')[:51]])   # _menucommands
+    p02 = open(f'{src}/P02.MCO', 'rb').read()
+    dump(f'{dst}/p02text.json', [x.decode('latin1') for x in p02[0x67:0x28A].split(b'\0')[:17]])   # town program's own texts
+    ct = ds + 0x9F8   # common text, message n = n-th string
     dump(f'{dst}/comtxt.json', [x.decode('latin1') for x in exe[ct:ct + 0x4000].split(b'\0')[:400]])
     print(f'{n} locations, {len(blocks)} blocks, {sum(map(len, rooms.values()))} room chunks')
 

@@ -3,88 +3,114 @@ import { Level, type Figure } from './level';
 import { Clock } from './clock';
 import { View } from './view';
 import { resolveRoom } from './room';
-import type { Door, Exit } from './pack';
-import { Talk, type Hero } from './talk';
+import { json, type Door, type Exit } from './pack';
+import { Talk, format, wmatch } from './talk';
+import { Hero, PICK } from './hero';
+import { panel } from './panel';
 
 const status = document.getElementById('status')!;
 const START = { level: 'D02', x: 98, y: 18 };     // new_game.md: window (93,14), leader at window cell (5,4)
 const NEW_GAME_EVENTS = [10, 88, 117];
-const HERO: Hero = { name: 'Lukas', female: false, charm: 6 };   // new_game.md profile A (character creation comes later)
-
-const talkBox = document.getElementById('talk')!, log = document.getElementById('log')!;
-const word = document.getElementById('word') as HTMLInputElement;
-
-function line(text: string, cls = '') {
-  const d = document.createElement('div');
-  d.textContent = text; d.className = cls;
-  log.append(d); log.scrollTop = log.scrollHeight;
-}
+const rnd = (n: number) => Math.floor(Math.random() * n);   // RndCo(n): 0 … n−1
 
 async function main() {
   const view = await View.create(document.getElementById('view') as HTMLCanvasElement);
+  const [cmd, p02, comtxt] = await Promise.all([json<string[]>('commands.json'), json<string[]>('p02text.json'), json<string[]>('comtxt.json')]);
+  const hero = await Hero.profile(0);                        // profile A until character creation exists
   const clock = Clock.newGame();
+  const hour = Number(new URLSearchParams(location.search).get('hour'));   // dev aid: ?hour=20 starts in the evening
+  if (import.meta.env.DEV && hour >= 0 && hour < 24 && location.search.includes('hour=')) clock.hour = hour;
   const events = new Set(NEW_GAME_EVENTS);
-  const hero = { x: START.x, y: START.y, sprite: 0x3b };   // hero 0 = E00 tile 0x3B (_MCCPTile)
+  const pos = { x: START.x, y: START.y, sprite: 0x3b };      // hero 0 = E00 tile 0x3B (_MCCPTile)
   let level = await Level.load(START.level);
   let outside: { level: Level; x: number; y: number } | null = null;   // where to return from a room
   let figures: Figure[] = level.figures(clock, events);
-  let message = 'You have landed in Telermain.';
-  let talk: Talk | null = null;
-
-  const endTalk = () => {
-    const bye = talk?.farewell();
-    if (bye) message = `${talk!.name}: ${bye}`;
-    talk = null; talkBox.hidden = true; render();
-  };
-  const startTalk = async (who: Figure) => {
-    talk = await Talk.open(level.loc, who, HERO, events);
-    log.textContent = '';
-    line(`${who.name ? who.name + ': ' : ''}${talk.greeting()}`);
-    talkBox.hidden = false; word.value = ''; word.focus();
-  };
-  document.getElementById('ask')!.addEventListener('submit', e => {
-    e.preventDefault();
-    if (!talk || !word.value.trim()) return;
-    line(`> ${word.value}`, 'you');
-    const r = talk.ask(word.value);
-    word.value = '';
-    if (r.end) return endTalk();
-    line(r.text);
-  });
-  document.getElementById('news')!.addEventListener('click', () => {
-    if (!talk) return;
-    line('> News', 'you');
-    line(talk.news() ?? talk.ask('').text);
-    word.focus();
-  });
-  document.getElementById('bye')!.addEventListener('click', endTalk);
-  word.addEventListener('keydown', e => { if (e.key === 'Escape') endTalk(); });
+  let message = `${hero.name} has landed in Telermain.`;
+  const say = (s: string, other = '') => format(s, hero, other);
 
   const render = () => {
     const room = level.loc.kind === 'room';
-    view.draw(level, room ? 5 : hero.x, room ? 4 : hero.y, figures, [hero]);
+    view.draw(level, room ? 5 : pos.x, room ? 4 : pos.y, figures, [pos]);
     status.textContent = `${clock}  —  ${level.loc.name.replace(/\s+[MX]$/, '')}${message ? '  —  ' + message : ''}`;
   };
-
   const go = (lv: Level, x: number, y: number) => {
-    level = lv; hero.x = x; hero.y = y;
+    level = lv; pos.x = x; pos.y = y;
     figures = level.figures(clock, events);
   };
+  const close = (msg = '') => { panel.hide(); message = msg; render(); };
 
-  /** Doors (rules/locations.md, Towns): type 0/3 open, bit 0x80 key door, otherwise a locked private home. */
-  const enter = async (door: Door) => {
-    if (door.type & 0x80) return void (message = 'The door is magically locked.');
-    if (door.type !== 0 && door.type !== 3) {
-      const r = level.loc.residents[door.id];
-      const who = r && r.num !== 0xfe ? level.loc.words[r.name] : null;
-      message = who ? `${who}'s door is locked. (Knock, pick and break come with the command menus.)` : 'The door is locked.';
-      return;
-    }
+  // ---- talking (dialogue.md) ----
+  const talkTo = async (who: Figure) => {
+    const t = await Talk.open(level.loc, who, hero, events);
+    const speak = (s: string) => panel.line(`${who.name ? who.name + ': ' : ''}${s}`);
+    const end = () => { const bye = t.farewell(); close(bye ? `${who.name}: ${bye}` : ''); };
+    panel.show();
+    speak(t.greeting());
+    panel.set([{ label: 'News', act: () => { panel.line('> News', 'you'); speak(t.news() ?? t.ask('').text); } },
+               { label: 'End', act: end }],
+      word => {
+        panel.line(`> ${word}`, 'you');
+        const r = t.ask(word);
+        if (r.end) end(); else speak(r.text);
+      }, 'Ask about… (type a word, Enter)');
+  };
+
+  // ---- doors (rules/locations.md, Towns; P02 ovl_196b) ----
+  const enterRoom = async (door: Door) => {
     const ref = await resolveRoom(door, level.loc.pgms[door.pgm]);
     if (!ref) return void (message = 'This door leads somewhere not built yet.');
-    outside = { level, x: hero.x, y: hero.y };
+    outside = { level, x: pos.x, y: pos.y };
     go(await Level.loadRoom(ref), ref.start.x, ref.start.y);
-    message = `You enter ${level.loc.name}.`;
+    message = `${hero.name} enters ${level.loc.name}.`;
+  };
+
+  const lockedDoor = (door: Door) => {
+    const r = level.loc.residents[door.id];
+    const doorstn = level.loc.doorstn;
+    panel.show();
+    panel.line(p02[0]);                                               // "The door is locked."
+    const done = (text: string) => { panel.line(say(text)); menu(); };
+    const goIn = async (...texts: string[]) => { close(); message = texts.map(t => say(t)).join(''); await enterRoom(door); render(); };
+    const yesNo = (text: string) => {
+      panel.line(say(text));
+      panel.set([{ label: cmd[3], act: () => void goIn() }, { label: cmd[4], act: menu }]);   // Yes / No
+    };
+    const knock = () => {
+      // Sound 0x11. Home = resident's hours (_TimCalc), not removed (_npcsta), RESID event conditions.
+      const home = r && r.num !== 0xfe && clock.within(r.appear, r.disappear) &&
+                   (!r.ifevent || events.has(r.ifevent)) && (!r.ifnevent || !events.has(r.ifnevent));
+      if (!home) return done(p02[1]);                                 // "There is no response."
+      panel.line(say(p02[2]));                                        // "Whom do you seek?"
+      panel.set([{ label: cmd[0], act: menu }], word => {
+        panel.line(`> ${word}`, 'you');
+        if (wmatch(word, level.loc.words) === r.name) yesNo(p02[4]);  // "That's me! Would you like to come in?"
+        else done(p02[3]);                                            // "There is no one here by that name."
+      }, 'Whom do you seek?');
+    };
+    const pick = () => {
+      if (doorstn === 0xff) return done(p02[6]);                      // "%h resists the urge …"
+      const s = hero.slot(PICK);
+      if (s < 0) return done(p02[11]);                                // "%h needs a lockpick to do that."
+      if (Math.min(99, (hero.rec.h_dextrty >> 1) + hero.rec.h_lockpck) < rnd(100)) {
+        hero.dec(s); return done(comtxt[0x90]);                       // the pick breaks (text inferred: ovl_100b)
+      }
+      void goIn(p02[7], p02[9]);                                      // "The lock clicks open!" " The party goes inside."
+    };
+    const breakIn = () => {
+      if (doorstn === 0xff || doorstn >= hero.rec.h_strngth) return done(doorstn === 0xff ? p02[6] : p02[10]);
+      void goIn(p02[8], p02[9]);                                      // "%h breaks open the door!"
+    };
+    function menu() {
+      panel.set([{ label: cmd[26], act: knock }, { label: cmd[31], act: pick }, { label: cmd[8], act: breakIn },
+                 { label: cmd[0], act: () => close() }]);             // Knock, Pick, Break, End
+    }
+    menu();
+  };
+
+  const door = async (d: Door) => {
+    if (d.type & 0x80) return void (message = 'The door is magically locked.');   // key doors: rules/locations.md, Keys
+    if (d.type === 0 || d.type === 3) return enterRoom(d);
+    lockedDoor(d);
   };
 
   /** Room exits {x,y,pgm,tx,ty,datafile}: back to town `datafile` with the window at (tx,ty), leader at cell (5,4). */
@@ -98,17 +124,18 @@ async function main() {
   };
 
   const step = async (dx: number, dy: number) => {
-    const x = hero.x + dx, y = hero.y + dy;
+    const x = pos.x + dx, y = pos.y + dy;
     const who = figures.find(f => f.x === x && f.y === y);
-    const door = level.loc.doors.find(d => d.x === x && d.y === y);
+    const d = level.loc.doors.find(e => e.x === x && e.y === y);
     const exit = level.loc.exits.find(e => e.x === x && e.y === y);
-    if (who) { message = ''; await startTalk(who); }   // walking into someone talks to them (the original uses a Talk command)
-    else if (level.walkable(x, y) && !(level.loc.kind === 'room' && exit)) {
-      hero.x = x; hero.y = y;
+    const room = level.loc.kind === 'room';
+    if (who) { message = ''; await talkTo(who); }   // walking into someone talks to them (the original uses a Talk command)
+    else if (level.walkable(x, y) && !(room && exit)) {
+      pos.x = x; pos.y = y;
       message = '';
       if (clock.step()) figures = level.figures(clock, events);
-    } else if (exit && level.loc.kind === 'room') await leave(exit);
-    else if (door) await enter(door);
+    } else if (exit && room) await leave(exit);
+    else if (d) await door(d);
     else if (exit) message = 'The way out of town. The world map comes later.';
     else message = `Blocked by ${level.tileName(x, y)}.`;
     render();
@@ -121,7 +148,7 @@ async function main() {
   let queue = Promise.resolve();   // steps run in order; keys pressed while a room loads are not lost
   addEventListener('keydown', e => {
     const k = KEYS[e.key];
-    if (!k || talk) return;
+    if (!k || panel.open) return;
     e.preventDefault();
     queue = queue.then(() => step(...k)).catch(err => { status.textContent = String(err); console.error(err); });
   });

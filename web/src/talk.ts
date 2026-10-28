@@ -7,7 +7,8 @@ interface Entry { word: number; resp: number; cmds: Cmd[] }
 interface Slot { script: Entry[]; greet: number; bye: number; unknown: number }
 interface Conversation { texts: string[]; words: string[]; slots: Slot[] }
 
-export interface Hero { name: string; female: boolean; charm: number }
+/** What conversations need to know about the speaker's side. */
+export interface Speaker { readonly name: string; readonly female: boolean; readonly charm: number }
 
 /** _MCSTRICMP: case-insensitive; matches when the typed word begins with the whole list word. */
 export function wmatch(typed: string, words: string[]): number {
@@ -16,7 +17,7 @@ export function wmatch(typed: string, words: string[]): number {
 }
 
 /** FAR_PRTAWRD format codes that need no print parameters (dialogue.md, Text format codes). */
-export function format(s: string, hero: Hero, other: string): string {
+export function format(s: string, hero: Speaker, other: string): string {
   return s.replace(/\r/g, '\n').replace(/%(r(\d+)|[a-zA-Z])/g, (_, c: string, para?: string) => {
     if (para) return `[Read Paragraph ${para}.]`;
     switch (c) {
@@ -34,10 +35,10 @@ export function format(s: string, hero: Hero, other: string): string {
 }
 
 export class Talk {
-  private constructor(private loc: Location, private who: Figure, private hero: Hero, private events: Set<number>,
+  private constructor(private loc: Location, private who: Figure, private hero: Speaker, private events: Set<number>,
                       private comtxt: string[], private conv: Conversation | null) {}
 
-  static async open(loc: Location, who: Figure, hero: Hero, events: Set<number>): Promise<Talk> {
+  static async open(loc: Location, who: Figure, hero: Speaker, events: Set<number>): Promise<Talk> {
     const comtxt = await json<string[]>('comtxt.json');
     const named = who.num < 0xfa;
     const conv = named ? await json<Conversation>(`conversations/C${String(who.num >> 3).padStart(2, '0')}.json`) : null;
