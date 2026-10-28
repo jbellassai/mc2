@@ -37,7 +37,7 @@ All percentage rolls are `_RndCo(100)` = uniform 0‥99 (`ovl_04af` is `RndCo(AX
 A weapon's `h_invamt` byte is `0x80 | wear` (all weapons in the shipped saves carry the bit; 0x80 = like new). Only a party member's readied weapon (`h_inhand`) is affected, and never an *unbreakable* one (`wp_unbreakable`):
 - **Break check** after an attack that lands (result 1, 2 or 0xFF): `wear ≥ 90` → breaks; `25 ≤ wear < 90` → breaks if `wear/2 ≥ RndCo(100)`; below 25 never. Breaking sets the byte to `0xE2` (wear 98), sheathes the weapon (`_Sheathe`) and prints "%h's weapon breaks!" (comtxt 0x76).
 - **Wear** +1 after every attack except a dodge (result 0) or no target (4).
-- *Draw* refuses only a byte above `0xE3` ("It's broken!"), so a broken weapon (wear 98) can be drawn again and will break on its next landed blow; camp *Fix* lowers wear by one per successful smith roll (`camp.md`). **Quirk** for a port: a weapon at wear ≥ 100 can only come from wear piling up past 98 between checks, which the rules above never produce.
+- *Draw* refuses only a byte above `0xE3` ("It's broken!"), so a broken weapon (wear 98) can be drawn again and will break on its next landed blow; camp *Fix* lowers wear by one per successful smith roll (`camp.md`). Whether the +1 wear of the breaking blow itself is applied (98 → 99) was not traced; either way a broken weapon is still usable until wear passes 99.
 
 ## Magic damage (`P06` slot 32 `_MDamage` → `ovl_0fa9`, called with the damage in AX)
 Shield points (`c_shield`, +12) absorb first: `DAM = max(0, AX − shield)`, `shield −= min(AX, shield)`. Then steps 6–7 above apply unchanged (the knockdown roll uses the *caster's* weapon skill/dexterity).
