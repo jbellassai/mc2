@@ -345,10 +345,10 @@ async function main() {
     panel.show();
     panel.line(comtxt[0x44]);
     fight.newRound();
-    onWin = won;
+    onWin = won; fightDiff = diff;
     partyTurn();
   };
-  let onWin = () => {};
+  let onWin = () => {}, fightDiff = 0;
   /** The next hero with actions left acts; when none is left, the monsters' phase. */
   const partyTurn = () => {
     if (finished()) return;
@@ -414,11 +414,46 @@ async function main() {
     if (o === 2) { panel.line(comtxt[0x50]); panel.set([{ label: cmd[1], act: () => location.reload() }]); return true; }
     panel.line(comtxt[0x4e]);
     onWin();
-    panel.set([{ label: cmd[0], act: () => {
-      level = outside!.level; party.place(outside!.x, outside!.y); outside = null; fight = null; close();
-    } }]);
+    // P95 ovl_072d: loot for every slain monster, its value to each hireling's partybucks (ovl_164e, cap 30000).
+    const value = fight!.rollLoot(fightDiff, events, tables.lootvalues);
+    for (const { hero: h } of party.members)
+      if (h.rec.h_relatn === 2) h.rec.h_partybucks = Math.min(30000, (h.rec.h_partybucks as number) + value);
+    searchAsk();
     render();
     return true;
+  };
+  const endFight = () => { level = outside!.level; party.place(outside!.x, outside!.y); outside = null; fight = null; close(); };
+  /** P95 ovl_0a06: while a corpse is unsearched, "Would you like to search for valuables?" (comtxt 0xC8); Yes → "Who is
+   *  going to search?" (0x10F, a living member) → ovl_0a78. No ends the fight's aftermath. */
+  const searchAsk = () => {
+    if (!fight!.recs.some(r => r.loot)) return void panel.set([{ label: cmd[0], act: endFight }]);
+    panel.line(comtxt[0xc8]);
+    const living = fight!.recs.filter(r => !r.side && fight!.alive(r));
+    panel.set([{ label: cmd[3], act: () => {
+      if (living.length === 1) return search(living[0].hero!);
+      panel.line(comtxt[0x10f]);
+      panel.set(living.map(r => ({ label: r.name, act: () => search(r.hero!) })));
+    } }, { label: cmd[4], act: endFight }]);
+  };
+  /** P95 ovl_0a78: corpse by corpse, "%h searches a(n) %l" (0xA7, 0xA8/0xA9 for the races at P95 0xCDB) + " and finds
+   *  nothing." (0xAA) or " and finds: " (0xAB) and the treasure (_PrtTreasure: "n Item" with "s" for more than one is
+   *  assumed); _IncObj gives it (Coins to h_gold, cap 9999). When it refuses (0x32 / 0x33) the search stops there and
+   *  the question comes again. */
+  const search = (h: Hero) => {
+    for (const r of fight!.recs.filter(m => m.loot)) {
+      const { item, amount } = r.loot!, worn = amount & 0x80;
+      const who = ctext(0xa7, { h: h.name }) + ctext(cdata.loot.an.includes(r.race) ? 0xa9 : 0xa8, { l: r.name });
+      if (!amount) { panel.line(who + comtxt[0xaa]); r.loot = undefined; continue; }
+      const n = worn ? 1 : amount;
+      panel.line(who + comtxt[0xab] + `${n} ${items[item]}${n > 1 ? comtxt[0x51] : ''}`);
+      const rec = h.rec, free = rec.h_invitem.indexOf(0xff);
+      let ok: boolean;
+      if (item === 0) { ok = rec.h_gold + n <= 9999; if (ok) rec.h_gold += n; }
+      else { ok = incObj(h, item, n); if (ok && worn) rec.h_invamt[free] = amount; }
+      if (!ok) { panel.line(ctext(item === 0 || h.slot(item) >= 0 ? 0x32 : 0x33, { o: h.name })); return searchAsk(); }
+      r.loot = undefined;
+    }
+    panel.set([{ label: cmd[0], act: endFight }]);
   };
   /** P01 ovl_0d01 onto a mushroom-patch feature: the step's time is spent and the window stays where it was, so leaving
    *  the patch returns the party to the square it stepped from. P04 ovl_050f: the formation from (4,3), each member by

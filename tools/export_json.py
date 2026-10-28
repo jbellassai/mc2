@@ -266,6 +266,7 @@ def main(src, dst):
         'useall': [i + 0x31 for i in range(32) if struct.unpack_from('<H', exe, ds + 0x8AE + 2 * i)[0]]})   # _AllDoit asks
     # Combat (rules/combat.md, encounters.md): monsters by code − 5, groups by number − 60, weapons by item − 9.
     p96 = open(f'{src}/P96.MCO', 'rb').read()
+    p95 = open(f'{src}/P95.MCO', 'rb').read()
     d06 = open(f'{src}/D06.MCV', 'rb').read()
     ptr = struct.unpack_from('<14H', d06)   # D06 header words are file offsets
     names = [x.decode('latin1') for x in exe[ds + 0x40A4:ds + 0x4204].split(b'\0')[:37]]   # _w_monstrs
@@ -287,6 +288,9 @@ def main(src, dst):
         'setupxy': list(open(f'{src}/P81.MCO', 'rb').read()[0x162F:0x165F]),   # 24 x, 24 y: formation f member m at 6f+m
         'ranges': {'x': [list(p96[0x19 + 2 * k:0x1B + 2 * k]) for k in range(8)],      # sides 6-9 melee, then casters
                    'y': [list(p96[0x29 + 2 * k:0x2B + 2 * k]) for k in range(8)]},
+        'loot': {'thresholds': list(p95[0x21E:0x21E + 168]), 'items': list(p95[0x17A:0x17A + 168]),   # race·4: d100 bands, items
+                 'amounts': [list(p95[k:k + 3]) for k in range(0x13A, p95.index(b'\xff', 0x13A), 3)],  # {item, lo, hi}
+                 'an': list(p95[0xCDB:0xCE0])},   # races named with "an" (comtxt 0xA9)
         'maxtbl': list(exe[ds + 0x2C7E:ds + 0x2C7E + 120]),   # _MaxSkill: skill·6 + race
         'guarddiff': list(open(f'{src}/P01.MCO', 'rb').read()[0x33A:0x34A]),       # world fights' difficulty by region
         'd06': {'cast': list(d06[ptr[0]:ptr[1]]), 'crit': list(d06[ptr[1]:ptr[2]]), 'crit2': list(d06[ptr[2]:ptr[3]]),

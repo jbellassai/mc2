@@ -13,6 +13,7 @@ interface Weapon { minst: number; basedam: number; type: number; unbreakable: nu
   race: number; hitlist: number[] }
 export interface CombatData { monsters: Monster[]; groups: number[][]; weapons: Weapon[]; setupxy: number[]; maxtbl: number[];
   ranges: { x: number[][]; y: number[][] }; guarddiff: number[];
+  loot: { thresholds: number[]; items: number[]; amounts: number[][]; an: number[] };
   d06: { cast: number[]; crit: number[]; crit2: number[]; prey: number[]; counts: number[]; armor: number[]; dodge: number[] } }
 
 /** A CMBTNT record. `side` 0 = party (`c_alignmnt` 0), 1 = monsters. */
@@ -24,6 +25,7 @@ export interface Rec {
   health: number;   // c_health: 1 knocked down
   target: number;   // c_target, 0xFF none
   moves: number;    // c_removes: actions left this round
+  loot?: { item: number; amount: number };   // c_itspc1/c_qaspc2 after the fight (P95 ovl_08f6); amount 0 = nothing
 }
 
 const rnd = (n: number) => Math.floor(Math.random() * n);   // _RndCo
@@ -106,6 +108,32 @@ export class Fight {
     if (!this.recs.some(r => r.side === 1 && this.alive(r))) return 1;
     if (!this.recs.some(r => r.side === 0 && this.alive(r))) return 2;
     return 0;
+  }
+
+  /** P95 ovl_08f6, after a won fight, for every slain monster (not fled or removed): a coin flip; heads 5-10 Coins,
+   *  tails an item only if RndCo(20) + diff > 10, by the race's d100 bands (P95 0x21E/0x17A, race·4) with an amount from
+   *  the {item, lo, hi} table (P95 0x13A), else 1; weapons and armour (9-0x30) come worn, 0x80 | RndCo(20) (ovl_0a78).
+   *  Vankruh leaves nothing but sets events 150 and, if slain, 61. Returns the loot value for hirelings' `partybucks`. */
+  rollLoot(diff: number, events: Set<number>, values: number[]): number {
+    const L = this.data.loot;
+    let value = 0;
+    for (const r of this.recs.filter(m => m.side && !(m.state & 0x18))) {
+      if (r.race === 28) { events.add(150); if (r.state & 0x80) events.add(61); continue; }
+      let item = 0, amount = 0;
+      if (rnd(2)) amount = rnd(6) + 5;
+      else if (rnd(20) + diff > 10 && L.thresholds[r.race * 4]) {
+        const d = rnd(100);
+        let i = r.race * 4;
+        while (L.thresholds[i] <= d) i++;
+        item = L.items[i];
+        const t = L.amounts.find(a => a[0] === item);
+        amount = t ? t[1] + rnd(t[2] - t[1] + 1) : 1;
+        if (item >= 9 && item <= 0x30) amount = 0x80 | rnd(20);
+      }
+      r.loot = { item, amount };
+      value += values[item] * (amount & 0x80 ? 1 : amount);
+    }
+    return value;
   }
 
   /** P94 ovl_04a6, every round: undead rise with 1 HP; each living record gets 1 action, one more when dex·8+4 ≥ 50
