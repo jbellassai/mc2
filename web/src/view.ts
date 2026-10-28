@@ -29,21 +29,27 @@ export class View {
     return { x: cx - (COLS >> 1) + col, y: cy - (ROWS >> 1) + row };
   }
 
-  draw(lv: Level, cx: number, cy: number, figures: Figure[], party: { x: number; y: number; sprite: number }[]) {
+  /** `phase` counts animation steps: tile cycles advance every step, animated NPCs flip every few (_NPCANIMATE). */
+  draw(lv: Level, cx: number, cy: number, figures: Figure[], party: { x: number; y: number; sprite: number }[], phase = 0) {
     const ox = cx - (COLS >> 1), oy = cy - (ROWS >> 1);
     const ctx = this.ctx;
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, COLS * TILE, ROWS * TILE);
     for (let y = 0; y < ROWS; y++)
       for (let x = 0; x < COLS; x++) {
-        const t = lv.tile(ox + x, oy + y);
+        let t = lv.tile(ox + x, oy + y);
+        const cyc = lv.anim.get(t);
+        if (cyc) t = cyc[phase % cyc.length];
         if (t !== 0xff) ctx.drawImage(lv.tiles, (t % 16) * 16, (t >> 4) * 16, 16, 16, x * TILE, y * TILE, TILE, TILE);
       }
     const cols = this.sprites.columns;
     for (const f of figures) {
       // _SingleNPCDraw: companions (num < 0x20) use their hero frames; anyone else the E02 sprite `tile`.
       if (f.num < 0x20) this.sheet(this.heroes, 0x3b + 18 * f.num, cols, f.x - ox, f.y - oy);
-      else this.sheet(this.folk, this.sprites.npc[f.tile].start, cols, f.x - ox, f.y - oy);
+      else {
+        const n = this.sprites.npc[f.tile];
+        this.sheet(this.folk, n.start + (n.frames > 1 ? (phase >> 2) & 1 : 0), cols, f.x - ox, f.y - oy);   // frames 0/1 only
+      }
     }
     for (const p of party) this.sheet(this.heroes, p.sprite, cols, p.x - ox, p.y - oy);
   }

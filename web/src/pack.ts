@@ -34,7 +34,7 @@ export interface RoomRecord extends Omit<Location, 'exits' | 'townsfolk' | 'npcs
   npcs: Npc[][];
 }
 
-export interface TileData { names: string[]; nameindex: number[]; walkable: number[]; walkable_los: number[] }
+export interface TileData { names: string[]; nameindex: number[]; walkable: number[]; walkable_los: number[]; anim: string }
 export interface Sprites { columns: number; npc: { start: number; frames: number }[] }
 
 const BASE = './pack/';

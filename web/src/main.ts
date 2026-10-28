@@ -9,7 +9,7 @@ import { Hero, PICK } from './hero';
 import { panel } from './panel';
 
 const status = document.getElementById('status')!;
-const START = { level: 'D02', x: 98, y: 18 };     // new_game.md: window (93,14), leader at window cell (5,4)
+const START = { level: 'D02', x: 98, y: 18 };   // mutable for the ?at= dev aid     // new_game.md: window (93,14), leader at window cell (5,4)
 const NEW_GAME_EVENTS = [10, 88, 117];
 const rnd = (n: number) => Math.floor(Math.random() * n);   // RndCo(n): 0 … n−1
 
@@ -19,8 +19,10 @@ async function main() {
     json<string[]>('comtxt.json'), json<string[]>('npctypes.json')]);
   const hero = await Hero.profile(0);                        // profile A until character creation exists
   const clock = Clock.newGame();
-  const hour = Number(new URLSearchParams(location.search).get('hour'));   // dev aid: ?hour=20 starts in the evening
-  if (import.meta.env.DEV && hour >= 0 && hour < 24 && location.search.includes('hour=')) clock.hour = hour;
+  // Dev aids: ?hour=20 starts in the evening, ?at=74,25 starts on another square.
+  const q = new URLSearchParams(location.search);
+  if (import.meta.env.DEV && q.has('hour')) clock.hour = Math.min(23, Math.max(0, Number(q.get('hour')) || 0));
+  if (import.meta.env.DEV && q.has('at')) [START.x, START.y] = q.get('at')!.split(',').map(Number);
   const events = new Set(NEW_GAME_EVENTS);
   const pos = { x: START.x, y: START.y, sprite: 0x3b };      // hero 0 = E00 tile 0x3B (_MCCPTile)
   let level = await Level.load(START.level);
@@ -29,9 +31,11 @@ async function main() {
   let message = `${hero.name} has landed in Telermain.`;
   const say = (s: string, other = '') => format(s, hero, other);
 
+  let phase = 0;   // animation step; 300 ms is a guess (the original's timer unit is not traced)
+  setInterval(() => { phase++; render(); }, 300);
   const render = () => {
     const room = level.loc.kind === 'room';
-    view.draw(level, room ? 5 : pos.x, room ? 4 : pos.y, figures, [pos]);
+    view.draw(level, room ? 5 : pos.x, room ? 4 : pos.y, figures, [pos], phase);
     status.textContent = `${clock}  —  ${level.loc.name.replace(/\s+[MX]$/, '')}${message ? '  —  ' + message : ''}`;
   };
   const go = (lv: Level, x: number, y: number) => {

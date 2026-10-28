@@ -10,12 +10,21 @@ export class Level {
   readonly h: number;
   readonly cells: Uint8Array;
   private readonly walk: Set<number>;
+  /** Tileset `aniptr` records {tile, barrier class, kind, cycle…, FF}, list ends FF FF: tile → its animation cycle. */
+  readonly anim = new Map<number, number[]>();
 
   private constructor(readonly id: string, readonly loc: Location, readonly tileset: number,
                       readonly tiles: HTMLImageElement, readonly data: TileData) {
     [this.w, this.h] = loc.mapsize;
     this.cells = new Uint8Array(this.w * this.h).fill(0xff);
     this.walk = new Set(data.walkable);
+    const a = hex(data.anim);
+    for (let i = 0; i + 3 < a.length && a[i] !== 0xff;) {
+      let j = i + 3;
+      while (j < a.length && a[j] !== 0xff) j++;
+      this.anim.set(a[i], [...a.slice(i + 3, j)]);
+      i = j + 2;                                     // FF ends the cycle, a second FF separates records
+    }
   }
 
   private static async make(id: string, loc: Location, ts: number): Promise<Level> {

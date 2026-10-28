@@ -110,7 +110,7 @@ Loaded by `_LoadTiles(n)` right after `Vnn.MCT`; six leading u16 offsets are rel
 | `txttbl` | NUL-separated name pool ("a bridge", "grassland", "a plant", "a door" …) |
 | `txtptr` | 128 bytes: name index per tile |
 | `walkptr` | two `FF`-terminated tile-id lists: list 1 = **walkable** tiles; list 2 = extra tiles `_ChkWlk` accepts only while `_losflag` is set — only P02 slot 10 (`ovl_1ae7`, the V02 0x0B flood-fill of reachable squares) sets it |
-| `aniptr` | animation sequences, `FF`-terminated groups |
+| `aniptr` | **animated tiles**: records `{tile, barrier class, kind, cycle tiles…, FF}` separated by a second `FF`, list ends `FF FF` — street lamps, fountains, fireplaces, cauldrons, torches; spiders and snakes carry barrier class `'B'` (Repel) and some walls `'C'` (Pierce), `rules/spells.md`. Every tile of a cycle has its own record with the same cycle. Frame timing not traced |
 | `doorptr` | door tile pairs |
 | `colorptr` | 128 bytes: minimap colour per tile |
 
