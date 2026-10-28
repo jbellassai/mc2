@@ -1,10 +1,9 @@
-// Game clock (docs/rules/time_weather.md). A town step costs 1/12 of a 5-minute tick.
+// Game clock (docs/rules/time_weather.md). A town step costs 1/12 of a 5-minute tick (counted by the caller).
 const SUNRISE = [8, 8, 7, 7, 7, 6, 6, 6, 7, 7, 7, 8];
 const SUNSET = [18, 18, 19, 19, 19, 20, 20, 20, 19, 19, 19, 18];
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
 export class Clock {
-  steps = 0;
   weather = 0;   // _weather: new game starts Clear (_ssnwthrs = [100, 0, …]); regional weather comes with the world map
   constructor(public minute: number, public hour: number, public date: number, public month: number) {}
 
@@ -17,13 +16,6 @@ export class Clock {
   within(appear: number, disappear: number): boolean {
     if (appear === disappear) return true;
     return appear < disappear ? this.hour >= appear && this.hour < disappear : this.hour >= appear || this.hour < disappear;
-  }
-
-  /** One town step. Returns true when the hour changed (callers re-check who is present). */
-  step(): boolean {
-    if (++this.steps < 12) return false;
-    this.steps = 0;
-    return this.tick();
   }
 
   /** _CalUpd1: five minutes. Returns true when the hour changed. */

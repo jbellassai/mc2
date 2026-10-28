@@ -4,7 +4,7 @@ import { json, two, type Door, type Pgm, type RoomRecord } from './pack';
 const BOUND = [0x40, 0x48, 0x6c, 0x7c, 0x80, 0x84, 0x90, 0x98, 0xa0, 0xa8, 0xbb, 0xc0, 0xc8, 0xd0, 0xd8]; // P05 0x2BA, P09 0x66
 const BANKS = new Set([15, 16, 17, 18, 36, 55, 60, 75, 80, 81, 82, 83, 90, 91]);                       // LOCTYPE banks
 /** P05 ovl_1411: party base square by `_rmtyp` (P05 file 0x1F / 0x28); members fill a 3×3 formation from it. */
-const BASE_X = [4, 7, 4, 4, 4, 4, 4, 4, 7], BASE_Y = [5, 5, 5, 5, 5, 5, 5, 5, 1];
+export const BASE_X = [4, 7, 4, 4, 4, 4, 4, 4, 7], BASE_Y = [5, 5, 5, 5, 5, 5, 5, 5, 1];   // entry 8 = inn guest side
 
 /** `room` = the door's room id (`_rmdata[0]`), `kind` = P05's `_rmtyp` (rules/services.md). */
 export interface RoomRef { id: string; pgm: Pgm; index: number; room: number; kind: number; map: { g: number; chunk: number }; start: { x: number; y: number } }

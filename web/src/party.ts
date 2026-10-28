@@ -45,6 +45,19 @@ export class Party {
     return m;
   }
 
+  /** _DecEnergy, minute 0 and 30: every member not asleep (h_actvty 0) loses 1, 4 if Poisoned or Ill, +1 holding a weapon. */
+  decEnergy() {
+    for (const { hero } of this.members) {
+      const r = hero.rec as Record<string, number>;
+      if (r.h_actvty === 0) continue;
+      hero.lose('h_energy', (r.h_cond1 & 0x0a ? 4 : 1) + (r.h_inhand !== 0xff ? 1 : 0));
+      hero.isHeTr();
+    }
+  }
+
+  /** P02 ovl_0fca: walking in town, every second tick costs everyone 1 energy. */
+  walkTired() { for (const { hero } of this.members) { hero.lose('h_energy', 1); hero.isHeTr(); } }
+
   static async companion(num: number): Promise<HeroRecord> {
     return structuredClone((await json<HeroRecord[]>('companions.json'))[num - 1]);
   }

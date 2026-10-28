@@ -2,13 +2,14 @@
 import { Level, type Figure } from './level';
 import { Clock } from './clock';
 import { View } from './view';
-import { resolveRoom } from './room';
+import { resolveRoom, BASE_X, BASE_Y } from './room';
 import { json, type Door, type Exit } from './pack';
 import { Talk, format, wmatch } from './talk';
 import { Hero, PICK, STATS, SKILLS } from './hero';
 import { panel, type Button } from './panel';
 import { loadTrade, lot, single, prices, incObj, sellable } from './shop';
-import { ServiceRoom, noon, INN } from './service';
+import { ServiceRoom, noon, rent, INN } from './service';
+import { camp } from './camp';
 import { Party } from './party';
 
 const status = document.getElementById('status')!;
@@ -18,8 +19,8 @@ const rnd = (n: number) => Math.floor(Math.random() * n);   // RndCo(n): 0 … n
 
 async function main() {
   const view = await View.create(document.getElementById('view') as HTMLCanvasElement);
-  const [cmd, p02, comtxt, npctypes, items, p97] = await Promise.all([json<string[]>('commands.json'), json<string[]>('p02text.json'),
-    json<string[]>('comtxt.json'), json<string[]>('npctypes.json'), json<string[]>('items.json'), json<string[]>('p97text.json')]);
+  const [cmd, p02, comtxt, npctypes, items, p97, p93, conds] = await Promise.all(['commands', 'p02text', 'comtxt', 'npctypes',
+    'items', 'p97text', 'p93text', 'conds'].map(n => json<string[]>(`${n}.json`)));
   const hero = await Hero.profile(0);                        // profile A until character creation exists
   const clock = Clock.newGame();
   // Dev aids: ?hour=20 starts in the evening, ?at=74,25 starts on another square.
@@ -32,6 +33,7 @@ async function main() {
   let level = await Level.load(START.level);
   let outside: { level: Level; x: number; y: number } | null = null;   // where to return from a room
   let service: ServiceRoom | null = null;                               // the P05 room the party is in
+  let roomStart = { x: 0, y: 0 };                                       // its formation origin (base square)
   let figures: Figure[] = level.figures(clock, events, party.away);
   let message = `${hero.name} has landed in Telermain.`;
   const say = (s: string, other = '') => format(s, hero, other);
@@ -58,7 +60,21 @@ async function main() {
     if (!noon().includes(service?.kind === INN ? service.room : -1)) return;
     if (panel.open) panel.line(level.loc.texts[9]); else message = level.loc.texts[9];   // "It's time to check out."
   };
-  const ctx = { hero, clock, cmd, comtxt, items, close, tick: () => { if (clock.tick()) hourly(); render(); } };
+  /** _CalUpd: five minutes; _DecEnergy at minute 0 and 30; the hour tick. */
+  const tick = () => {
+    const hour = clock.tick();
+    if (clock.minute % 30 === 0) party.decEnergy();
+    if (hour) hourly();
+    render();
+  };
+  let walkSteps = 0, walkTicks = 0;   // P02: 12 steps = one tick, and every second tick costs 1 energy (ovl_0fca)
+  const walked = () => {
+    if (++walkSteps < 12) return;
+    walkSteps = 0;
+    if (++walkTicks & 1) party.walkTired();
+    tick();
+  };
+  const ctx = { hero, clock, cmd, comtxt, items, close, tick };
 
   // ---- talking (dialogue.md) ----
   const talkTo = async (who: Figure) => {
@@ -176,6 +192,7 @@ async function main() {
     const ref = await resolveRoom(door, level.loc.pgms[door.pgm]);
     if (!ref) return void (message = 'This door leads somewhere not built yet.');
     outside = { level, x: lead.x, y: lead.y };
+    roomStart = ref.start;
     go(await Level.loadRoom(ref), ref.start.x, ref.start.y);
     message = level.loc.name.trim() ? `${hero.name} enters ${level.loc.name}.` : '';   // which of D08/D09's room names applies is not traced
     service = ref.pgm.program === 5 ? await ServiceRoom.open(ctx, ref.room, ref.kind, level.loc.texts, level.loc.words) : null;
@@ -241,6 +258,14 @@ async function main() {
     message = '';
   };
 
+  /** P05 ovl_16a5, bumping the inn's archway at (8,4): from the guest side back to the keeper's base, with rent paid
+   *  through to the guest side (base entry 8), otherwise "…only to paying guests" (room text 6). */
+  const innArch = () => {
+    const k = lead.y < 5 ? 1 : rent[service!.room - 0x40] ? 8 : -1;
+    if (k < 0) { message = level.loc.texts[6]; return; }
+    party.place(BASE_X[k], BASE_Y[k]);
+    message = '';
+  };
   const figureAt = (x: number, y: number) => figures.find(f => f.x === x && f.y === y);
   /** A step (rules/locations.md, A step). Town: the whole formation moves, members tested in slot order 5…0, and
    *  one blocked member holds everyone. Rooms: only the acting member moves (_RMove moves `_p1x/_p1y[_curpla]`). */
@@ -253,6 +278,8 @@ async function main() {
       return render();
     }
     const movers = room ? [lead] : [...party.members].reverse();
+    const unable = movers.find(m => (m.hero.rec.h_cond1 as number) & 0xfc);   // Dead, Paralyzed, Exhausted, Poisoned, Starving
+    if (unable) { message = `${unable.hero.name}: ${unable.hero.condition(conds)}.`; return render(); }
     for (const m of movers) {
       const x = m.x + dx, y = m.y + dy;
       const exit = level.loc.exits.find(e => e.x === x && e.y === y);
@@ -266,12 +293,13 @@ async function main() {
       if (mate ? !room : level.walkable(x, y)) continue;
       const d = level.loc.doors.find(e => e.x === x && e.y === y);
       if (d && !mate) { await door(d); return render(); }
+      if (room && service?.kind === INN && x === 8 && y === 4) { innArch(); return render(); }
       message = exit ? 'The way out of town. The world map comes later.' : `Blocked by ${mate ? mate.hero.name : level.tileName(x, y)}.`;
       return render();
     }
     for (const m of movers) { m.x += dx; m.y += dy; }
     message = '';
-    if (clock.step()) hourly();
+    walked();
     render();
   };
 
@@ -302,7 +330,8 @@ async function main() {
     };
     const wrap = document.createElement('div'); wrap.className = 'sheets';
     wrap.append(
-      table(`${r.h_fullnm}`, [['Hit points', `${r.h_hitpts} / ${r.h_hpmax}`], ['Energy', String(r.h_energy)], ['Coins', String(r.h_gold)],
+      table(`${r.h_fullnm}`, [['Condition', who.condition(conds)], ['Hit points', `${r.h_hitpts} / ${r.h_hpmax}`],
+                              ['Energy', String(r.h_energy)], ['Coins', String(r.h_gold)],
                               ...STATS.map(([f, l]) => [l, String(r[f])] as [string, string])]),
       table('Skills', SKILLS.map(([f, l]) => [l, String(r[f])] as [string, string])),
       ...chunks(who.pack().map(p => [p.name + (p.worn ? ' (worn)' : p.hand ? ' (in hand)' : ''), p.count] as [string, string]), 12)
@@ -320,6 +349,19 @@ async function main() {
     if (who) return talkTo(who);
     message = say(comtxt[0x11]) + level.tileName(x, y) + comtxt[0x10];
   };
+  /** Camp (C). In a P05 inn room P05 first refuses the keeper's side (acting member at x ≥ 4 and y ≥ 5: comtxt 0x24);
+   *  when camp ends with the rent used up, the party goes back to the base square and the keeper speaks (ovl_19b0/167f). */
+  const campCmd = () => {
+    const inn = service?.kind === INN && service.room < 0x5c ? service.room - 0x40 : -1;
+    if (inn >= 0 && lead.x >= 4 && lead.y >= 5) { message = say(comtxt[0x24]); return render(); }
+    camp({ party, clock, cmd, p93, tick, rent: () => inn >= 0 ? rent[inn] : null, done: () => {
+      close();
+      if (inn < 0 || rent[inn]) return;
+      party.place(roomStart.x, roomStart.y);
+      message = level.loc.texts[9];   // "It's time to check out." (assumption: ovl_167f's text number is not traced)
+      render();
+    } });
+  };
   let looking = false, talking = false;
   view.canvas.addEventListener('click', e => {
     if (panel.open) return;
@@ -336,6 +378,7 @@ async function main() {
     if (panel.open) return;
     if (e.key === 'i' || e.key === 'I') { sheet(); return; }
     if (e.key === 'l' || e.key === 'L') { looking = true; message = say(comtxt[0x0d]); render(); return; }   // "Mark the target."
+    if (e.key === 'c' || e.key === 'C') { campCmd(); return; }
     if (e.key === 't' || e.key === 'T') { talking = true; message = say(comtxt[0x0d]); render(); return; }
     const k = KEYS[e.key];
     if (!k) return;

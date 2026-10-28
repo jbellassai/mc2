@@ -1,7 +1,7 @@
 """Build the web port's data pack from the original files (decision 1). Never commit or publish the output.
 usage: export_json.py ORIGDIR OUTDIR -> OUTDIR/locations/*.json, tiledata/Bnn.json, tilesets/Vnn.png, sprites/E0n.png, conversations/Cnn.json,
        blocks.json, rooms.json, sprites.json, comtxt.json, items.json, heroes.json,
-       commands.json, npctypes.json, p90.json, p02text.json, p91text.json, p05.json, p97text.json, companions.json
+       commands.json, npctypes.json, p90.json, p02text.json, p91text.json, p05.json, p97text.json, p93text.json, conds.json, companions.json
 Schema: docs/data_schema.md. Byte strings are lowercase hex; every list is in file order."""
 import json, os, struct, sys
 sys.path.insert(0, os.path.dirname(__file__))
@@ -224,6 +224,9 @@ def main(src, dst):
                              'lots': {str(lots[i]): lots[i + 1] for i in range(0, len(lots) - 1, 2)}})
     p02 = open(f'{src}/P02.MCO', 'rb').read()
     dump(f'{dst}/p02text.json', [x.decode('latin1') for x in p02[0x67:0x28A].split(b'\0')[:17]])   # town program's own texts
+    p93 = open(f'{src}/P93.MCO', 'rb').read()
+    dump(f'{dst}/p93text.json', [x.decode('latin1') for x in p93[0x3D:0x254].split(b'\0')])   # camp texts (rules/camp.md)
+    dump(f'{dst}/conds.json', [x.decode('latin1') for x in exe[ds + 0x4204:ds + 0x4300].split(b'\0')[:12]])   # _w_conds: OK, then cond1<<8|cond2 bits 15…5
     p97 = open(f'{src}/P97.MCO', 'rb').read()
     dump(f'{dst}/p97text.json', [x.decode('latin1') for x in p97[0x17:0x1BA].split(b'\0')[:7]])   # hire / dismiss texts
     p91 = open(f'{src}/P91.MCO', 'rb').read()   # small talk: {weather, line} pairs at 0x48, 0xFF, then the lines

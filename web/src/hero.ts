@@ -45,6 +45,27 @@ export class Hero {
     return out;
   }
 
+  /** _IsHeTr: energy 0 → Exhausted (cond1 0x10, Tired cleared); otherwise not Exhausted, Tired (cond2 0x20) below 15. */
+  isHeTr() {
+    const r = this.rec as Record<string, number>;
+    if (r.h_energy === 0) { r.h_cond1 |= 0x10; r.h_cond2 &= ~0x20; return; }
+    r.h_cond1 &= ~0x10;
+    if (r.h_energy < 15) r.h_cond2 |= 0x20; else r.h_cond2 &= ~0x20;
+  }
+
+  /** _DecSta: lose `n` of a stat, floor 0. */
+  lose(field: string, n: number) {
+    const r = this.rec as Record<string, number>;
+    r[field] = Math.max(0, r[field] - n);
+  }
+
+  /** _SumStat: the condition shown is the highest set bit of cond1<<8 | cond2 (`conds` = _w_conds). */
+  condition(conds: string[]): string {
+    const c = (this.rec.h_cond1 as number) << 8 | (this.rec.h_cond2 as number);
+    for (let b = 15, i = 1; b >= 5; b--, i++) if (c & 1 << b) return conds[i];
+    return conds[0];
+  }
+
   /** _SearchInv: inventory slot holding `item`, or -1. */
   slot(item: number): number { return this.rec.h_invitem.indexOf(item); }
 
