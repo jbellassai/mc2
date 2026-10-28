@@ -3,7 +3,7 @@ import { Level, type Figure } from './level';
 import { Clock } from './clock';
 import { View } from './view';
 import { resolveRoom, BASE_X, BASE_Y } from './room';
-import { json, two, type Door, type Exit } from './pack';
+import { json, hex, two, type Door, type Exit } from './pack';
 import { Talk, format, wmatch } from './talk';
 import { Hero, PICK, STATS, SKILLS } from './hero';
 import { panel, type Button } from './panel';
@@ -43,6 +43,7 @@ async function main() {
   const events = new Set(NEW_GAME_EVENTS);
   const party = new Party(hero, START.x, START.y);
   const lead = party.leader;                                 // the acting member (_curpla) is always the leader for now
+  if (import.meta.env.DEV) Object.assign(window, { dbg: { party } });   // for scripts/shot.mjs eval:
   let level = await Level.load(START.level);
   let outside: { level: Level; x: number; y: number } | null = null;   // where to return from a room
   let service: ServiceRoom | null = null;                               // the P05 room the party is in
@@ -275,7 +276,7 @@ async function main() {
   };
 
   const door = async (d: Door) => {
-    if (d.type & 0x80) return void (message = 'The door is magically locked.');   // key doors: rules/locations.md, Keys
+    if (d.type & 0x80) return keyDoor(d);
     if (d.type === 2 && (d.pgm === 0x78 || d.pgm === 0x79)) return passThrough(d);
     if (d.type >= 6 && d.type <= 9) return guardedRoom(d);
     if (d.type === 0 || d.type === 3) return enterRoom(d);
@@ -365,7 +366,7 @@ async function main() {
     fight = f;
     afterWin = after;
     autoHeroes.clear(); heading = false;
-    if (import.meta.env.DEV) Object.assign(window, { dbg: { fight } });   // for scripts/shot.mjs eval:
+    if (import.meta.env.DEV) Object.assign(window, { dbg: { party, fight } });   // for scripts/shot.mjs eval:
     panel.show();
     panel.line(comtxt[ambush ? 0x7c : 0x44]);                         // "AMBUSH!" / "COMBAT!"
     fight.newRound();
@@ -765,6 +766,95 @@ async function main() {
     render();
   };
 
+  /** P02 ovl_0d70, a key door (type bit 0x80): the key is item `type & 0x7F` anywhere in the party (not used up). With
+   *  it every `spdoors` record's square gets its `newtile` and the carrier says `loctext[text]`; without it
+   *  `loctext[text + 1]`. With the key the party then goes through: the door's PGM record (P02 L_198c). */
+  const keyDoor = async (d: Door) => {
+    const key = d.type & 0x7f, recs = level.loc.keydoor ?? [];
+    const carrier = party.members.find(m => m.hero.rec.h_invitem.includes(key));
+    if (!recs.length) return void (message = level.tileName(d.x, d.y));
+    const t = level.loc.texts[recs[0].text + (carrier ? 0 : 1)] ?? '';
+    if (carrier) for (const r of recs) level.set(r.x, r.y, r.newtile);
+    const line = format(t.replace(/%a/g, items[key]), carrier?.hero ?? hero, hero.name);
+    message = carrier ? `${carrier.hero.name}: ${line}` : line;
+    if (!carrier) return;
+    const pgm = level.loc.pgms[d.pgm];
+    if (pgm?.program === 2) { go(await Level.load(`D${two(pgm.datafile)}`, pgm.tileset), lead.x, lead.y); return; }
+    if (pgm?.program === 5) { const said = message; await enterRoom(d); message = said; return; }
+    message += ` (P0${pgm?.program} D${two(pgm?.datafile ?? 0)}: not built yet.)`;
+  };
+
+  // ---- digging and lockpicking (P02 ovl_1131 Shovel, ovl_1044 Pick; rules/locations.md, Towns) ----
+  const chests = new Set<string>();                                  // `_chests`, by level and treasure group
+  const mark = (prompt: string, then: (x: number, y: number) => void) => { message = prompt; marking = then; render(); };
+  const adjacent = (x: number, y: number) => Math.max(Math.abs(lead.x - x), Math.abs(lead.y - y)) <= 1;
+  const spotAt = (x: number, y: number, type: number) => (level.loc.spots ?? []).find(p => p.x === x && p.y === y && p.type === type);
+  /** Shovel: "Where shall %h dig?" (0x7F); an unwalkable square without a Look text → "%h is unable to dig there."
+   *  (0x80); a type-3 spot whose treasure is still there → its treasure, else "%h finds nothing." (0x81). */
+  const dig = (h: Hero) => mark(format(comtxt[0x7f], h, h.name), (x, y) => {
+    if (!adjacent(x, y)) return;
+    if (!level.walkable(x, y) && !(level.loc.look ?? []).some(l => l.x === x && l.y === y)) return void (message = format(comtxt[0x80], h, h.name));
+    const p = spotAt(x, y, 3);
+    if (!p) return void (message = format(comtxt[0x81], h, h.name));
+    treasure(h, p.d2);
+  });
+  /** Pick: "Mark the target."; not a type-2 spot → "%h can not use a lockpick on that!" (0x8F). The pick roll
+   *  min(99, dex/2 + lockpick) against RndCo(100) (a miss breaks the Pick, 0x90, the lock opens anyway); a trapped spot
+   *  (d3: 1 Poisoned, 2 Ill) springs when RndCo(120) > skill (V02 service 0x15: energy and HP halved), else a lockpick
+   *  skill roll; then the treasure. */
+  const lockpick = (h: Hero) => mark(say(comtxt[0x0d]), (x, y) => {
+    if (!adjacent(x, y)) return;
+    const p = spotAt(x, y, 2), r = h.rec as Record<string, number> & Hero['rec'];
+    if (!p) return void (message = format(comtxt[0x8f], h, h.name));
+    panel.show();
+    const skill = Math.min(99, (r.h_dextrty >> 1) + r.h_lockpck);
+    if (skill <= rnd(100)) { panel.line(comtxt[0x90]); h.dec(h.slot(0x50)); }
+    if (p.d3 && skill < rnd(120)) {
+      r.h_cond1 |= p.d3 === 1 ? 0x08 : 0x02; r.h_energy >>= 1; r.h_hitpts >>= 1; h.isHeTr();
+      const t = (n: number) => format(chamberTexts[n], h, h.name);
+      panel.line(`${t(2)} ${chamberTexts[2 + p.d3]}`); panel.line(t(5));
+    } else {
+      const chance = r.h_lockpck < 50 ? (50 - r.h_lockpck) >> 2 : 1;
+      if (r.h_lockpck < cdata.maxtbl[10 * 6 + r.h_race] && rnd(100) < chance) { r.h_lockpck++; panel.line(ctext(0x60, { h: h.name, l: 'Lockpick' })); }
+    }
+    treasure(h, p.d2);
+  });
+  const chamberTexts = (await json<{ texts: string[] }>('p07.json')).texts;   // the same trap texts as V02's
+  /** The treasure of group `g` (`treasptr`: id, {item, amount}…, 0xFF): taken already → "%h finds nothing."; else
+   *  "%h unearths treasure!" (0x82), each item listed (a pair with item 0x80 prints loctext[amount] instead), "Who will
+   *  take the treasure?" (0x85) and the chosen member gets all of it (_IncObj; weapons and armour as one, unworn); a
+   *  refusal stops there and the question comes back for the rest. */
+  const treasure = (h: Hero, g: number) => {
+    const key = `${level.id}:${g}`;
+    panel.show();
+    if (chests.has(key)) { panel.line(format(comtxt[0x81], h, h.name)); return void panel.set([{ label: cmd[0], act: () => close() }]); }
+    const t = hex(level.loc.tables.treasptr ?? '');
+    let i = 0;
+    while (i < t.length && t[i] !== g) { while (i < t.length && t[i] !== 0xff) i++; i++; }
+    const loot: [number, number][] = [];
+    for (i++; i + 1 < t.length && t[i] !== 0xff; i += 2) loot.push([t[i], t[i + 1]]);
+    panel.line(format(comtxt[0x82], h, h.name));
+    for (const [item, n] of loot)
+      panel.line(item === 0x80 ? format(level.loc.texts[n] ?? '', h, h.name)
+        : item >= 9 && item <= 0x30 || n === 1 ? `1 ${items[item]}` : `${n} ${items[item]}${comtxt[0x51]}`);   // _PrtTreasure (assumed form)
+    let left = loot.filter(([item]) => item !== 0x80);
+    if (!left.length) { chests.add(key); return void panel.set([{ label: cmd[0], act: () => close() }]); }
+    const ask = () => {
+      panel.line(comtxt[0x85]);
+      panel.set(party.members.map(m => ({ label: m.hero.name, act: () => {
+        chests.add(key);
+        while (left.length) {
+          const [item, n] = left[0], w = m.hero, worn = item >= 9 && item <= 0x30;
+          const ok = item === 0 ? w.rec.h_gold + n <= 9999 && (w.rec.h_gold += n, true) : incObj(w, item, worn ? 1 : n);
+          if (!ok) { panel.line(ctext(w.slot(item) >= 0 ? 0x32 : 0x33, { o: w.name })); return ask(); }
+          left = left.slice(1);
+        }
+        close();
+      } })));
+    };
+    ask();
+  };
+
   // ---- special spots (rules/locations.md, Special spots; P02 ovl_189d/ovl_151a) ----
   const spotTables = await json<{ ambush: { ids: number[]; events: number[] }; remarks: { ids: number[]; events: number[]; locspecs: number[] } }>('spots.json');
   const ambushed = new Set<number>();                                 // `_ambush` bits by ambush id
@@ -905,6 +995,7 @@ async function main() {
     const pick = (who: Hero, item: number) => {
       panel.line(`> ${items[item]}`, 'you');
       if (chamber && item === 0x50 && chamber.hr.reward && !(chamber.hr.reward & 0x80)) return openChest(who);
+      if (level.loc.kind === 'level' && (item === 0x50 || item === 0x46)) { close(); return item === 0x50 ? lockpick(who) : dig(who); }
       if (!tables.useall.includes(item) || party.members.length < 2) return done(once(who, item));
       panel.line(say(comtxt[0x3c]));
       panel.set([{ label: cmd[3], act: () => done(everyone(item)) }, { label: cmd[4], act: () => done(once(who, item)) }]);
@@ -979,6 +1070,7 @@ async function main() {
     panel.set([{ label: cmd[3], act: () => go(false) }, { label: cmd[4], act: () => close() }]);
   };
   let looking = false, talking = false;
+  let marking: ((x: number, y: number) => void) | null = null;   // _Mark: the next direction picks a square
   view.canvas.addEventListener('click', e => {
     if (panel.open) return;
     const t = view.cellAt(e, level.loc.kind === 'room' ? 5 : lead.x, level.loc.kind === 'room' ? 4 : lead.y);
@@ -1007,6 +1099,7 @@ async function main() {
     if (!k) return;
     e.preventDefault();
     if (looking) { looking = false; look(lead.x + k[0], lead.y + k[1]); return; }
+    if (marking) { const f = marking; marking = null; message = ""; f(lead.x + k[0], lead.y + k[1]); render(); return; }
     if (talking) { talking = false; void talkAt(lead.x + k[0], lead.y + k[1]).then(render); return; }
     queue = queue.then(() => step(...k)).catch(err => { status.textContent = String(err); console.error(err); });
   });
