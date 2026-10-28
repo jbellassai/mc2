@@ -38,7 +38,7 @@ Every item has a base **value** in `_lootvalues` (DS:2E72, `docs/rules/economy.m
 Weapons 09–1E map to `WEAPDATA` rows `code − 9` (table in `combat.md`). `_GetWpnSkl`: in-hand item < 0x12 → sword skill, < 0x1A → axe, < 0x1F → archery, else fist.
 
 ## Consumables (*Use*: `_DoUse`, handler table `UVECTBL` EXE 0C2F:0521, handlers FFRE 0C2F:0561–0760)
-*Use* offers items 0x31–0x50 and 0x5B; `_DoUse` runs the item's handler and, if it returns non-zero, removes **one** of the item from the user's pack — instruments (Lyre, Lute, Flute, Bandore) are never used up. A handler that finds nothing to do still returns 1, so **a wasted Potion or Sermin is consumed** ("%o uses a %l.").
+*Use* (`_UseItem`, EXE 1957:05E2) lists the acting member's items 0x31–0x50 and 0x5B ("Select.", comtxt 0x2B; none → returns silently). For items flagged in DS:0x8AE (Food … Turpin, Loka, Medicin) a party of 2+ is asked "Is this order for everyone?" (comtxt 0x3C, `_AllDoit`): *Yes* runs the handler for every member holding one ("%o uses a %l.", 0x38) and prints "%o has no %ls." (0x3E) for the others. Alone: a handler returning 0 prints the item's `_NoUse` text (comtxt number per item at DS:0x2D9A: 0xB9 "%h can't use the %l now.", 0xBA "…here.", 0x83 "Nothing happens."); otherwise "%o uses a %l." (not for instruments). `_DoUse` runs the item's handler and, if it returns non-zero, removes **one** of the item from the user's pack — instruments (Lyre, Lute, Flute, Bandore) are never used up. A handler that finds nothing to do still returns 1, so **a wasted Potion or Sermin is consumed** ("%o uses a %l.").
 
 | item | effect |
 |---|---|

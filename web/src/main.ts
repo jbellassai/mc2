@@ -21,6 +21,7 @@ async function main() {
   const view = await View.create(document.getElementById('view') as HTMLCanvasElement);
   const [cmd, p02, comtxt, npctypes, items, p97, p93, conds] = await Promise.all(['commands', 'p02text', 'comtxt', 'npctypes',
     'items', 'p97text', 'p93text', 'conds'].map(n => json<string[]>(`${n}.json`)));
+  const tables = await json<{ hungerhours: number[]; nousetext: number[]; useall: number[] }>('exetables.json');
   const hero = await Hero.profile(0);                        // profile A until character creation exists
   const clock = Clock.newGame();
   // Dev aids: ?hour=20 starts in the evening, ?at=74,25 starts on another square.
@@ -56,6 +57,7 @@ async function main() {
   /** The hour tick: who is about, and the inns' noon checkout (P92). */
   const hourly = () => {
     figures = level.figures(clock, events, party.away);
+    party.hunger(tables.hungerhours);
     if (clock.hour !== 12 || clock.minute !== 0) return;
     if (!noon().includes(service?.kind === INN ? service.room : -1)) return;
     if (panel.open) panel.line(level.loc.texts[9]); else message = level.loc.texts[9];   // "It's time to check out."
@@ -354,13 +356,50 @@ async function main() {
   const campCmd = () => {
     const inn = service?.kind === INN && service.room < 0x5c ? service.room - 0x40 : -1;
     if (inn >= 0 && lead.x >= 4 && lead.y >= 5) { message = say(comtxt[0x24]); return render(); }
-    camp({ party, clock, cmd, p93, tick, rent: () => inn >= 0 ? rent[inn] : null, done: () => {
+    camp({ party, clock, cmd, p93, items, use: () => useCmd(), tick, rent: () => inn >= 0 ? rent[inn] : null, done: () => {
       close();
       if (inn < 0 || rent[inn]) return;
       party.place(roomStart.x, roomStart.y);
       message = level.loc.texts[9];   // "It's time to check out." (assumption: ovl_167f's text number is not traced)
       render();
     } });
+  };
+  /** Use (U), _UseItem: the member's items 0x31-0x50 and 0x5B ("Select."). For the consumables (DS:8AE) a party of
+   *  2+ is asked "Is this order for everyone?": then each member holding one uses it ("%o uses a %l.") or "%o has no %ls.".
+   *  Alone: success "%o uses a %l.", nothing to do → the item's _NoUse text. The original acts as `_curpla`; the port
+   *  asks whose pack first. */
+  const useCmd = () => {
+    const fmt = (s: string, who: Hero, item: number) => format(s.replace(/%l/g, items[item]), who, who.name);
+    const usable = (who: Hero) => [...new Set(who.rec.h_invitem.filter(c => c > 0x30 && c < 0x51 || c === 0x5b))];
+    const done = (text: string) => { panel.line(text.trim()); panel.set([{ label: cmd[0], act: () => close() }]); };
+    const once = (who: Hero, item: number) => {
+      const slot = who.slot(item);
+      if (!who.use(item, tables.hungerhours[who.rec.h_race as number])) return fmt(comtxt[tables.nousetext[item]], who, item);
+      who.dec(slot);
+      return fmt(comtxt[0x38], who, item);
+    };
+    const everyone = (item: number) => party.members.map(({ hero: who }) => {
+      const slot = who.slot(item);
+      if (slot < 0) return fmt(comtxt[0x3e], who, item);
+      who.use(item, tables.hungerhours[who.rec.h_race as number]); who.dec(slot);
+      return fmt(comtxt[0x38], who, item);
+    }).join(' ');
+    const pick = (who: Hero, item: number) => {
+      panel.line(`> ${items[item]}`, 'you');
+      if (!tables.useall.includes(item) || party.members.length < 2) return done(once(who, item));
+      panel.line(say(comtxt[0x3c]));
+      panel.set([{ label: cmd[3], act: () => done(everyone(item)) }, { label: cmd[4], act: () => done(once(who, item)) }]);
+    };
+    const list = (who: Hero) => {
+      const codes = usable(who);
+      if (!codes.length) return close();                                           // nothing usable: the original just returns
+      panel.show();
+      panel.line(comtxt[0x2b]);                                                   // "Select."
+      panel.set([...codes.map(c => ({ label: items[c], act: () => pick(who, c) })), { label: cmd[0], act: () => close() }]);
+    };
+    if (party.members.length < 2) return list(hero);
+    panel.show();
+    panel.set([...party.members.map(m => ({ label: m.hero.name, act: () => list(m.hero) })), { label: cmd[0], act: () => close() }]);
   };
   let looking = false, talking = false;
   view.canvas.addEventListener('click', e => {
@@ -379,6 +418,7 @@ async function main() {
     if (e.key === 'i' || e.key === 'I') { sheet(); return; }
     if (e.key === 'l' || e.key === 'L') { looking = true; message = say(comtxt[0x0d]); render(); return; }   // "Mark the target."
     if (e.key === 'c' || e.key === 'C') { campCmd(); return; }
+    if (e.key === 'u' || e.key === 'U') { useCmd(); return; }
     if (e.key === 't' || e.key === 'T') { talking = true; message = say(comtxt[0x0d]); render(); return; }
     const k = KEYS[e.key];
     if (!k) return;

@@ -1,7 +1,7 @@
 """Build the web port's data pack from the original files (decision 1). Never commit or publish the output.
 usage: export_json.py ORIGDIR OUTDIR -> OUTDIR/locations/*.json, tiledata/Bnn.json, tilesets/Vnn.png, sprites/E0n.png, conversations/Cnn.json,
        blocks.json, rooms.json, sprites.json, comtxt.json, items.json, heroes.json,
-       commands.json, npctypes.json, p90.json, p02text.json, p91text.json, p05.json, p97text.json, p93text.json, conds.json, companions.json
+       commands.json, npctypes.json, p90.json, p02text.json, p91text.json, p05.json, p97text.json, p93text.json, conds.json, companions.json, exetables.json
 Schema: docs/data_schema.md. Byte strings are lowercase hex; every list is in file order."""
 import json, os, struct, sys
 sys.path.insert(0, os.path.dirname(__file__))
@@ -246,6 +246,10 @@ def main(src, dst):
                     'task': u8(0x233, 15), 'lists': [list(x) for x in p05[0x28B:0x2B9].split(b'\0')],
                     'texts': [x.decode('latin1') for x in v05[7:].split(b'\0')[:48]]},
         'lodge': {'mask': u8(0x247, 3), 'cost': 200}})
+    dump(f'{dst}/exetables.json', {   # small EXE rule tables (rules/items.md, time_weather.md)
+        'hungerhours': list(exe[ds + 0x3AA8:ds + 0x3AAE]),                                      # HUNGERHOURS by race
+        'nousetext': list(exe[ds + 0x2D9A:ds + 0x2D9A + 0x5C]),                                # _NoUse comtxt per item
+        'useall': [i + 0x31 for i in range(32) if struct.unpack_from('<H', exe, ds + 0x8AE + 2 * i)[0]]})   # _AllDoit asks
     ct = ds + 0x9F8   # common text, message n = n-th string
     dump(f'{dst}/comtxt.json', [x.decode('latin1') for x in exe[ct:ct + 0x4000].split(b'\0')[:400]])
     print(f'{n} locations, {len(blocks)} blocks, {sum(map(len, rooms.values()))} room chunks')

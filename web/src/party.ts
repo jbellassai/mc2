@@ -58,6 +58,19 @@ export class Party {
   /** P02 ovl_0fca: walking in town, every second tick costs everyone 1 energy. */
   walkTired() { for (const { hero } of this.members) { hero.lose('h_energy', 1); hero.isHeTr(); } }
 
+  /** P92 ovl_039d, hourly: h_lastmeal++ (cap 255); at the race's hunger hours a member holding more than 5 Food
+   *  eats one (_DoUse → _EatMeal, silent), otherwise _IsHeHu marks Hungry/Starving. */
+  hunger(hungerhours: number[]) {
+    for (const { hero } of this.members) {
+      const r = hero.rec as Record<string, number>, hours = hungerhours[r.h_race];
+      if (r.h_lastmeal < 0xff) r.h_lastmeal++;
+      if (r.h_lastmeal < hours) continue;
+      const slot = hero.slot(0x31);
+      if (slot >= 0 && hero.rec.h_invamt[slot] > 5) { hero.use(0x31, hours); hero.dec(slot); }
+      else hero.isHeHu(hours);
+    }
+  }
+
   static async companion(num: number): Promise<HeroRecord> {
     return structuredClone((await json<HeroRecord[]>('companions.json'))[num - 1]);
   }

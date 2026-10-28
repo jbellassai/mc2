@@ -15,6 +15,7 @@ Built by `.venv/bin/python -I tools/export_json.py original out/pack`; never com
 | `items.json` | item names by code (`_w_objects`, 0x00–0x5C) |
 | `companions.json` | the 31 companions' starting `HERO` records from `R90.MCV` (index = `h_orinum` − 1, plain gold) |
 | `p93text.json` | camp texts (P93 file 0x3D): 0 "Is everyone going to sleep?", 1 "%o will sleep.", … 8 "Camp activities are in progress." (`rules/camp.md`) |
+| `exetables.json` | small EXE tables: `hungerhours[race]` (DS:3AA8), `nousetext[item]` (`_NoUse` comtxt number, DS:2D9A), `useall` (items whose *Use* asks "Is this order for everyone?", DS:8AE) |
 | `conds.json` | `_w_conds`: 0 "OK", then names for bits 15…5 of `h_cond1<<8 \| h_cond2` (Dead … Tired); `_SumStat` shows the highest set bit |
 | `p97text.json` | P97 hire/dismiss texts (file 0x17): 0 the King's refusal, 1 the hireling's offer, 2–6 dismissal replies |
 | `heroes.json` | the five new-game profiles A–E as `HERO` records (field names from `structs.h`; `h_gold` is `{hundreds, units}` here) |

@@ -59,6 +59,48 @@ export class Hero {
     r[field] = Math.max(0, r[field] - n);
   }
 
+  /** _IsHeHu: Hungry (cond2 0x40) from `hours` since the last meal, Starving (cond1 0x04) from 4× that. */
+  isHeHu(hours: number) {
+    const r = this.rec as Record<string, number>;
+    r.h_cond1 &= ~0x04; r.h_cond2 &= ~0x40;
+    if (r.h_lastmeal < hours) return;
+    if (r.h_lastmeal < hours << 2) r.h_cond2 |= 0x40; else r.h_cond1 |= 0x04;
+  }
+
+  /** _EatMeal: one meal takes `hours` off h_lastmeal (silent). */
+  eatMeal(hours: number) {
+    const r = this.rec as Record<string, number>;
+    r.h_lastmeal -= Math.min(r.h_lastmeal, hours);
+    this.isHeHu(hours);
+  }
+
+  /** _DoUse handlers (FFRE 0C2F:0561…, rules/items.md, Consumables) outside combat; false = nothing to do
+   *  (handler 0x74E), true = used up. Instruments and the Mindstone are not built here. */
+  use(item: number, hours: number): boolean {
+    const r = this.rec as Record<string, number>;
+    switch (item) {
+      case 0x31: this.eatMeal(hours); return true;                                   // Food
+      case 0x32: {                                                                   // Potion
+        if (r.h_cond1 & 0x08) return true;                                           // Poisoned: wasted
+        const to = r.h_cond1 & 0x02 ? Math.max(10, r.h_hitpts) : r.h_hpmax;          // Ill: only up to 10
+        if (to < 100) r.h_hitpts = Math.max(r.h_hitpts, to);                          // _IncSta refuses results ≥ 100
+        return true;
+      }
+      case 0x33: {                                                                   // Sermin
+        const to = r.h_cond1 & 0x0a ? Math.max(15, r.h_energy) : 99;
+        r.h_energy = Math.max(r.h_energy, to); this.isHeTr(); return true;
+      }
+      case 0x34: r.h_inuse |= 0x80; return true;                                     // Gonshi: 4 actions next fight
+      case 0x35: r.h_inuse |= 0x40; return true;                                     // Nift: 3 shield charges
+      case 0x36: r.h_inuse |= 0x20; return true;                                     // Mirget: triple damage
+      case 0x37: r.h_inuse |= 0x10; return true;                                     // Luffin: undodgeable
+      case 0x38: r.h_inuse |= 0x08; return true;                                     // Turpin: magic skill 99
+      case 0x3c: r.h_cond1 &= ~0x08; return true;                                    // Loka cures Poisoned
+      case 0x3d: r.h_cond1 &= ~0x02; return true;                                    // Medicin cures Ill
+      default: return false;
+    }
+  }
+
   /** _SumStat: the condition shown is the highest set bit of cond1<<8 | cond2 (`conds` = _w_conds). */
   condition(conds: string[]): string {
     const c = (this.rec.h_cond1 as number) << 8 | (this.rec.h_cond2 as number);
