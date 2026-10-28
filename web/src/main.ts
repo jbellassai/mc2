@@ -9,16 +9,17 @@ import { Hero, PICK, STATS, SKILLS } from './hero';
 import { panel, type Button } from './panel';
 import { loadTrade, lot, single, prices, incObj, sellable } from './shop';
 import { ServiceRoom, noon, INN } from './service';
+import { Party } from './party';
 
 const status = document.getElementById('status')!;
-const START = { level: 'D02', x: 98, y: 18 };   // mutable for the ?at= dev aid     // new_game.md: window (93,14), leader at window cell (5,4)
+const START = { level: 'D02', x: 97, y: 17 };   // new_game.md: window (93,14) + (4,3), formation cell 0; mutable for ?at=
 const NEW_GAME_EVENTS = [10, 88, 117];
 const rnd = (n: number) => Math.floor(Math.random() * n);   // RndCo(n): 0 … n−1
 
 async function main() {
   const view = await View.create(document.getElementById('view') as HTMLCanvasElement);
-  const [cmd, p02, comtxt, npctypes, items] = await Promise.all([json<string[]>('commands.json'), json<string[]>('p02text.json'),
-    json<string[]>('comtxt.json'), json<string[]>('npctypes.json'), json<string[]>('items.json')]);
+  const [cmd, p02, comtxt, npctypes, items, p97] = await Promise.all([json<string[]>('commands.json'), json<string[]>('p02text.json'),
+    json<string[]>('comtxt.json'), json<string[]>('npctypes.json'), json<string[]>('items.json'), json<string[]>('p97text.json')]);
   const hero = await Hero.profile(0);                        // profile A until character creation exists
   const clock = Clock.newGame();
   // Dev aids: ?hour=20 starts in the evening, ?at=74,25 starts on another square.
@@ -26,11 +27,12 @@ async function main() {
   if (import.meta.env.DEV && q.has('hour')) clock.hour = Math.min(23, Math.max(0, Number(q.get('hour')) || 0));
   if (import.meta.env.DEV && q.has('at')) [START.x, START.y] = q.get('at')!.split(',').map(Number);
   const events = new Set(NEW_GAME_EVENTS);
-  const pos = { x: START.x, y: START.y, sprite: 0x3b };      // hero 0 = E00 tile 0x3B (_MCCPTile)
+  const party = new Party(hero, START.x, START.y);
+  const lead = party.leader;                                 // the acting member (_curpla) is always the leader for now
   let level = await Level.load(START.level);
   let outside: { level: Level; x: number; y: number } | null = null;   // where to return from a room
   let service: ServiceRoom | null = null;                               // the P05 room the party is in
-  let figures: Figure[] = level.figures(clock, events);
+  let figures: Figure[] = level.figures(clock, events, party.away);
   let message = `${hero.name} has landed in Telermain.`;
   const say = (s: string, other = '') => format(s, hero, other);
 
@@ -38,19 +40,20 @@ async function main() {
   setInterval(() => { phase++; render(); }, 300);
   const render = () => {
     const room = level.loc.kind === 'room';
-    view.draw(level, room ? 5 : pos.x, room ? 4 : pos.y, figures, [pos], phase);
+    view.draw(level, room ? 5 : lead.x, room ? 4 : lead.y, figures, party.members, phase);
     status.textContent = `${clock}  —  ${place()}${message ? '  —  ' + message : ''}`;
   };
   /** School and job D-files have no location name: show the town's. */
   const place = () => (level.loc.name.trim() || outside?.level.loc.name || '').replace(/\s+[MX]$/, '');
+  /** To a level with the formation origin at (x, y). */
   const go = (lv: Level, x: number, y: number) => {
-    level = lv; pos.x = x; pos.y = y;
-    figures = level.figures(clock, events);
+    level = lv; party.place(x, y);
+    figures = level.figures(clock, events, party.away);
   };
   const close = (msg = '') => { panel.hide(); message = msg; render(); };
   /** The hour tick: who is about, and the inns' noon checkout (P92). */
   const hourly = () => {
-    figures = level.figures(clock, events);
+    figures = level.figures(clock, events, party.away);
     if (clock.hour !== 12 || clock.minute !== 0) return;
     if (!noon().includes(service?.kind === INN ? service.room : -1)) return;
     if (panel.open) panel.line(level.loc.texts[9]); else message = level.loc.texts[9];   // "It's time to check out."
@@ -126,9 +129,34 @@ async function main() {
       speak(comtxt[0xc3] + coins(each) + pouch(s.item) + '.');
       if (max === 1) deal(1); else ask(comtxt[0xb6].trim() + ' ' + comtxt[0xb5] + comtxt[0xbe], max, deal);
     };
+    /** _Invite (EXE 2166:01D6) → P97 ovl_03f7 (rules/npcs.md, Companions). */
+    const invite = async () => {
+      panel.line(`> ${cmd[23]}`, 'you');
+      if (who.num >= 0x20) return speak(comtxt[0x1f]);              // ICANT: "I can't do that." (text read from its name, not traced)
+      const room = level.loc.kind === 'room';
+      const cell = party.members.length < 6 ? party.freeCell((x, y) => room || level.walkable(x, y) && !figureAt(x, y)) : -1;
+      if (cell < 0) return panel.line(comtxt[0x20]);                 // "No room!"
+      const rec = await Party.companion(who.num);
+      const join = () => {
+        party.add(rec, items, cell, who.x, who.y);
+        if (!room) party.place(lead.x, lead.y);                       // _NewPXY: town programs only
+        figures = level.figures(clock, events, party.away);
+        close(`${who.name}: ${comtxt[0x21]}`);                        // "I am honored."
+      };
+      if (rec.h_relatn === 3 && !events.has(65)) return speak(say(p97[0]));   // the King: `_events+8 & 2`
+      if (rec.h_relatn !== 2) return join();
+      speak(say(p97[1], who.name));                                   // "…for a fair share… Will %h hire %o?"
+      yesNo(() => {                                                   // ovl_0612: settlement every 7 days from hire day −1
+        rec.h_partybucks = rec.h_mybucks = 0;
+        const pay = rec.h_paydays as number[];
+        for (let i = 0, d = clock.date + 29; i < 4; i++, d += 7) pay[i] = d > 30 ? (d -= 30) : d;
+        join();
+      }, menu);
+    };
     const talkButtons = (): Button[] => [
       { label: 'News', act: () => { panel.line('> News', 'you'); speak(t.news() ?? t.ask('').text); } },
       { label: 'Weather', act: () => { panel.line('> Weather', 'you'); speak(t.weather(clock.weather) ?? t.ask('').text); } },
+      { label: cmd[23], act: () => void invite() },                     // Invite
       ...(t.shop.length ? [{ label: cmd[9], act: buy }, { label: comtxt[0x17b], act: sell }] : []),   // Buy, Sell
       { label: cmd[0], act: end }];
     function menu() {
@@ -147,7 +175,7 @@ async function main() {
   const enterRoom = async (door: Door) => {
     const ref = await resolveRoom(door, level.loc.pgms[door.pgm]);
     if (!ref) return void (message = 'This door leads somewhere not built yet.');
-    outside = { level, x: pos.x, y: pos.y };
+    outside = { level, x: lead.x, y: lead.y };
     go(await Level.loadRoom(ref), ref.start.x, ref.start.y);
     message = level.loc.name.trim() ? `${hero.name} enters ${level.loc.name}.` : '';   // which of D08/D09's room names applies is not traced
     service = ref.pgm.program === 5 ? await ServiceRoom.open(ctx, ref.room, ref.kind, level.loc.texts, level.loc.words) : null;
@@ -203,32 +231,47 @@ async function main() {
     lockedDoor(d);
   };
 
-  /** Room exits {x,y,pgm,tx,ty,datafile}: back to town `datafile` with the window at (tx,ty), leader at cell (5,4). */
+  /** Room exits {x,y,pgm,tx,ty,datafile}: back to town `datafile` with the window at (tx,ty), formation at window + (4,3). */
   const leave = async (exit: Exit) => {
     const id = `D${String(exit.datafile).padStart(2, '0')}`;
     if (exit.datafile !== undefined && exit.datafile !== 255)
-      go(outside?.level.id === id ? outside.level : await Level.load(id), exit.tx + 5, exit.ty + 4);
+      go(outside?.level.id === id ? outside.level : await Level.load(id), exit.tx + 4, exit.ty + 3);
     else if (outside) go(outside.level, outside.x, outside.y);
     outside = null; service = null;
     message = '';
   };
 
+  const figureAt = (x: number, y: number) => figures.find(f => f.x === x && f.y === y);
+  /** A step (rules/locations.md, A step). Town: the whole formation moves, members tested in slot order 5…0, and
+   *  one blocked member holds everyone. Rooms: only the acting member moves (_RMove moves `_p1x/_p1y[_curpla]`). */
   const step = async (dx: number, dy: number) => {
-    const x = pos.x + dx, y = pos.y + dy;
-    const who = figures.find(f => f.x === x && f.y === y);
-    const d = level.loc.doors.find(e => e.x === x && e.y === y);
-    const exit = level.loc.exits.find(e => e.x === x && e.y === y);
     const room = level.loc.kind === 'room';
-    if (who) { message = ''; if (!service?.talk()) await talkTo(who); }   // walking into someone talks to them (the original uses a Talk command)
-    else if (level.walkable(x, y) && !(room && exit)) {
-      pos.x = x; pos.y = y;
+    const who = figureAt(lead.x + dx, lead.y + dy);
+    if (who) {   // walking into someone talks to them (the original uses a Talk command)
       message = '';
-      if (clock.step()) hourly();
-    } else if (exit && room && service) service.leave(() => void leave(exit).then(render));
-    else if (exit && room) await leave(exit);
-    else if (d) await door(d);
-    else if (exit) message = 'The way out of town. The world map comes later.';
-    else message = `Blocked by ${level.tileName(x, y)}.`;
+      if (!service?.talk()) await talkTo(who);
+      return render();
+    }
+    const movers = room ? [lead] : [...party.members].reverse();
+    for (const m of movers) {
+      const x = m.x + dx, y = m.y + dy;
+      const exit = level.loc.exits.find(e => e.x === x && e.y === y);
+      const other = figureAt(x, y);
+      if (room && exit) {
+        if (service) service.leave(() => void leave(exit).then(render)); else await leave(exit);
+        return render();
+      }
+      if (other) { message = `Blocked by ${other.name ?? npctypes[other.type] ?? 'someone'}.`; return render(); }
+      const mate = party.at(x, y);                       // in town a mate's square is vacated by the same step
+      if (mate ? !room : level.walkable(x, y)) continue;
+      const d = level.loc.doors.find(e => e.x === x && e.y === y);
+      if (d && !mate) { await door(d); return render(); }
+      message = exit ? 'The way out of town. The world map comes later.' : `Blocked by ${mate ? mate.hero.name : level.tileName(x, y)}.`;
+      return render();
+    }
+    for (const m of movers) { m.x += dx; m.y += dy; }
+    message = '';
+    if (clock.step()) hourly();
     render();
   };
 
@@ -249,8 +292,8 @@ async function main() {
   };
   const chunks = <T,>(a: T[], n: number) => Array.from({ length: Math.ceil(a.length / n) }, (_, i) => a.slice(i * n, i * n + n));
   /** Character sheet (the original's Inven): attributes, skills, coins, pack. */
-  const sheet = () => {
-    const r = hero.rec;
+  const sheet = (who: Hero = hero) => {
+    const r = who.rec;
     const table = (title: string, rows: [string, string][]) => {
       const t = document.createElement('table'); t.className = 'sheet';
       t.createCaption().textContent = title || '\u00a0';
@@ -262,10 +305,11 @@ async function main() {
       table(`${r.h_fullnm}`, [['Hit points', `${r.h_hitpts} / ${r.h_hpmax}`], ['Energy', String(r.h_energy)], ['Coins', String(r.h_gold)],
                               ...STATS.map(([f, l]) => [l, String(r[f])] as [string, string])]),
       table('Skills', SKILLS.map(([f, l]) => [l, String(r[f])] as [string, string])),
-      ...chunks(hero.pack().map(p => [p.name + (p.worn ? ' (worn)' : p.hand ? ' (in hand)' : ''), p.count] as [string, string]), 12)
+      ...chunks(who.pack().map(p => [p.name + (p.worn ? ' (worn)' : p.hand ? ' (in hand)' : ''), p.count] as [string, string]), 12)
         .map((rows, i) => table(i ? '' : 'Pack', rows)));
     panel.show(); panel.add(wrap);
-    panel.set([{ label: cmd[0], act: () => close(message) }]);   // End
+    panel.set([...(party.members.length > 1 ? party.members.map(m => ({ label: m.hero.name, act: () => sheet(m.hero) })) : []),
+               { label: cmd[0], act: () => close(message) }]);   // End
   };
   /** Talk + direction: the person there, or "%h talks to" the square (comtxt 0x11). In a service room the keeper
    *  answers whatever square is marked (assumption: how the original routes Talk to `_swgreet = −3` is not traced). */
@@ -279,7 +323,7 @@ async function main() {
   let looking = false, talking = false;
   view.canvas.addEventListener('click', e => {
     if (panel.open) return;
-    const t = view.cellAt(e, level.loc.kind === 'room' ? 5 : pos.x, level.loc.kind === 'room' ? 4 : pos.y);
+    const t = view.cellAt(e, level.loc.kind === 'room' ? 5 : lead.x, level.loc.kind === 'room' ? 4 : lead.y);
     look(t.x, t.y);
   });
 
@@ -296,8 +340,8 @@ async function main() {
     const k = KEYS[e.key];
     if (!k) return;
     e.preventDefault();
-    if (looking) { looking = false; look(pos.x + k[0], pos.y + k[1]); return; }
-    if (talking) { talking = false; void talkAt(pos.x + k[0], pos.y + k[1]).then(render); return; }
+    if (looking) { looking = false; look(lead.x + k[0], lead.y + k[1]); return; }
+    if (talking) { talking = false; void talkAt(lead.x + k[0], lead.y + k[1]).then(render); return; }
     queue = queue.then(() => step(...k)).catch(err => { status.textContent = String(err); console.error(err); });
   });
   render();

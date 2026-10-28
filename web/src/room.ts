@@ -26,6 +26,6 @@ export async function resolveRoom(door: Door, pgm: Pgm): Promise<RoomRef | null>
   if (chunk === undefined) return null;
   // P05's base table covers rmtyp 0-8; P08/P09 placement is not traced yet, so they use the store base.
   const k = pgm.program === 5 && rmtyp < BASE_X.length ? rmtyp : 0;
-  // Assumption: a lone leader stands in the formation's centre cell (+1,+1).
-  return { id, pgm, index: idx, room: door.id, kind: rmtyp, map: { g: rm.g, chunk }, start: { x: BASE_X[k] + 1, y: BASE_Y[k] + 1 } };
+  // `start` = formation origin; members stand at start + (cell mod 3, cell div 3) (P05 ovl_19b0, FFSAVE).
+  return { id, pgm, index: idx, room: door.id, kind: rmtyp, map: { g: rm.g, chunk }, start: { x: BASE_X[k], y: BASE_Y[k] } };
 }

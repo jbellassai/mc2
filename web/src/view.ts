@@ -1,4 +1,4 @@
-// Tile view centred on the party leader. Original window is 11×9 with the leader at (5,4); the port shows more.
+// Tile view centred on the party leader. Original window is 11×9 with the party's 3×3 formation at (4,3)-(6,5); the port shows more.
 import { image, json, type Sprites } from './pack';
 import type { Level, Figure } from './level';
 
@@ -10,6 +10,7 @@ export class View {
                       private sprites: Sprites) {
     canvas.width = COLS * TILE; canvas.height = ROWS * TILE;
     canvas.style.width = `${COLS * TILE * 3}px`;
+    canvas.style.aspectRatio = `${COLS} / ${ROWS}`;   // keeps square tiles when max-height shrinks it
     this.ctx = canvas.getContext('2d')!;
     this.ctx.imageSmoothingEnabled = false;
   }

@@ -74,13 +74,13 @@ export class Level {
   }
 
   /** _SetNPCs: townsfolk by day/night, named NPCs by hours and event conditions (npcs.md). */
-  figures(clock: Clock, events: Set<number>): Figure[] {
+  figures(clock: Clock, events: Set<number>, away: Set<number> = new Set()): Figure[] {
     const out: Figure[] = [];
     const light = clock.daylight();
     for (const g of this.loc.townsfolk)
       if (g.num >= 0xfc || (g.num === 0xfa && light) || (g.num === 0xfb && !light)) out.push(g);
     for (const n of this.loc.npcs) {
-      if (!clock.within(n.appear, n.disappear)) continue;
+      if (away.has(n.num) || !clock.within(n.appear, n.disappear)) continue;   // _npcsta: in the party
       if (n.ifevent && !events.has(n.ifevent)) continue;
       if (n.ifnevent && events.has(n.ifnevent)) continue;
       out.push({ ...n, name: this.loc.words[n.name] });
