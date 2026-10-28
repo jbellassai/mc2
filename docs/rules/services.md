@@ -80,7 +80,7 @@ The subject is a keyword (`WMatch` against the library's `gwrds`). Each library 
 | 13 | 7E | 45 | 0 | list 3 |
 | 14 | 7E | 55 | 0 | list 11 |
 
-`h_research < required` → "skill is not sufficient". Days 0: the party waits `(100 − research)/4 + 1` five-minute ticks and the text list (file 0x28B: NUL-separated lists of `loctext` numbers of that library's D-file: 1 `[9]`, 2 `[10,11,12]`, 3 `[13,14,15]`, 4 `[17,18,19]`, 5 `[20–24]`, 6 `[25–28]`, 7 `[33,34,35]`, 8 `[36–39]`, 9 `[40,41,42]`, 10 `[43,44]`, 11 `[45,46,47]`) is read aloud. Days > 0: the member must hold the matching scroll (`SearchInv(task + 0x2E)`, else "requires a magical %a"), then `h_actvty = task`, `h_actmisc = scroll item`, `h_actdays = days` and the scroll is "unrolled"; on completion `h_invamt[scroll] |= 0x80` ("places the %a in %p pack"). TODO: who reads the 0x80 flag on scrolls (quest scripts).
+`h_research < required` → "skill is not sufficient". Days 0: the party waits `(100 − research)/4 + 1` five-minute ticks and the text list (file 0x28B: NUL-separated lists of `loctext` numbers of that library's D-file: 1 `[9]`, 2 `[10,11,12]`, 3 `[13,14,15]`, 4 `[17,18,19]`, 5 `[20–24]`, 6 `[25–28]`, 7 `[33,34,35]`, 8 `[36–39]`, 9 `[40,41,42]`, 10 `[43,44]`, 11 `[45,46,47]`) is read aloud. Days > 0: the member must hold the matching scroll (`SearchInv(task + 0x2E)`, else "requires a magical %a"), then `h_actvty = task`, `h_actmisc = scroll item`, `h_actdays = days` and the scroll is "unrolled"; on completion `h_invamt[scroll] |= 0x80` ("places the %a in %p pack"). The flag is read by the Dark Candle rooms (`P07 ovl_06c2`: an undeciphered scroll is "blank", `locations.md`).
 
 ## Wizards' lodge (`_rmtyp 5`, D11) — "memorize spells up to 7 days"
 

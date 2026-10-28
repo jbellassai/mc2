@@ -73,7 +73,7 @@ A combatant record (`CMBTNT`, 33 bytes) may cast `G_curspl` when: state flags (`
 `_RndCo(n)` = `rand()·n / 0x8000`, i.e. uniform 0‥n−1 (`rand()` is Borland's LCG, `(seed·0x15A4E35+1) >> 16 & 0x7FFF`).
 
 ## Skill caps — `_MaxSkill(?, hero, skill)`
-`_maxtbl` DS:2C7E (6 skills × 6 races): [99, 40, 75, 60, 60, 75, 75, 10, 25, 50, 99, 50, 80, 25, 99, 80, 75, 50, 75, 99, 75, 0, 0, 0, 99, 40, 99, 50, 75, 99, 99, 30, 99, 99, 10, 30]. Index = `skill*6 + h_race`; skill 3 (magic) is 0 for a hero with `h_magic == 0`. Race/skill order TODO.
+`_maxtbl` DS:2C7E (first 6 of 20 skills × 6 races): [99, 40, 75, 60, 60, 75, 75, 10, 25, 50, 99, 50, 80, 25, 99, 80, 75, 50, 75, 99, 75, 0, 0, 0, 99, 40, 99, 50, 75, 99, 99, 30, 99, 99, 10, 30]. Index = `skill*6 + h_race`; skill 3 (magic) is 0 for a hero with `h_magic == 0`. The full 20 × 6 table with skill and race names is in `skills.md`.
 
 ## Resident spell effects (FFFAR, INT 62h; `decomp/overlays/FFFAR.c`)
 All go through `ovl_3228`: pick a target (`EXE_SpelTarg`), play sound 10 and effect `Spef4`, then:

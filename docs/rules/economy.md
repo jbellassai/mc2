@@ -83,7 +83,7 @@ So a hireling expects roughly a quarter of the party's take; giving them less th
 For each volunteer (`h_relatn == 1`) after a fight: `attitude = max(0, attitude + h_loyalty − 20)`. If attitude ≤ 40 and `RndCo(80) ≥ attitude` and `RndCo(12) ≥ h_loyalty`, the member leaves the party (P95 local text 0x10D, slot freed, `_swass = 3`). Loyalty is 0–12 per companion, so every fight costs 8–20 attitude; nothing in the trade code raises it (TODO: find what does — gifts do not).
 
 ## Other gold sinks
-- `P01 ovl_0fcc`: "How many days shall I stay here and wait (1-30)?" charges `days × rate` (`_capdays`, rate table P01 @0x34A) via `_DecGold` — a companion waiting somewhere; semantics TODO.
-- `P05` (mindstone location): 200 coins (`DecObj0(0, 200)`) for a mindstone service; TODO.
+- `P01 ovl_0fcc`: a ship captain's anchored-wait days, `days × rate` (`ships.md`).
+- `P05`: 200 coins to rent a spell-book group at a wizards' lodge (`services.md`).
 - `P09` puzzle rooms compare `h_gold` against a local price `OV_0x767`.
 - Captive ransom (`_capcost`) is not referenced by any decompiled code.

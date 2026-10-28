@@ -63,7 +63,7 @@ Shield points (`c_shield`, +12) absorb first: `DAM = max(0, AX − shield)`, `sh
 | 20 | Elvenbow | 6 | 18 | bow | | 0 | 0 | any | |
 | 21 | Darkfinder | 5 | 24 | bow | yes | 1 | 20 | race 2 (Elf) | |
 
-"min str" (`wp_minst`) is subtracted in the hit formula, so strength above the minimum is what counts. Whether it is also an equip requirement is TODO (`_WeapSel`).
+"min str" (`wp_minst`) is subtracted in the hit formula, so strength above the minimum is what counts. It is also the equip requirement: drawing a weapon (`_DrawWeap`, EXE 0957:07F0; the list from `FAR_WEAPSEL` offers inventory items 9–0x1E) refuses when `wp_race ≠ 0xFF` and `≠ h_race` ("Only a %a can wield that.", comtxt 0x103), when the item's `h_invamt ≥ 0xE4` ("It's broken!", 0x39), or when `h_strngth < wp_minst` ("%h is not strong enough to wield that!", 0x69). Otherwise `h_inhand` = that slot ("%h draws …"). *Sheathe* sets `h_inhand = 0xFF` (fists) for one member or the whole party.
 
 ## Races (`DS:409x` name table; `h_race` / `c_race`)
 0 Human, 1 Wizard, 2 Elf, 3 Halfling, 4 Dwarf, 5 Orc, 6 Zorlim, 7 Tekhir, 8 Troll, 9 Goblin, 10 Sandgu, 11 Slime, 12 Minotaur, 13 Domug, 14 Skeleton, 15 Zombie, 16 Kurdazi, 17 Jerrah, 18 Barg, 19 Zebani, 20 Gragan, 21 Mongor, 22 Fermigon, 23 Gnoll, 24 Ogre, 25 Gaem, 26 Zumagin, 27 Hibliss, 28 Vankruh, 29 Naur, 30 Zakhad, 31 Urgodot, 32 Doombeast, 33 Mizigu, 34 Aciden, 35 Flamebelly, 36 Dreadknight … Party races are 0–5 (six rows in `_maxtbl`). Monster stat records (`MSTATS`, 23 bytes) are reached as `_monsptr[race − 5]`.

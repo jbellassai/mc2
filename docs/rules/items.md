@@ -45,7 +45,7 @@ Weapons 09–1E map to `WEAPDATA` rows `code − 9` (table in `combat.md`). `_Ge
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | 1 | 2 | 3 | 4 | 5 | 6 | 8 | **10** | **15** | 1 | 2 | 4 |
 
-Armour subtracts flat from each hit (`DAM = max(0, HIT − c_armor)`, combat.md). Nothing in the EXE or V06 restricts armour by race or strength; equip restrictions, if any, are in the wear UI (TODO, FFFAR item menu). `LOCTYPE.pearlsw` is unrelated to Pearl plate: it marks locations whose **map** command needs a Pearl (item 1) instead of the free minimap (`P02 ovl_13c4`).
+Armour subtracts flat from each hit (`DAM = max(0, HIT − c_armor)`, combat.md). Nothing in the EXE or V06 restricts armour by race or strength; the camp *Put* command (`camp.md`) checks none either. Weapons do have equip checks (race, strength, broken — `combat.md`, weapon table). `LOCTYPE.pearlsw` is unrelated to Pearl plate: it marks locations whose **map** command needs a Pearl (item 1) instead of the free minimap (`P02 ovl_13c4`).
 
 ## Clothing
 Items 0x2B–0x30 only matter on the world map (energy per step by weather, `time_weather.md`); a tailor's work (`_tailorcharm`) reduces the penalty.
