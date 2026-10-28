@@ -30,6 +30,7 @@ export interface Location {
   residents: { name: number; num: number; appear: number; disappear: number; ifevent: number; ifnevent: number }[];
   roommap?: { g: number; chunks: number[] } | null;
   hrooms?: HRoom[];
+  spots?: { x: number; y: number; type: number; d1: number; d2: number; d3: number }[];
   locdiff: number;
 }
 

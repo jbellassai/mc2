@@ -106,7 +106,7 @@ The same roll serves every non-combat skill through `_SkillUp0` (INT 62h AH=0x31
 | 2 (8) | 6,6,6,7,7,9 | 2,4,6,3,5,4 | right |
 | 3 (9) | 3,5,7,4,6,5 | 5,5,5,6,6,7 | bottom |
 
-- Monsters (P96 file 0x19 = x ranges, 0x29 = y ranges, `{lo,hi}` **byte** pairs, 8 each: sides 6–9 melee, then sides 6–9 casters; a random cell in the rectangle, re-rolled until `_PlacePerson` finds a free passable cell; wilderness fights instead take a random cell of the whole 11×9 map, scanning forward from `RndCo(99)+17` for a free one):
+- Monsters (P96 file 0x19 = x ranges, 0x29 = y ranges, `{lo,hi}` **byte** pairs, 8 each: sides 6–9 melee, then sides 6–9 casters; a random cell in the rectangle moved by `_PlacePerson`, re-rolled until the square is free and reachable from the first hero (`_blobmap` < 100, flood-filled over the background; P96 `ovl_10ec`). Wilderness fights (`_cmbtyp` 1) use side 6's rectangles like rooms; only **street** fights (`_cmbtyp` 0, ambushes) take a cell of the whole 11×9 view: index `RndCo(99)`, then +17 mod 99 until a free reachable one (correction: this scan was earlier attributed to the wilderness). Heroes: wilderness formation 0, rooms formation `side − 6` (both via `_PlacePerson`), street = their squares relative to the view (`_p1x/_p1y − _winxy`):
 
 | side | melee monsters | casters (`c_magskl ≠ 0`, except Vankruh and Doombeast) |
 |---|---|---|

@@ -75,6 +75,13 @@ export class Level {
     return lv;
   }
 
+  /** The 11×9 view of `lv` with its top-left at (x0, y0), same tileset: a street fight's arena (P96 `_cmbtyp` 0). */
+  static view(lv: Level, x0: number, y0: number): Level {
+    const v = new Level(lv.id, { ...lv.loc, kind: 'room', mapsize: [11, 9], exits: [], townsfolk: [], npcs: [], doors: [] }, lv.tileset, lv.tiles, lv.data);
+    for (let y = 0; y < 9; y++) for (let x = 0; x < 11; x++) v.cells[y * 11 + x] = lv.tile(x0 + x, y0 + y);
+    return v;
+  }
+
   /** Overwrite one map square (room features: chest, fountain, doors). */
   set(x: number, y: number, tile: number) { this.cells[y * this.w + x] = tile; }
 

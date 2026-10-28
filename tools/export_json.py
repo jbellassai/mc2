@@ -242,6 +242,10 @@ def main(src, dst):
                              'clothing': [list(p01[0x2A2 + 12 * k:0x2AE + 12 * k]) for k in range(7)],   # rows 0x2B-0x30, then none
                              'regions': [list(p01[0x236 + 4 * k:0x23A + 4 * k]) for k in range(16)],    # {x0,y0,x1,y1}, first match
                              'patchtiles': list(p01[0x36A:0x374])})   # mushroom-patch tileset by terrain class (ovl_09bf)
+    p02 = open(f'{src}/P02.MCO', 'rb').read()   # special spots (rules/locations.md, Special spots)
+    v02 = open(f'{src}/V02.MCO', 'rb').read()
+    dump(f'{dst}/spots.json', {'ambush': {'ids': list(p02[0x1743:0x1749]), 'events': list(p02[0x1749:0x174F])},
+                               'remarks': {'ids': list(v02[0xBDB:0xBF6]), 'events': list(v02[0xBF6:0xC11]), 'locspecs': list(v02[0xC11:0xC2C])}})
     p07 = open(f'{src}/P07.MCO', 'rb').read()   # dungeon rooms (rules/locations.md): chest/fountain texts, trap bits
     dump(f'{dst}/p07.json', {'texts': [x.decode('latin1') for x in p07[0x806:0x980].split(b'\0')[:15]], 'trap': list(p07[0x804:0x806]),
                              'doorx': list(p07[3:11]), 'doory': list(p07[11:19])})   # door n squares: (x[2n+k], y[2n+k])

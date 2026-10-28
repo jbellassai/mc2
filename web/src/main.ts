@@ -358,7 +358,7 @@ async function main() {
   let actor: Rec | null = null;
   /** P01 ovl_0846 → _DoACmbt: a wilderness fight on G00 chunk `ter`; `won` runs on victory (e.g. the guard is cleared).
    *  "COMBAT!" (comtxt 0x44), then rounds: the party phase, hero by hero, then the monster phase (P94 ovl_02e8). */
-  const startFight = (lv: Level, f: Fight, diff: number, won: () => void, after: (() => void) | null = null) => {
+  const startFight = (lv: Level, f: Fight, diff: number, won: () => void, after: (() => void) | null = null, ambush = false) => {
     outside = { level, x: lead.x, y: lead.y };
     level = lv;
     figures = [];
@@ -367,10 +367,10 @@ async function main() {
     autoHeroes.clear(); heading = false;
     if (import.meta.env.DEV) Object.assign(window, { dbg: { fight } });   // for scripts/shot.mjs eval:
     panel.show();
-    panel.line(comtxt[0x44]);
+    panel.line(comtxt[ambush ? 0x7c : 0x44]);                         // "AMBUSH!" / "COMBAT!"
     fight.newRound();
     onWin = won; fightDiff = diff;
-    partyTurn();
+    if (ambush) void monsterPhase(); else partyTurn();                // `_ambflg`: the monsters move first
   };
   let onWin = () => {}, fightDiff = 0, afterWin: (() => void) | null = null;
   /** The next hero with actions left acts; when none is left, the monsters' phase. */
@@ -761,7 +761,61 @@ async function main() {
     message = '';
     if (patch) pickAt(lead.x, lead.y);
     walked();
+    if (level.loc.kind === 'level') await spotsAround();
     render();
+  };
+
+  // ---- special spots (rules/locations.md, Special spots; P02 ovl_189d/ovl_151a) ----
+  const spotTables = await json<{ ambush: { ids: number[]; events: number[] }; remarks: { ids: number[]; events: number[]; locspecs: number[] } }>('spots.json');
+  const ambushed = new Set<number>();                                 // `_ambush` bits by ambush id
+  let spotsDone = new Set<number>(), spotsLevel = '';                 // `_spetbldone`, kept while on the same level
+  /** After a step: the 3×3 squares around the leader, the first record per square (row by row from the top left;
+   *  the original's scan order was not traced). */
+  const spotsAround = async () => {
+    if (spotsLevel !== level.id) { spotsDone = new Set(); spotsLevel = level.id; }
+    const list = level.loc.spots ?? [];
+    for (let y = lead.y - 1; y <= lead.y + 1; y++) for (let x = lead.x - 1; x <= lead.x + 1; x++) {
+      const i = list.findIndex((p, k) => p.x === x && p.y === y && !spotsDone.has(k) && p.type !== 2 && p.type !== 3);
+      if (i < 0) continue;
+      const p = list[i], on = party.members.some(m => m.x === x && m.y === y);
+      if (p.type === 0 && !ambushed.has(p.d2)) return ambushAt(p);
+      if ((p.type === 1 || p.type === 5) && on) return jump(p.d1, p.d2, p.d3, comtxt[p.type === 1 ? 0x7b : 0x7e]);
+      if (p.type === 6 && remark(p)) spotsDone.add(i);
+    }
+  };
+  /** Type 0, an ambush: group d1, ambush id d2 (its `_ambush` bit set once won; ids 12, 101, 97, 108, 155, 110 also set
+   *  events 49, 70, 71, 72, 90, 107 when they trigger). A street fight on the view around the party, `_diff` = locdiff − 1;
+   *  the monsters move first unless `RndCo(200)` is below the party's best tracking ("%o detects an ambush!", 0xBB).
+   *  (The Sense spell's detection is not modelled.) */
+  const ambushAt = (p: { d1: number; d2: number }) => {
+    const k = spotTables.ambush.ids.indexOf(p.d2);
+    if (k >= 0) events.add(spotTables.ambush.events[k]);
+    const best = party.members.reduce((a, m) => (m.hero.rec.h_track as number) > (a.hero.rec.h_track as number) ? m : a);
+    const seen = rnd(200) < (best.hero.rec.h_track as number);
+    if (seen) message = format(comtxt[0xbb], hero, best.hero.name);
+    const wx = lead.x - 4, wy = lead.y - 3, lv = Level.view(level, wx, wy), diff = Math.max(0, level.loc.locdiff - 1);
+    const f = Fight.street(cdata, lv, party.members, p.d1, diff, party.members.map(m => ({ x: m.x - wx, y: m.y - wy })));
+    startFight(lv, f, diff, () => ambushed.add(p.d2), null, !seen);
+  };
+  /** Types 1 (teleportal: "The party is swept into a teleportal!" first) and 5 (hidden chute: "The party slides through
+   *  a hidden chute!" after): another level, PGM record `pgm`, with the window at (x, y) (assumed, as for exits). */
+  const jump = async (pgm: number, x: number, y: number, text: string) => {
+    const g = level.loc.pgms[pgm];
+    if (!g || g.program !== 2) { message = text; return; }
+    go(await Level.load(`D${two(g.datafile)}`, g.tileset), x + 4, y + 3);
+    message = text;
+  };
+  /** Type 6, a companion's remark: the first of members 1-5 whose race is d1 & 0x7F (d1 ≥ 0x80) or who is companion d1
+   *  (0xFE: no speaker needed); none, or event d2 already set (d2 ≠ 0xFF) → nothing, the spot stays armed. Else the
+   *  remark-event table (V02 0xBDB) may set an event for this `_locspec`, and `loctext[d3]` is spoken. */
+  const remark = (p: { d1: number; d2: number; d3: number }): boolean => {
+    const who = p.d1 === 0xfe ? null : party.members.slice(1).find(m => p.d1 >= 0x80 ? m.hero.rec.h_race === (p.d1 & 0x7f) : m.num === p.d1);
+    if ((p.d1 !== 0xfe && !who) || (p.d2 !== 0xff && events.has(p.d2))) return false;
+    const t = spotTables.remarks;
+    for (let k = 0; k < t.ids.length; k++) if (t.ids[k] === p.d3 && t.locspecs[k] === level.loc.locnum) events.add(t.events[k]);
+    const text = format(level.loc.texts[p.d3] ?? '', who?.hero ?? hero, hero.name);
+    message = who ? `${who.hero.name}: ${text}` : text;
+    return true;
   };
 
   /** _Look (rules/locations.md, Look). Line of sight is not modelled yet: every square counts as visible. */

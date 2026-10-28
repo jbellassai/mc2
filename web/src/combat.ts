@@ -55,28 +55,36 @@ export class Fight {
 
   static async data(): Promise<CombatData> { return json<CombatData>('combat.json'); }
 
-  /** A wilderness fight (`_cmbtyp` 1): side 6, monsters on random free squares (scan forward from RndCo(99)+17). */
+  /** A wilderness fight (`_cmbtyp` 1): side 6 (heroes at formation 0, monsters in side 6's rectangles). */
   static wild(data: CombatData, level: Level, heroes: { hero: Hero; num: number }[], group: number, diff: number): Fight {
-    return Fight.setup(data, level, heroes, group, diff, 6, null);
+    return Fight.setup(data, level, heroes, group, diff, 6, null, null);
+  }
+
+  /** A street fight (`_cmbtyp` 0, ambushes): the arena is the 11×9 view cut from the level, each hero keeps its square
+   *  (`at`, relative to the view); monsters scan the arena from RndCo(99) in steps of 17 (mod 99). */
+  static street(data: CombatData, level: Level, heroes: { hero: Hero; num: number }[], group: number, diff: number,
+                at: { x: number; y: number }[]): Fight {
+    return Fight.setup(data, level, heroes, group, diff, 6, null, at);
   }
 
   /** A dungeon-room fight (`_cmbtyp` 5): the door's side (type 6-9) places both sides; the flee squares are the room's
    *  doors (`doors`, P96 ovl_0e19), taken one step inside the room. */
   static room(data: CombatData, level: Level, heroes: { hero: Hero; num: number }[], group: number, diff: number, side: number,
               doors: { x: number; y: number }[]): Fight {
-    return Fight.setup(data, level, heroes, group, diff, side, doors);
+    return Fight.setup(data, level, heroes, group, diff, side, doors, null);
   }
 
   /** P96 setup: heroes at formation `side − 6` of `_setupxy` (member m at 6f + m, _PlacePerson), then the group's
    *  monsters — in a room, a random square in the side's rectangle (P96 0x19/0x29; casters, `c_magskl ≠ 0` except
-   *  Vankruh and Doombeast, by the casters' rectangle), moved to a free one by _PlacePerson. The best leader rank leads. */
+   *  Vankruh and Doombeast, by the casters' rectangle), moved by _PlacePerson and re-rolled until the square is free and
+   *  reachable from the first hero (`_blobmap` < 100 over the background, P96 ovl_10ec). The best leader rank leads. */
   private static setup(data: CombatData, level: Level, heroes: { hero: Hero; num: number }[], group: number, diff: number,
-                       side: number, doors: { x: number; y: number }[] | null): Fight {
+                       side: number, doors: { x: number; y: number }[] | null, street: { x: number; y: number }[] | null): Fight {
     const f = new Fight(data, level), k = side - 6;
     const taken = (x: number, y: number) => f.occupied(x, y);
     heroes.forEach(({ hero, num }, m) => {
       const r = hero.rec as Record<string, number> & typeof hero.rec, item = r.h_inhand === NONE ? NONE : r.h_invitem[r.h_inhand];
-      const at = level.place(data.setupxy[6 * k + m], data.setupxy[24 + 6 * k + m], taken);
+      const at = street ? street[m] : level.place(data.setupxy[6 * k + m], data.setupxy[24 + 6 * k + m], taken);
       f.recs.push({ recno: m, side: 0, name: hero.name, race: r.h_race, hero, num, tile: 0,
         x: at.x, y: at.y, hp: r.h_hitpts, shield: r.h_shield, armor: f.heroArmor(hero),
         bravery: r.h_bravery, str: r.h_strngth, dex: r.h_dextrty, agi: r.h_agility, int: r.h_intellg,
@@ -85,15 +93,17 @@ export class Fight {
     });
     for (const code of f.roster(group, diff)) {
       const s = data.monsters[(code & 0x7f) - 5], recno = 6 + f.recs.length - heroes.length;
-      let x: number, y: number;
-      if (!doors) {
-        let i = rnd(99) + 17;
-        while (f.occupied(i % 99 % W, Math.floor(i % 99 / W)) || !level.walkable(i % 99 % W, Math.floor(i % 99 / W))) i++;
-        x = i % 99 % W; y = Math.floor(i % 99 / W);
+      const reach = f.distances(f.recs[0].x, f.recs[0].y, true);
+      const ok = (x: number, y: number) => x >= 0 && f.free(x, y) && reach[y * W + x] < 0x7e;
+      let x = -1, y = -1;
+      if (street) {
+        for (let i = rnd(99), n = 0; n < 99; i = (i + 17) % 99, n++) if (ok(i % W, Math.floor(i / W))) { x = i % W; y = Math.floor(i / W); break; }
       } else {
         const c = s.mskl && (code & 0x7f) !== 28 && (code & 0x7f) !== 32 ? 4 : 0, rx = data.ranges.x[c + k], ry = data.ranges.y[c + k];
-        ({ x, y } = level.place(rx[0] + rnd(rx[1] - rx[0] + 1), ry[0] + rnd(ry[1] - ry[0] + 1), taken));
+        for (let n = 0; n < 200 && !ok(x, y); n++)
+          ({ x, y } = level.place(rx[0] + rnd(rx[1] - rx[0] + 1), ry[0] + rnd(ry[1] - ry[0] + 1), taken));
       }
+      if (!ok(x, y)) continue;                             // no room left: the monster stays out (the original loops)
       f.recs.push({ recno, side: 1, name: s.name, race: code & 0x7f, num: NONE, tile: s.tile, x,
         y, hp: s.hp, shield: s.shield, armor: s.armor, bravery: s.bravery, str: s.str, dex: s.dex,
         agi: s.agi, int: s.int, wskl: s.wskl, weapon: s.weapon, res: s.res, mskl: s.mskl, maxhp: s.hp, invis: 0, fear: 0, freeze: 0, nift: 0, state: s.undead ? 2 : 0, health: 0, target: NONE, moves: 0 });
@@ -363,7 +373,7 @@ export class Fight {
   }
 
   /** `_blobmap` (V06 0x25): steps from (x, y) to every square over free squares (8-way); the goal may be occupied. */
-  private distances(x: number, y: number, background = false): number[] {
+  distances(x: number, y: number, background = false): number[] {
     const d = new Array(W * H).fill(0x7e);
     d[y * W + x] = 0;
     const q = [[x, y]];
