@@ -7,7 +7,7 @@ export const COLS = 21, ROWS = 15, TILE = 16;
 export class View {
   private ctx: CanvasRenderingContext2D;
   private constructor(readonly canvas: HTMLCanvasElement, private heroes: HTMLImageElement, private folk: HTMLImageElement,
-                      private sprites: Sprites) {
+                      private more: HTMLImageElement, private sprites: Sprites) {
     canvas.width = COLS * TILE; canvas.height = ROWS * TILE;
     canvas.style.width = `${COLS * TILE * 3}px`;
     canvas.style.aspectRatio = `${COLS} / ${ROWS}`;   // keeps square tiles when max-height shrinks it
@@ -16,11 +16,19 @@ export class View {
   }
 
   static async create(canvas: HTMLCanvasElement): Promise<View> {
-    return new View(canvas, await image('sprites/E00.png'), await image('sprites/E02.png'), await json<Sprites>('sprites.json'));
+    const [e00, e02, e03] = await Promise.all(['E00', 'E02', 'E03'].map(n => image(`sprites/${n}.png`)));
+    return new View(canvas, e00, e02, e03, await json<Sprites>('sprites.json'));
   }
 
   private sheet(im: HTMLImageElement, k: number, cols: number, cx: number, cy: number) {
     this.ctx.drawImage(im, (k % cols) * 16, Math.floor(k / cols) * 16, 16, 16, cx * TILE, cy * TILE, TILE, TILE);
+  }
+
+  /** _MCCPTile: hero or companion n stands on E00 frame 0x3B + 18n; companions from 0x18 on use E03 frame 18(n − 0x18).
+   *  Maps load only frame 0 and frames 10-17 of the 18 (_TileApplies, DS:0x4CA); there is no walking animation. */
+  private hero(n: number, cx: number, cy: number) {
+    const cols = this.sprites.columns;
+    if (n < 0x18) this.sheet(this.heroes, 0x3b + 18 * n, cols, cx, cy); else this.sheet(this.more, 18 * (n - 0x18), cols, cx, cy);
   }
 
   /** The map square under a mouse event, for a view centred on (cx, cy). */
@@ -31,7 +39,7 @@ export class View {
   }
 
   /** `phase` counts animation steps: tile cycles advance every step, animated NPCs flip every few (_NPCANIMATE). */
-  draw(lv: Level, cx: number, cy: number, figures: Figure[], party: { x: number; y: number; sprite: number }[], phase = 0) {
+  draw(lv: Level, cx: number, cy: number, figures: Figure[], party: { x: number; y: number; num: number }[], phase = 0) {
     const ox = cx - (COLS >> 1), oy = cy - (ROWS >> 1);
     const ctx = this.ctx;
     ctx.fillStyle = '#000';
@@ -46,12 +54,12 @@ export class View {
     const cols = this.sprites.columns;
     for (const f of figures) {
       // _SingleNPCDraw: companions (num < 0x20) use their hero frames; anyone else the E02 sprite `tile`.
-      if (f.num < 0x20) this.sheet(this.heroes, 0x3b + 18 * f.num, cols, f.x - ox, f.y - oy);
+      if (f.num < 0x20) this.hero(f.num, f.x - ox, f.y - oy);
       else {
         const n = this.sprites.npc[f.tile];
         this.sheet(this.folk, n.start + (n.frames > 1 ? (phase >> 2) & 1 : 0), cols, f.x - ox, f.y - oy);   // frames 0/1 only
       }
     }
-    for (const p of party) this.sheet(this.heroes, p.sprite, cols, p.x - ox, p.y - oy);
+    for (const p of party) this.hero(p.num, p.x - ox, p.y - oy);
   }
 }

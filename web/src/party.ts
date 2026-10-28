@@ -4,10 +4,10 @@
 import { json } from './pack';
 import { Hero, type HeroRecord } from './hero';
 
-export interface Member { hero: Hero; cell: number; x: number; y: number; sprite: number }
+/** `num` = `_party` value = h_orinum (0 the player); the view picks the sprite from it (_MCCPTile). */
+export interface Member { hero: Hero; cell: number; x: number; y: number; num: number }
 
-/** _MCCPTile: hero or companion n stands on E00 frame 0x3B + 18n (n = h_orinum). */
-const sprite = (h: Hero) => 0x3b + 18 * (h.rec.h_orinum as number);
+const num = (h: Hero) => h.rec.h_orinum as number;
 
 export class Party {
   readonly members: Member[] = [];
@@ -15,7 +15,7 @@ export class Party {
   readonly away = new Set<number>();
 
   constructor(lead: Hero, x: number, y: number) {
-    this.members.push({ hero: lead, cell: 0, x, y, sprite: sprite(lead) });
+    this.members.push({ hero: lead, cell: 0, x, y, num: num(lead) });
   }
 
   get leader(): Member { return this.members[0]; }
@@ -39,7 +39,7 @@ export class Party {
 
   /** P97 ovl_03f7: the companion's record (`_member6[num − 1]`) joins where the NPC stood. */
   add(rec: HeroRecord, items: string[], cell: number, x: number, y: number): Member {
-    const hero = new Hero(rec, items), m = { hero, cell, x, y, sprite: sprite(hero) };
+    const hero = new Hero(rec, items), m = { hero, cell, x, y, num: num(hero) };
     this.members.push(m);
     this.away.add(rec.h_orinum as number);
     return m;

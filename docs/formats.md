@@ -120,8 +120,8 @@ Loaded by `_LoadTiles(n)` right after `Vnn.MCT`; six leading u16 offsets are rel
 
 | file | tiles | use |
 |---|---|---|
-| `E00` | 599 | 0–0x3A icons and spell effects; hero/companion *n* = 18 frames from `0x3B + 18n` (`_MCCPTile`; *n* = 0x18 for the player when `DS:4D75` is set) |
-| `E03` | 144 | companions with party index ≥ 0x18: 18 frames from `18(n − 0x18)` |
+| `E00` | 599 | 0–0x3A icons and spell effects; hero/companion *n* < 0x18 = 18 frames from `0x3B + 18n` (`_MCCPTile`); slots 0x18–0x1D hold the player's alternate look (`DS:4D75`) and Ralle's (party value 7) variants `0x19 + _kmhero`. Maps load only frames 0 (standing) and 10–17 (`_TileApplies`, DS:0x4CA = `1,0×9,1×8`), combat frames 0–13 (DS:0x4B8): there is no walking animation |
+| `E03` | 144 | companions *n* ≥ 0x18 (24 Polo … 31 Somona): 18 frames from `18(n − 0x18)` (checked: entry 2 = King Rebnard's crown) |
 | `E02` | 146 | town NPC sprites: sprite id *t* (the `tile` byte of GEN/KNPC/assignment records) has `_animtilecount[_npcanimtype[t]]` frames (1, or 3 for animated ones), stored in id order (tables at DS:373A / DS:3744) |
 | `E01` | 312 | combat: 3 × 9 weapon/missile tiles, then monster frames (`_monsttiles`) |
 
