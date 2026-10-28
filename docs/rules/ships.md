@@ -109,7 +109,7 @@ EXE `_CapAtLiberty`: a KNPC row of type 0x1D is shown only while the matching ca
 
 ## Port notes
 
-Built in the web port (`web/src/ships.ts`, `main.ts` *ships*): hiring, buying days, sailing, landing and anchoring, the daily countdown, time is up / working for passage, Amos, the rough sea and the Conch (on Use; the original's K command). Not yet: the seasick Dwarf and the ship campsite (the port has no open camp), the teleport refusal (no teleport spells yet), swimming.
+Built in the web port (`web/src/ships.ts`, `main.ts` *ships*): hiring, buying days, sailing, landing and anchoring, the daily countdown, time is up / working for passage, Amos, the rough sea and the Conch (on Use; the original's K command). Not yet: the seasick Dwarf and the ship campsite (the port has no open camp), the teleport refusal (no teleport spells yet).
 
 - Only `_capsta`, `_boatx/y`, `_capdays`, `_sailsw`, `_curcap` need to persist; everything else is derivable.
 - Quirks a port may want to fix: passage mode not saved; the hire prompt for state 4/5 boats found at sea (unreachable in practice); the "unsafe to sail" text on foot; Amos' theft being irreversible and unexplained.

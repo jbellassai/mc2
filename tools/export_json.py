@@ -238,7 +238,10 @@ def main(src, dst):
                                   'weather': [[pairs[i], pairs[i + 1]] for i in range(0, len(pairs) - 1, 2)]})
     p01 = open(f'{src}/P01.MCO', 'rb').read()   # world map (rules/time_weather.md, World-map step cost; locations.md, World map)
     s8 = lambda o, n: [b - 256 if b > 127 else b for b in p01[o:o + n]]
-    dump(f'{dst}/p01.json', {'terraintime': list(p01[0x276:0x280]), 'weathertime': s8(0x280, 12), 'terrainenergy': list(p01[0x298:0x2A4]),
+    # terraintime / terrainenergy run to 14 entries: a swimmer's step indexes them with river 12 / water 13 and reads the
+    # bytes that follow each table (skills.md, swim)
+    dump(f'{dst}/p01.json', {'terraintime': list(p01[0x276:0x284]), 'weathertime': s8(0x280, 12), 'terrainenergy': list(p01[0x298:0x2A6]),
+                             'swimweather': list(p01[0x2F6:0x302]),   # ovl_194e, by weather
                              'clothing': [list(p01[0x2A2 + 12 * k:0x2AE + 12 * k]) for k in range(7)],   # rows 0x2B-0x30, then none
                              'regions': [list(p01[0x236 + 4 * k:0x23A + 4 * k]) for k in range(16)],    # {x0,y0,x1,y1}, first match
                              'patchtiles': list(p01[0x36A:0x374]),   # mushroom-patch tileset by terrain class (ovl_09bf)

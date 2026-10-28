@@ -363,9 +363,10 @@ async function main() {
     if (ships.sailing && y === 101 && !events.has(102)) { message = shipText(ships.cur, 0x29); return; }   // ovl_0f3b
     if (!ships.sailing && !level.walkable(x, y)) {
       const i = ships.boatAt(x, y);                                      // ovl_1070
-      if (i < 0) { message = `Blocked by ${level.tileName(x, y)}.`; return; }
-      return board(i, dx, dy);
-    }
+      if (i >= 0) return board(i, dx, dy);
+      const no = world.swim(ter, clock.weather, party);
+      if (no) { message = no[0] < 0 ? `Blocked by ${level.tileName(x, y)}.` : comtxt[no[0]].replace('%a', no[1]); return; }
+    } else world.swimming = false;
     return worldMove(dx, dy);
   };
   /** The step itself (P01 ovl_147c / ovl_10f7), then the per-step states, patrols and guards. */

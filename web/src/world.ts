@@ -8,7 +8,7 @@ import type { Level } from './level';
 import { Ships, type ShipData } from './ships';
 
 interface P01 {
-  terraintime: number[]; weathertime: number[]; terrainenergy: number[]; clothing: number[][]; regions: number[][]; patchtiles: number[];
+  terraintime: number[]; weathertime: number[]; swimweather: number[]; terrainenergy: number[]; clothing: number[][]; regions: number[][]; patchtiles: number[];
   patrols: number[][]; respawn: number[]; steps: { dirs: number[][]; side1: number[][]; side2: number[][]; order: number[] };
   ships: ShipData;
 }
@@ -194,6 +194,28 @@ export class World {
     if (!clock.daylight()) n++;
     if (party.members.some(m => (m.hero.rec.h_cond1 as number) | (m.hero.rec.h_cond2 as number))) n++;
     return n;
+  }
+
+  /** OV_0x1bd, overlay-private: the party is in the water. Any walkable or non-water step clears it. */
+  swimming = false;
+
+  /** P01 ovl_194e, a step into river (12) or water (13) on foot: refused when already swimming ("Too far to swim!"
+   *  0x77), when a member (from slot 5 down) has no swim skill ("%a can't swim!" 0x78), when (w − 99)/2 ≥ the best
+   *  swim skill ("The weather is too stormy to swim!" 0x79) or when (w − energy)/2 ≥ a member's swim skill ("%a can not
+   *  endure a swim!" 0x7A), w = `swimweather[weather]`. Returns [comtxt, %a] for a refusal, [-1, ''] for any other
+   *  terrain, null when the party swims. */
+  swim(ter: number, weather: number, party: Party): [number, string] | null {
+    if (ter !== 12 && ter !== 13) { this.swimming = false; return [-1, '']; }
+    if (this.swimming) return [0x77, ''];
+    const ms = [...party.members].reverse().map(m => m.hero), sw = (h: typeof ms[0]) => h.rec.h_swim as number;
+    const none = ms.find(h => !sw(h));
+    if (none) return [0x78, none.name];
+    const w = this.p01.swimweather[weather];
+    if ((w - 99) >> 1 >= Math.max(...ms.map(sw))) return [0x79, ''];
+    const weak = ms.find(h => (w - h.rec.h_energy) >> 1 >= sw(h));
+    if (weak) return [0x7a, weak.name];
+    this.swimming = true;
+    return null;
   }
 
   /** Energy per member and step: terrain energy + clothing penalty in this weather (minus `_tailorcharm`, 0 here). The
