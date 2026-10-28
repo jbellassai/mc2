@@ -37,6 +37,27 @@ Every item has a base **value** in `_lootvalues` (DS:2E72, `docs/rules/economy.m
 
 Weapons 09–1E map to `WEAPDATA` rows `code − 9` (table in `combat.md`). `_GetWpnSkl`: in-hand item < 0x12 → sword skill, < 0x1A → axe, < 0x1F → archery, else fist.
 
+## Consumables (*Use*: `_DoUse`, handler table `UVECTBL` EXE 0C2F:0521, handlers FFRE 0C2F:0561–0760)
+*Use* offers items 0x31–0x50 and 0x5B; `_DoUse` runs the item's handler and, if it returns non-zero, removes **one** of the item from the user's pack — instruments (Lyre, Lute, Flute, Bandore) are never used up. A handler that finds nothing to do still returns 1, so **a wasted Potion or Sermin is consumed** ("%o uses a %l.").
+
+| item | effect |
+|---|---|
+| 0x31 Food | `h_lastmeal −= min(h_lastmeal, HUNGERHOURS[race])` (one meal), hunger flags updated (`time_weather.md`) |
+| 0x32 Potion | **heal to full** (`h_hitpts = h_hpmax`); if Ill only up to 10 HP; **no effect if Poisoned**. In combat it also gets a knocked-down member back up (clears `h_cond1` bit 0, restores the combat record's agility/dexterity). The same routine is the *Zengrl* spell (20): `HP += magic · hpmax / 100`, capped |
+| 0x33 Sermin | energy to 99, or only up to 15 while Poisoned or Ill |
+| 0x34 Gonshi | `HERO+0xA5 |= 0x80`: the member gets **4 actions every round** (P94) for the current or next fight; used in combat it also sets this round's actions to 4 |
+| 0x35 Nift | `HERO+0xA5 |= 0x40`: **3 shield charges** (blows fully absorbed, `combat.md` *Attack* step 4) at the start of the next fight, or at once in combat |
+| 0x36 Mirget | `HERO+0xA5 |= 0x20`: the next melee hit does triple damage |
+| 0x37 Luffin | `HERO+0xA5 |= 0x10`: the next attack cannot be dodged |
+| 0x38 Turpin | `HERO+0xA5 |= 0x08`: the next spell is cast with magic skill 99 (`_GetMagSkl`) |
+| 0x3C Loka | cures Poisoned (`h_cond1 &= ~0x08`, also on the combat record) |
+| 0x3D Medicin | cures Ill (`h_cond1 &= ~0x02`) |
+| 0x40 Mindstone | only the player ("only Lukas"); not in combat; runs *Recall* (P88 entry 1, `assignments.md`) |
+| 0x44 Lyre, 0x45 Lute, 0x48 Flute, 0x5B Bandore | play a song (`encounters.md`, *Combat songs*; outside combat FFFAR service 0x12); not in the fight overlay's own *Use* |
+| everything else (scrolls, keys, Rope, Shovel, Pick, Orb, Horn, Conch, Map, Fireglobe, shapes…) | nothing here; location programs react to the *used* item themselves (`open-questions.md` item 7) |
+
+The 0x80 and 0x40 flags are cleared after a fight (`P95`, unless the party fled — `_endcmbt 4`); 0x20/0x10/0x08 are one-shot and cleared when consumed.
+
 ## Armour (`V06 INT61_00`, combatant built from a hero)
 
 `c_armor = Σ armor_value[item − 0x1F]` over every worn item in 0x1F–0x2A; `c_shield = h_shield`, `c_hitpts = h_hitpts`, `c_energy = h_energy`, `c_magskl = h_magic`, weapon = `h_invitem[h_inhand]`. The value table is `D06.MCV` pointer 9 (file 0x1BA):
