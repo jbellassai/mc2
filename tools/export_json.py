@@ -235,7 +235,8 @@ def main(src, dst):
                              'side': {'odd': list(p08[0xA3:0xAC]), 'even': list(p08[0xAC:0xB1])},   # by _lastdir
                              'junk': list(p08[0xE49:p08.index(b'\0\0', 0xE49)])})   # dropped to make room for a gift (ovl_0e86)
     v02 = open(f'{src}/V02.MCO', 'rb').read()   # town spells (rules/spells.md)
-    dump(f'{dst}/v02.json', {'vision': {'ids': list(v02[0x8C:0x9C]), 'texts': list(v02[0x9C:0xAC])},   # door id bands → comtxt
+    dump(f'{dst}/v02.json', {'hroomtype': {'ids': list(v02[0xE19:0xE27]), 'types': list(v02[0xE27:0xE35])},   # INT60_12: prison 1, candles 2-5, Vankruh 6
+                             'vision': {'ids': list(v02[0x8C:0x9C]), 'texts': list(v02[0x9C:0xAC])},   # door id bands → comtxt
                              'sense': [struct.unpack_from('<H', v02, 0x7FE + 2 * i)[0] for i in range(16)]})   # direction by flags
     p89 = open(f'{src}/P89.MCO', 'rb').read()   # the Teleport picker (rules/spells.md)
     dump(f'{dst}/p89.json', {'tiers': list(p89[0x09:0x0E]), 'x0': list(p89[0x10:0x15]), 'y0': list(p89[0x15:0x1A]),

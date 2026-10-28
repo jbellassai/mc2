@@ -123,7 +123,7 @@ async function main() {
   const people = (): Figure[] => {
     if (level.loc.kind === 'world') return level.figures(clock, events, party.away);
     const at = spot();
-    return [...level.figures(clock, events, party.away), ...assigns.here(at.loc, at.room, at.hroom)
+    return [...level.figures(clock, events, party.away), ...(chamber?.freed ? [chamber.freed] : []), ...assigns.here(at.loc, at.room, at.hroom)
       .map(a => ({ x: a.as_x, y: a.as_y, type: 0, tile: a.as_tile, num: a.as_npc, name: r90[a.as_npc - 1].h_name }))];
   };
   /** The hour tick: who is about, and the inns' noon checkout (P92). */
@@ -185,6 +185,8 @@ async function main() {
 
   // ---- talking (dialogue.md) ----
   const talkTo = async (who: Figure) => {
+    const elden = chamber?.says(who);
+    if (elden) { panel.show(); panel.line(`${who.name}: ${elden}`); return void panel.set([{ label: cmd[0], act: () => close() }]); }
     if (scene && party.members.length > 1 && !speaker) {                // P08 scenes care who speaks (`_curpla`)
       panel.show(); panel.line(say(comtxt[0x11]).trim());
       return void panel.set([...party.members.map(m => ({ label: m.hero.name, act: () => { speaker = m; void talkTo(who); } })),
@@ -851,7 +853,7 @@ async function main() {
   const guardedRoom = async (d: Door) => {
     const hr = level.loc.hrooms?.find(h => h.id === d.id), pgm = level.loc.pgms[d.pgm];
     if (!hr || !pgm) return void (message = 'This door leads somewhere not built yet.');
-    const key = `${level.id}:${hr.id}`, ch = await Chamber.build(hr, pgm.tileset, key), diff = Math.max(0, level.loc.locdiff - 1);
+    const key = `${level.id}:${hr.id}`, ch = await Chamber.build(hr, pgm.tileset, key, events), diff = Math.max(0, level.loc.locdiff - 1);
     const back = { level, x: lead.x, y: lead.y };
     if (dunrms.has(key)) return enterChamber(ch, d.type, back, false);
     startFight(ch.level, Fight.room(cdata, ch.level, party.members, hr.group, diff, d.type, ch.doors()), diff,
@@ -873,6 +875,19 @@ async function main() {
     const freed = assigns.rescue(back.level.loc.locnum, ch.hr.id, (x, y) => level.place(x, y, (a, b) => taken.some(t => t.x === a && t.y === b)), events);
     if (freed.length) message = assigns.rescueText;                    // P07 ovl_05ad: a prison cell
     figures = people();
+  };
+  /** P07 ovl_06c2, using the room's scroll (item 0x4A + type) in a Dark Candle room: an undeciphered scroll is blank
+   *  (D98 text 4), a member without magic cannot read it (5); otherwise the incantation (6, 7), the scroll burns, the
+   *  flame goes out, "%o has been set free!" (8, the elden's name from `gwrds`), the elden stands in the room and
+   *  event 0x3C + type is set. The original also plays sound 5 and a Bang at the reader. */
+  const candle = (h: Hero, item: number): string => {
+    const ch = chamber!, t = (n: number, o = '') => format(ch.candle!.texts[n].replace(/%a/g, items[item]), h, o || h.name);
+    if (!(h.rec.h_invamt[h.slot(item)] & 0x80)) return t(4);
+    if (!h.rec.h_magic) return t(5);
+    h.dec(h.slot(item));
+    ch.snuff(); ch.freed = ch.elden(); events.add(0x3c + ch.type);
+    figures = people();
+    return [t(6), t(7), t(8, ch.freed.name)].join(' ');
   };
   /** The chest and fountain need the acting member next to them (`_ChkRng` 1); otherwise " %w considers moving closer
    *  to it." (text 8; text 7 when another member makes the suggestion — `_Advice` chooses). */
@@ -1528,6 +1543,7 @@ async function main() {
         });
       }
       if (item === 0x40) return who === hero ? recallAway() : done(format(comtxt[0x1d], hero, hero.name));   // "Only %h can do that."
+      if (chamber?.candle && item === 0x4a + chamber.type && !chamber.freed && !events.has(0x3c + chamber.type)) return done(candle(who, item));
       if (chamber && item === 0x50 && chamber.hr.reward && !(chamber.hr.reward & 0x80)) return openChest(who);
       if (level.loc.kind === 'level' && (item === 0x50 || item === 0x46)) { close(); return item === 0x50 ? lockpick(who) : dig(who); }
       if (!tables.useall.includes(item) || party.members.length < 2) return done(once(who, item));
@@ -1768,7 +1784,7 @@ async function main() {
     await world.at(x, y, clock);
     message = '';
   }
-  if (import.meta.env.DEV) Object.assign(window, { dbg: { party, world, clock, events, assigns, get level() { return level; } } });   // for scripts/shot.mjs eval:
+  if (import.meta.env.DEV) Object.assign(window, { dbg: { party, world, clock, events, assigns, dunrms, get level() { return level; } } });   // for scripts/shot.mjs eval:
   render();
 }
 
