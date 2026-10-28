@@ -35,7 +35,7 @@ else:  lockpick skill-up roll (_SkillUp0, skill 10)
 Then "It contains %b %as. Will %h take them?" → `IncObj(hero, item, amount)` (a weapon/armour counts as 1), `_duntre` bit set, hirelings' `partybucks += value × amount` (`economy.md`); taking item 0x1E (Darkfinder) sets `_events+11 & 0x20`.
 
 ### Fountains (`ovl_0d54`)
-"Will %h drink from it?" → if the hero has magic (`h_magic ≠ 0`) and the spell is not 0x2A: `h_spells[spell] += amount` (cap 99), "%h gains %b %a spells." Spell 0x2A (or no magic) is a plain drink: "How refreshing!" (effect TODO — `ovl_0f04`). Once per fountain (`_duntre`).
+"Will %h drink from it?" → if the hero has magic (`h_magic ≠ 0`) and the spell is not 0x2A: `h_spells[spell] += amount` (cap 99), "%h gains %b %a spells." The spell charges are given once per fountain (`_duntre` bit by `hrmid`). Every other case — spell 0x2A, a hero without magic, or a fountain already used — is a plain drink, repeatable: "How refreshing!" and the drinker's **energy is set to 99** (`_IsHeTr`, sound 0x19).
 
 ### Dark Candle rooms (`_hroomtype` 2–5, data `D98`, P07 `ovl_06c2`)
 Four elden are imprisoned in candle flames; each room is reached through a dungeon door (`tools/doors.py`): Despair (id 0xF8) in Dorak 6, Pain (0xF9) in Ruz 2, Anguish (0xFA) in Namaz 6, Slow Death (0xFB) in Dragos 3 and Dreax 2. *Look* shows the inscription (`D98` texts 0–3). The room reacts to **using the matching scroll** (item `0x4A + type`: White 0x4C Despair/Zifar, Gray 0x4D Pain/Zulain, 0x4E Anguish/Zewinul, Blue 0x4F Slow Death/Zidoni; the elden's name is `D98.gwrds[item − 0x4C]`):
