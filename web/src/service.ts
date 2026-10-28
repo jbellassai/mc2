@@ -17,6 +17,10 @@ interface P05 {
 
 export interface ServiceCtx {
   hero: Hero; clock: Clock; cmd: string[]; comtxt: string[]; items: string[];
+  /** The party's heroes, leader first. */
+  members(): Hero[];
+  /** A companion on assignment in this room (P05 ovl_1742 counts them as engaged here). */
+  assigned(room: number): boolean;
   /** One 5-minute tick of the world, hour changes included. */
   tick(): void;
   close(msg?: string): void;
@@ -36,8 +40,11 @@ export function noon(): number[] {
 let p05: P05;
 
 export class ServiceRoom {
+  /** The acting member (`_curpla`): who asks, pays and is engaged. */
+  private pupil: Hero;
+
   private constructor(private ctx: ServiceCtx, readonly room: number, readonly kind: number,
-                      private texts: string[], private words: string[]) {}
+                      private texts: string[], private words: string[]) { this.pupil = ctx.hero; }
 
   /** Any P05 room; only kinds 1-5 have a service (region camps, ids ≥ 0x5C forced to the inn kind, are not built). */
   static async open(ctx: ServiceCtx, room: number, kind: number, texts: string[], words: string[]): Promise<ServiceRoom> {
@@ -47,8 +54,10 @@ export class ServiceRoom {
 
   private get serves() { return this.kind >= INN && this.kind <= LODGE && !(this.kind === INN && this.room >= 0x5c); }
 
-  private get rec() { return this.ctx.hero.rec as unknown as Record<string, number>; }
-  private say(s: string, vars: Record<string, string | number> = {}) { return format(s, this.ctx.hero, this.ctx.hero.name, vars); }
+  private get rec() { return this.pupil.rec as unknown as Record<string, number>; }
+  private say(s: string, vars: Record<string, string | number> = {}) {
+    return format(s.replace(/%d/g, this.pupil.female ? 'her' : 'him'), this.pupil, this.pupil.name, vars);
+  }
   private line(s: string, vars: Record<string, string | number> = {}) { panel.line(this.say(s, vars)); }
   private t(n: number, vars: Record<string, string | number> = {}) { return this.say(this.texts[n] ?? '', vars); }
   private yesNo(yes: () => void, no: () => void = () => this.done()) {
@@ -65,16 +74,20 @@ export class ServiceRoom {
       then(n);
     }, `0–${max}`);
   }
-  /** Back to the room: Pass while the hero has a task here, End otherwise. */
+  /** Back to the room: Pass while a member has a task here, End otherwise. */
   private done() {
     const b = [{ label: this.ctx.cmd[0], act: () => this.ctx.close() }];
-    if (this.busy) b.unshift({ label: this.ctx.cmd[30], act: () => this.pass() });   // Pass
+    if (this.engaged) b.unshift({ label: this.ctx.cmd[30], act: () => this.pass() });   // Pass
     panel.set(b);
   }
   private begin() { if (!panel.open) panel.show(); }
 
-  /** The member engaged here (ovl_1742); one hero for now. */
-  get busy(): boolean { return this.rec.h_actvty !== NONE && this.rec.h_actroom === this.room; }
+  /** ovl_1742: the first party member with a task in this room. */
+  private get engaged(): Hero | undefined {
+    return this.ctx.members().find(h => h.rec.h_actvty !== NONE && h.rec.h_actroom === this.room);
+  }
+  /** Someone is engaged here: a member, or a companion left here on assignment. One at a time. */
+  get busy(): boolean { return !!this.engaged || this.ctx.assigned(this.room); }
 
   private engage(task: number, misc: number, days: number) {
     const r = this.rec, c = this.ctx.clock;
@@ -86,9 +99,13 @@ export class ServiceRoom {
     if (this.kind <= JOB) this.talk(true);
   }
 
-  /** Talking to the keeper (`_swgreet = −3`); the inn only speaks on entry. False: ordinary conversation. */
-  talk(entry = false): boolean {
+  /** Whether Talk reaches the keeper (`_swgreet = −3`): the inn only speaks on entry. */
+  get talks(): boolean { return this.serves && this.kind !== INN; }
+
+  /** Talking to the keeper; `who` is the acting member. False: ordinary conversation. */
+  talk(entry = false, who: Hero = this.ctx.hero): boolean {
     if (!this.serves || this.kind === INN && !entry) return false;
+    this.pupil = who;
     this.begin();
     ({ [INN]: this.inn, [SCHOOL]: this.school, [JOB]: this.job, [LIBRARY]: this.library, [LODGE]: this.lodge })[this.kind]!.call(this);
     return true;
@@ -104,8 +121,8 @@ export class ServiceRoom {
       this.line(this.texts[2], { b: max });
       this.number(max, n => {
         const cost = n * price;
-        if (this.ctx.hero.rec.h_gold < cost) this.line(this.ctx.comtxt[0x25]);
-        else { this.ctx.hero.rec.h_gold -= cost; rent[i] += n; this.line(this.texts[4]); }
+        if (this.pupil.rec.h_gold < cost) this.line(this.ctx.comtxt[0x25]);
+        else { this.pupil.rec.h_gold -= cost; rent[i] += n; this.line(this.texts[4]); }
         this.done();
       }, this.t(5));
     }, () => { this.line(this.texts[3]); this.done(); });
@@ -126,8 +143,8 @@ export class ServiceRoom {
       const days = Math.max(1, p05.school.days[k] - quick);
       this.line(this.texts[28], { b: days });
       this.yesNo(() => {
-        if (this.ctx.hero.rec.h_gold < cost) this.line(this.ctx.comtxt[0x25]);
-        else { this.ctx.hero.rec.h_gold -= cost; this.engage(10 + s, p05.school.gain[s], days); this.line(this.texts[30]); }
+        if (this.pupil.rec.h_gold < cost) this.line(this.ctx.comtxt[0x25]);
+        else { this.pupil.rec.h_gold -= cost; this.engage(10 + s, p05.school.gain[s], days); this.line(this.texts[30]); }
         this.done();
       });
     });
@@ -162,7 +179,7 @@ export class ServiceRoom {
           return this.done();
         }
         const item = L.task[g] + 0x2e, a = this.ctx.items[item];
-        if (this.ctx.hero.slot(item) < 0) { this.line(this.texts[16], { a }); return this.done(); }
+        if (this.pupil.slot(item) < 0) { this.line(this.texts[16], { a }); return this.done(); }
         const days = Math.max(1, L.days[g] - (research >> 4));
         this.line(this.texts[3], { b: days });
         this.yesNo(() => { this.engage(L.task[g], item, days); this.line(this.texts[4], { a }); this.done(); });
@@ -170,19 +187,49 @@ export class ServiceRoom {
     }, 'Subject… (type a word, Enter)');
   }
 
-  /** The leader asks on behalf of the party's wizards (`_curpla == 0`); a wizard's own booth comes with companions. */
+  /** The lodge (P05 0x0F67): the player is asked whether a wizard will come (texts 11-13); a companion is offered a
+   *  booth (texts 0, 2): wizards only (15), one at a time (1), their own book free or a house copy for 200 coins
+   *  (6-10), then `h_actvty = 0x28 + group` for 7 days (4, 5). Only an assigned wizard studies (assignments.md). */
   private lodge() {
-    this.line(this.texts[11]);
-    this.yesNo(() => { this.line(this.texts[12]); this.done(); }, () => { this.line(this.texts[13]); this.done(); });
+    if (this.pupil === this.ctx.hero) {
+      this.line(this.texts[11]);
+      return this.yesNo(() => { this.line(this.texts[12]); this.done(); }, () => { this.line(this.texts[13]); this.done(); });
+    }
+    this.line(this.texts[0]); this.line(this.texts[2]);
+    this.yesNo(() => {
+      if (this.rec.h_race !== 1) { this.line(this.texts[15]); return this.done(); }
+      if (this.busy) { this.line(this.texts[1]); return this.done(); }
+      const start = (group: number) => { this.engage(0x28 + group, 0, 7); this.line(this.texts[4] + this.texts[5]); this.done(); };
+      const books = (groups: number[], then: (g: number) => void) => {
+        this.line(this.texts[3]);
+        panel.set([...groups.map(g => ({ label: this.ctx.items[0x53 + g], act: () => then(g) })), { label: this.ctx.cmd[0], act: () => this.done() }]);
+      };
+      this.line(this.texts[6]);
+      panel.set([
+        { label: this.texts[8], act: () => {                                // Own
+          const own = [0, 1, 2, 3, 4, 5, 6].filter(g => this.pupil.slot(0x53 + g) >= 0);
+          if (!own.length) { this.line(this.texts[10]); return this.done(); }
+          books(own, start);
+        } },
+        { label: this.texts[9], act: () => books([0, 1, 2, 3, 4, 5, 6].filter(g => p05.lodge.mask[this.room - 0x80] & 1 << g), g => {   // Rent
+          this.line(this.texts[7]);
+          this.yesNo(() => {
+            if (this.rec.h_gold < p05.lodge.cost) { this.line(this.ctx.comtxt[0x25]); return this.done(); }
+            this.rec.h_gold -= p05.lodge.cost; start(g);
+          });
+        }) },
+        { label: this.ctx.cmd[0], act: () => this.done() }]);
+    });
   }
 
   /** ovl_17bd, once an hour (minute 0): a day of the task passes at the hour it started. */
   hour(): boolean {
-    const r = this.rec, c = this.ctx.clock;
-    if (!this.busy || c.minute !== 0 || r.h_actdate === c.date || r.h_acthour !== c.hour) return false;
+    const h = this.engaged, r = h?.rec as Record<string, number> | undefined, c = this.ctx.clock;
+    if (!h || !r || c.minute !== 0 || r.h_actdate === c.date || r.h_acthour !== c.hour) return false;
+    this.pupil = h;
     if (r.h_actvty >= 0x5a) {                                    // jobs: open-ended, paid daily
       r.h_actdays++;
-      if (r.h_actvty < 0x5e) this.ctx.hero.rec.h_gold += r.h_actmisc;
+      if (r.h_actvty < 0x5e) r.h_gold += r.h_actmisc;
       return false;
     }
     if (r.h_actdays && --r.h_actdays) return false;
@@ -191,8 +238,8 @@ export class ServiceRoom {
       r[field] = Math.min(99, r[field] + r.h_actmisc);
       this.line(this.texts[33] + this.texts[6 + s] + this.texts[34], { b: r.h_actmisc });
     } else if (this.kind === LIBRARY) {
-      const slot = this.ctx.hero.slot(r.h_actmisc);
-      if (slot >= 0) this.ctx.hero.rec.h_invamt[slot] |= 0x80;
+      const slot = h.slot(r.h_actmisc);
+      if (slot >= 0) h.rec.h_invamt[slot] |= 0x80;
       this.line(this.texts[8], { a: this.ctx.items[r.h_actmisc] });
     }
     r.h_actvty = NONE;
@@ -207,7 +254,7 @@ export class ServiceRoom {
     panel.set([{ label: this.ctx.cmd[40], act: stop }]);   // Stop
     timer = window.setInterval(() => {
       this.ctx.tick();
-      if (this.hour() || !this.busy) stop();
+      if (this.hour() || !this.engaged) stop();
     }, 15);
   }
 
@@ -215,8 +262,10 @@ export class ServiceRoom {
   leave(go: () => void) {
     this.begin();
     const n = p05.leave[this.kind];
-    if (this.busy && n !== NONE) this.line(this.texts[n], { o: this.ctx.hero.name });
+    const h = this.engaged;
+    if (h) this.pupil = h;                                       // %o in the leave text
+    if (h && n !== NONE) this.line(this.texts[n]);
     else this.line(this.ctx.comtxt[0x23]);
-    this.yesNo(() => { this.rec.h_actvty = NONE; this.ctx.close(); go(); }, () => this.done());
+    this.yesNo(() => { for (const m of this.ctx.members()) m.rec.h_actvty = NONE; this.ctx.close(); go(); }, () => this.done());
   }
 }

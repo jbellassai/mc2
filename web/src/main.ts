@@ -171,7 +171,17 @@ async function main() {
     if (++walkTicks & 1) party.walkTired();
     tick();
   };
-  const ctx = { hero, clock, cmd, comtxt, items, close, tick };
+  const ctx = { hero, clock, cmd, comtxt, items, close, tick, members: () => party.members.map(m => m.hero),
+    assigned: (room: number) => assigns.here(spot().loc, room, 0xff).length > 0 };
+  /** Talk in a service room reaches the keeper; with company the port asks who speaks (the acting member, `_curpla`,
+   *  who pays and is taught). */
+  const keeper = (): boolean => {
+    if (!service?.talks) return false;
+    if (party.members.length < 2) return service.talk();
+    panel.show(); panel.line('Who speaks?');
+    panel.set([...party.members.map(m => ({ label: m.hero.name, act: () => void service!.talk(false, m.hero) })), { label: cmd[0], act: () => close() }]);
+    return true;
+  };
 
   // ---- talking (dialogue.md) ----
   const talkTo = async (who: Figure) => {
@@ -1019,7 +1029,7 @@ async function main() {
     const who = figureAt(lead.x + dx, lead.y + dy);
     if (who) {   // walking into someone talks to them (the original uses a Talk command)
       message = '';
-      if (!service?.talk()) await talkTo(who);
+      if (!keeper()) await talkTo(who);
       return render();
     }
     const movers = room ? [lead] : [...party.members].reverse();
@@ -1280,7 +1290,7 @@ async function main() {
   const talkAt = async (x: number, y: number) => {
     const who = figures.find(f => f.x === x && f.y === y);
     message = '';
-    if (service?.talk()) return;
+    if (keeper()) return;
     if (!who && special?.talk()) return;                               // the casino: Talk to anyone but the gamblers
     if (who) return talkTo(who);
     message = say(comtxt[0x11]) + level.tileName(x, y) + comtxt[0x10];
