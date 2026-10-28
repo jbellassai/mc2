@@ -26,6 +26,7 @@ def compose(loc, src, report=print):
         f = f"{src}/M{b['block']:02d}E{b['tileset']:02d}.MCM"
         if not os.path.exists(f): report(f'  missing {f}'); continue
         m = load_mcm(f); tilesets[b['tileset']] = tilesets.get(b['tileset'], 0) + 1
+        if m.w != 42: m = Map(42, 42, open(f, 'rb').read()[2:2 + 42 * 42])   # 5042-byte files: the block is the first 42×42
         same = diff = 0
         for yy in range(min(m.h, 42)):
             for xx in range(min(m.w, 42)):

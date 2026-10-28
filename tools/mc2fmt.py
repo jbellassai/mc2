@@ -48,7 +48,7 @@ class Map:
 def load_mcm(path):
     """Tile map. Layouts seen (see docs/formats.md):
       b'**' + 42*42 bytes            (1766 B)  most town/area maps
-      b'**' + 84*60 bytes            (5042 B)  MxxE93 strongholds
+      b'**' + 84*60 bytes            (5042 B)  MxxE93: as a block only the first 42*42 count (docs/formats.md)
       <w><h> + w*h bytes + junk     (5120 B)  M07E65 only: header is literal dims 84,60
     G*.MCM files are sets of 11x9 room maps (chunks of 0B 09 + 99 bytes, docs/formats.md *Room maps*); rejected here."""
     d = open(path, 'rb').read()

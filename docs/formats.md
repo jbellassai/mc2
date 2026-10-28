@@ -33,7 +33,7 @@ Loaded by `_LoadMap(num, set, letter)` into `struct MAPTYPE { u8 map_xl; u8 map_
 |---|---|---|---|---|
 | `Mbb Ett.MCM` | `2A 2A` | 42×42 tile indices, row-major | 150 | block *bb* drawn with tileset `Vtt.MCT`; placed into a location by its `D` record (below) |
 | `Gnn E00.MCM` | per chunk `0B 09` | N consecutive chunks of 2 + 11×9 bytes | 13 | **room interiors and arenas** (*Room maps* below): `_LoadMap(n, 0, 'G')` from the room programs; the `E00` is never substituted |
-| `M07/11/14 E93.MCM` | `2A 2A` | 5040 bytes, autocorrelation says 84 wide | 3 | **unresolved**: engine would read only the first 3638 bytes; does not align with sibling blocks |
+| `M01/07/11/14 E93.MCM` | `2A 2A` | 5040 bytes: **an ordinary 42×42 block** (the header says so) followed by 3276 bytes (84 × 39) of unknown use | 4 | the block is the first 1764 body bytes read 42 wide — verified 2026-10-28: Oshcrun (D03, block 7) composes into a coherent symmetric castle that way, and is scrambled when the file is read 84 wide. Earlier renders that cropped an 84-wide reading were wrong |
 | `M07E65.MCM` | `54 3C` = 84,60 | 84×60 + 78 junk bytes | 1 | **unresolved**, header honours the (xl,yl) convention |
 | `G04E00.MCM` | | 3 valid chunks then zeros, 1766 B | 1 | probably a stale file |
 
