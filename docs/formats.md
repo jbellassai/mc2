@@ -70,7 +70,7 @@ Sub-table `maps`: byte **before** the pointer target is the count *n* (0xFF = no
 
 | ptr | struct | notes |
 |---|---|---|
-| `roomptr` | `ROOM{x,y,pgm,id,type}` ×5, FF-terminated | doors: `pgm` = **index into this location's PGM list** (not an overlay number), `id` = room id (`_rmdata[0]`: P05 service-room class, `docs/rules/services.md`; resident index for houses), `type` → `_rmdata+6`. `tools/doors.py` resolves them |
+| `roomptr` | `ROOM{x,y,pgm,id,type}` ×5, ends at the first `x == 0` (P02 0x758) | doors (type 2 with `pgm` 'x'/'y' and `id` '+'/'−' = pass-through door, `rules/locations.md`): `pgm` = **index into this location's PGM list** (not an overlay number), `id` = room id (`_rmdata[0]`: P05 service-room class, `docs/rules/services.md`; resident index for houses), `type` → `_rmdata+6`. `tools/doors.py` resolves them |
 | `genptr` | `GEN{x,y,type,tile,num}` ×5, FF-term. | generic townsfolk; `num` 0xFA night-only, 0xFB day-only, ≥0xFC always |
 | `knpcptr` | `KNPC{x,y,type,tile,num,name,appear,disapp,ifevent,ifnevent}` ×10, FF-term. | named NPCs; `name` indexes `gwrds`; `num<0x20` = companion |
 | `resids` | `RESID{name,num,appear,disapp,ifevent,ifnevent}` ×6, **indexed by room id** | resident of each room (`num` 0xFE = none) |

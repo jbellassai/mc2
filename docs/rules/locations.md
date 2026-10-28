@@ -69,7 +69,7 @@ For each occupied party slot (5…0) the target square is tested in order:
 1. a member who is Dead, Paralyzed, Exhausted, Poisoned or Starving (`h_cond1 & 0xFC`) counts as blocked — so nobody moves (read from the code, not yet checked in play);
 2. walkable (`_ChkWlk`) → ok; else a water square while `_wlkwcount > 0` (Walkwater, V02 service 02) → ok;
 3. an **exit** (`exitptr` `{x, y, pgm, tx, ty}`) → change level: PGM record `pgm` (`_curmpg/_curtils/_curvar`) at `(tx, ty)` (in location `_curvar == 0x39` the target comes from a per-member table at `LOCTYPE+22`);
-4. a **door** (`roomptr` `{x, y, pgm, id, type}`) → enter it (below);
+4. a **door** (`roomptr` `{x, y, pgm, id, type}`, list ends at the first `x == 0`) → enter it (below). Exception, **pass-through doors** (type 2, `pgm` = 'x' or 'y', `id` = '+' or '−'; Oshcrun, Ground Floor, Katarra, Dragos 2, Drakhelm, Drakhelm 1/3): the whole party jumps (its extent along that axis + 1) squares in that direction — the extent comes from the occupied cells of the 3×3 formation `_formatn` (`_PartyWH`), and the step is re-tested from there (blocked → it stays where it was);
 5. otherwise blocked; V02 service 08 records what blocked him in `_bangstg[member]`: 1 = a tileset `aniptr` record of class **'C'** (the barrier Pierce removes), 2 = class **'B'** (the barrier Repel removes), 5 = plain wall.
 
 If any member is blocked the whole party stays put, sound 0x0E plays and V02 service 09 runs: every member with `_bangstg = 1` loses **10 + RndCo(10) energy**, with `_bangstg = 2` loses **1 HP**; HP is then floored at 1 (a barrier never kills), `_IsHeTr`, `MultiBang(0x17)`. A successful step costs time (12 steps = one 5-minute tick, `Towns` above), decrements `_wlkwcount`, then checks the special spots.

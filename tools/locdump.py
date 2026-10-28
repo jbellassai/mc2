@@ -18,6 +18,11 @@ def recs(d, off, size, nrec=None):
         out.append(tuple(d[off:off+size])); off += size
     return out
 
+def rooms(d, off):
+    """ROOM records {x, y, pgm, id, type}: the engine stops at the first x == 0 (P02 0x758, P01 ovl_0c1e)."""
+    out = recs(d, off, 5)
+    return out[:next((i for i, r in enumerate(out) if r[0] == 0), len(out))]
+
 def dump(path, out):
     L = load_loc(path); d = L['raw']; p = L['ptr']
     ends = sorted(v for v in p.values() if v) + [len(d)]
@@ -30,7 +35,7 @@ def dump(path, out):
     name = lambda i: words[i] if i < len(words) else f"?{i}"
     if p['roomptr']:
         w("rooms (x y pgm id type):\n")
-        for r in recs(d, p['roomptr'], 5): w(f"  {r}\n")
+        for r in rooms(d, p['roomptr']): w(f"  {r}\n")
     if p['pgmptr']:
         w("pgms (pgmnum tilefile datafile diskside): " + ' '.join(str(r) for r in recs(d, p['pgmptr'], 4, (end('pgmptr') - p['pgmptr']) // 4)) + "\n")
     if p['exitptr']:
