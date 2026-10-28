@@ -59,6 +59,8 @@ Every 11×9 interior — shop, inn, house, temple, dungeon room, mushroom patch,
 | P04 mushroom patch, P96 wilderness arena (`_cmbtyp 1`) | 0 | `_curter` / `_terrain` — terrain under the party |
 | P96 street / other fights (`_cmbtyp` 0, 2–4; table P96 file 0xCC4 = −1) | — | the arena is cut from the current map around the party |
 
+**Room records keep one list per room index.** A shared room file (D05 stores, D07 inns, D13 casinos, …) serves every room of its kind, so P05 `ovl_16fa` (and P09 likewise) skips `idx` 0xFF-terminated lists to find this room's **exits**, **townsfolk** (`genptr`) and **named NPCs** (`knpcptr`); an empty list is a lone 0xFF. Room exits are 6 bytes `{x, y, pgm, tx, ty, datafile}`: leaving puts the party back in town `Ddatafile` with the window at `(tx, ty)` (leader at window cell (5,4)) — the room's PGM records carry datafile 255 because the town comes from here. Doors are entered directly when their `type` is 0 or 3; bit 0x80 = key door; any other type is a locked private home (P02 `ovl_196b`: resident in the party → "I have a key", else the Knock/Pick/Break/Leave menu, `rules/locations.md`).
+
 `G04E00.MCM` is never referenced. `tools/render_rooms.py original out/rooms` renders every door's room (995 doors → 137 distinct images) plus a sheet of every chunk per (G file, tileset); `tools/gallery.py out` writes `out/index.html` with each location map and its rooms.
 
 Six `MxxE80.MCM` blocks are referenced by **no** location record, no `V80` tileset exists and no EXE/overlay code loads map letter 80 (`_LoadMap` callers checked): cut content, ignore for a port.

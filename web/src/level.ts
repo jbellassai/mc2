@@ -1,6 +1,7 @@
 // A program-2 location (town or dungeon level): its composed map and who is on it (docs/rules/locations.md, npcs.md).
-import { hex, json, image, two, type Location, type TileData } from './pack';
+import { hex, json, image, two, type Location, type RoomRecord, type TileData } from './pack';
 import type { Clock } from './clock';
+import type { RoomRef } from './room';
 
 export interface Figure { x: number; y: number; tile: number; num: number; name?: string }
 
@@ -17,6 +18,11 @@ export class Level {
     this.walk = new Set(data.walkable);
   }
 
+  private static async make(id: string, loc: Location, ts: number): Promise<Level> {
+    return new Level(id, loc, ts, await image(`tilesets/V${two(ts)}.png`), await json<TileData>(`tiledata/B${two(ts)}.json`));
+  }
+
+  /** A town or dungeon level composed from its map blocks. */
   static async load(id: string): Promise<Level> {
     const loc = await json<Location>(`locations/${id}.json`);
     const blocks = await json<Record<string, string>>('blocks.json');
@@ -24,13 +30,24 @@ export class Level {
     const counts = new Map<number, number>();
     for (const b of loc.blocks) counts.set(b.tileset, (counts.get(b.tileset) ?? 0) + 1);
     const ts = [...counts].sort((a, b) => b[1] - a[1])[0][0];
-    const lv = new Level(id, loc, ts, await image(`tilesets/V${two(ts)}.png`), await json<TileData>(`tiledata/B${two(ts)}.json`));
+    const lv = await Level.make(id, loc, ts);
     for (const b of loc.blocks) {
       if (b.block === 0) continue;
       const m = hex(blocks[`M${two(b.block)}E${two(b.tileset)}`]);   // later blocks win on overlap
       for (let y = 0; y < 42; y++)
         for (let x = 0; x < 42; x++) lv.cells[(b.y + y) * lv.w + b.x + x] = m[y * 42 + x];
     }
+    return lv;
+  }
+
+  /** An 11×9 room: one G-file chunk drawn with the tileset of the door's PGM record (formats.md, Room maps). */
+  static async loadRoom(ref: RoomRef): Promise<Level> {
+    const rec = await json<RoomRecord>(`locations/${ref.id}.json`);
+    const rooms = await json<Record<string, string[]>>('rooms.json');
+    const i = ref.index;   // P05 ovl_16fa: this room's own exit / townsfolk / NPC lists
+    const loc: Location = { ...rec, mapsize: [11, 9], exits: rec.exits[i] ?? [], townsfolk: rec.townsfolk[i] ?? [], npcs: rec.npcs[i] ?? [] };
+    const lv = await Level.make(ref.id, loc, ref.pgm.tileset);
+    lv.cells.set(hex(rooms[`G${two(ref.map.g)}`][ref.map.chunk]));
     return lv;
   }
 

@@ -2,7 +2,7 @@
 
 export interface Door { x: number; y: number; pgm: number; id: number; type: number }
 export interface Pgm { program: number; tileset: number; datafile: number; disk: number }
-export interface Exit { x: number; y: number; pgm: number; tx: number; ty: number }
+export interface Exit { x: number; y: number; pgm: number; tx: number; ty: number; datafile?: number }
 export interface Townsfolk { x: number; y: number; type: number; tile: number; num: number }
 export interface Npc extends Townsfolk { name: number; appear: number; disappear: number; ifevent: number; ifnevent: number }
 export interface Block { block: number; tileset: number; x: number; y: number }
@@ -19,7 +19,15 @@ export interface Location {
   exits: Exit[];
   townsfolk: Townsfolk[];
   npcs: Npc[];
+  residents: { name: number; num: number; appear: number; disappear: number; ifevent: number; ifnevent: number }[];
   roommap?: { g: number; chunks: number[] } | null;
+}
+
+/** A room record as exported: exits, townsfolk and NPCs are one list per room index (formats.md, Room maps). */
+export interface RoomRecord extends Omit<Location, 'exits' | 'townsfolk' | 'npcs'> {
+  exits: Exit[][];
+  townsfolk: Townsfolk[][];
+  npcs: Npc[][];
 }
 
 export interface TileData { names: string[]; nameindex: number[]; walkable: number[]; walkable_los: number[] }

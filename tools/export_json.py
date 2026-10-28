@@ -19,6 +19,14 @@ def recs(b, size, stop=None):
         out.append(list(r))
     return out
 
+def lists(b, size):
+    """Per-room-index lists (P05 ovl_16fa skips idx 0xFF-terminated lists): records of `size` bytes, each list ended by 0xFF."""
+    out, cur, i = [], [], 0
+    while i < len(b):
+        if b[i] == 0xFF: out.append(cur); cur = []; i += 1
+        else: cur.append(list(b[i:i + size])); i += size
+    return out
+
 def tables(d):
     """The 20 header pointers and each sub-table's bytes, bounded by the next larger pointer.
     A pointer equal to roomptr (other than roomptr itself) marks an unused table (locations.md)."""
@@ -44,11 +52,18 @@ def location(d, kind):
         L['roommap'] = {'g': t['maps'][0], 'chunks': list(t['maps'][1:])} if t['maps'] else None
     L['doors'] = [dict(zip(('x', 'y', 'pgm', 'id', 'type'), r)) for r in recs(t['roomptr'], 5, lambda r: r[0] == 0)]
     L['pgms'] = [dict(zip(('program', 'tileset', 'datafile', 'disk'), r)) for r in recs(t['pgmptr'], 4)]
-    L['exits'] = [dict(zip(('x', 'y', 'pgm', 'tx', 'ty'), r)) for r in recs(t['exitptr'], 5, lambda r: r[0] in (0, 0xFF))]
+    if kind == 'room':   # one list per room index: exits {x,y,pgm,tx,ty,datafile}, townsfolk, named NPCs
+        L['exits'] = [[dict(zip(('x', 'y', 'pgm', 'tx', 'ty', 'datafile'), r)) for r in l] for l in lists(t['exitptr'], 6)]
+        L['townsfolk'] = [[dict(zip(('x', 'y', 'type', 'tile', 'num'), r)) for r in l] for l in lists(t['genptr'], 5)]
+        L['npcs'] = [[dict(zip(('x', 'y', 'type', 'tile', 'num', 'name', 'appear', 'disappear', 'ifevent', 'ifnevent'), r))
+                      for r in l] for l in lists(t['knpcptr'], 10)]
+    else:
+        L['exits'] = [dict(zip(('x', 'y', 'pgm', 'tx', 'ty'), r)) for r in recs(t['exitptr'], 5, lambda r: r[0] in (0, 0xFF))]
     if kind == 'region': return L
-    L['townsfolk'] = [dict(zip(('x', 'y', 'type', 'tile', 'num'), r)) for r in recs(t['genptr'], 5, lambda r: r[0] == 0xFF)]
-    L['npcs'] = [dict(zip(('x', 'y', 'type', 'tile', 'num', 'name', 'appear', 'disappear', 'ifevent', 'ifnevent'), r))
-                 for r in recs(t['knpcptr'], 10, lambda r: r[0] == 0xFF)]
+    if kind != 'room':
+        L['townsfolk'] = [dict(zip(('x', 'y', 'type', 'tile', 'num'), r)) for r in recs(t['genptr'], 5, lambda r: r[0] == 0xFF)]
+        L['npcs'] = [dict(zip(('x', 'y', 'type', 'tile', 'num', 'name', 'appear', 'disappear', 'ifevent', 'ifnevent'), r))
+                     for r in recs(t['knpcptr'], 10, lambda r: r[0] == 0xFF)]
     L['residents'] = [dict(zip(('name', 'num', 'appear', 'disappear', 'ifevent', 'ifnevent'), r)) for r in recs(t['resids'], 6)]
     L['people'] = [dict(zip(('word', 'npc', 'x'), r)) for r in recs(t['peopr'], 3, lambda r: r[0] == 0xFF)]
     L['news'] = [dict(zip(('npctype', 'event', 'text'), r)) for r in recs(t['newsr'], 3, lambda r: r[0] == 0xFF)]

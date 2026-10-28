@@ -18,7 +18,7 @@ Always: `kind` (`level` = town or dungeon level, `room` = 11×9 interior, `regio
 
 Not for regions: `townsfolk` `[{x, y, type, tile, num}]`, `npcs` `[{x, y, type, tile, num, name, appear, disappear, ifevent, ifnevent}]`, `residents` (indexed by room id) `[{name, num, appear, disappear, ifevent, ifnevent}]`, `people` `[{word, npc, x}]`, `news` `[{npctype, event, text}]`.
 
-Rooms: `roommap` `{g, chunks}` = `maps[0]` and the chunk list (`formats.md`, *Room maps*, for which chunk a door uses).
+Rooms: `roommap` `{g, chunks}` = `maps[0]` and the chunk list (`formats.md`, *Room maps*, for which chunk a door uses); `exits`, `townsfolk` and `npcs` are **lists of lists**, one per room index (`id − boundary`, or entry 0 of a bank record); room exits add `datafile` (the town to return to).
 
 Levels: `look` `[{x, y, text}]`, `spots` `[{x, y, type, d1, d2, d3}]`, `keydoor` `[{unused, x, y, newtile, text}]`, `hrooms` `[{id, group, reward, amount, map, xy[4]}]` (`rules/locations.md`).
 

@@ -37,7 +37,7 @@ try {
     await send('Input.dispatchKeyEvent', { type: 'keyDown', key, code: key });
     await send('Input.dispatchKeyEvent', { type: 'keyUp', key, code: key });
   }
-  await sleep(200);
+  await sleep(500);
   console.log(await evaluate('document.getElementById("status").textContent'));
   writeFileSync(out, Buffer.from((await send('Page.captureScreenshot', { format: 'png' })).result.data, 'base64'));
   ws.close();
