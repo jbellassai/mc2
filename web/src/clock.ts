@@ -5,6 +5,7 @@ const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 
 
 export class Clock {
   steps = 0;
+  weather = 0;   // _weather: new game starts Clear (_ssnwthrs = [100, 0, …]); regional weather comes with the world map
   constructor(public minute: number, public hour: number, public date: number, public month: number) {}
 
   /** New game: 8:30, day 2 of month 6 (new_game.md). */

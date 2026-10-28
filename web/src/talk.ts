@@ -6,6 +6,7 @@ interface Cmd { op: 'E' | 'C' | 'S'; arg?: number; alt?: number; song?: number }
 interface Entry { word: number; resp: number; cmds: Cmd[] }
 interface Slot { script: Entry[]; greet: number; bye: number; unknown: number }
 interface Conversation { texts: string[]; words: string[]; slots: Slot[] }
+interface SmallTalk { lines: string[]; weather: [number, number][] }
 
 /** What conversations need to know about the speaker's side. */
 export interface Speaker { readonly name: string; readonly female: boolean; readonly charm: number }
@@ -36,13 +37,13 @@ export function format(s: string, hero: Speaker, other: string): string {
 
 export class Talk {
   private constructor(private loc: Location, private who: Figure, private hero: Speaker, private events: Set<number>,
-                      private comtxt: string[], private conv: Conversation | null) {}
+                      private comtxt: string[], private small: SmallTalk, private conv: Conversation | null) {}
 
   static async open(loc: Location, who: Figure, hero: Speaker, events: Set<number>): Promise<Talk> {
-    const comtxt = await json<string[]>('comtxt.json');
+    const [comtxt, small] = await Promise.all([json<string[]>('comtxt.json'), json<SmallTalk>('p91text.json')]);
     const named = who.num < 0xfa;
     const conv = named ? await json<Conversation>(`conversations/C${String(who.num >> 3).padStart(2, '0')}.json`) : null;
-    return new Talk(loc, who, hero, events, comtxt, conv);
+    return new Talk(loc, who, hero, events, comtxt, small, conv);
   }
 
   get name(): string { return this.who.name ?? ''; }
@@ -77,9 +78,15 @@ export class Talk {
     for (const c of e.cmds) {
       if (c.op === 'E' && !this.events.has(c.arg!)) resp = c.alt!;
       // _tailorcharm and _chrmods start at 0 (not modelled yet)
-      if (c.op === 'C' && this.hero.charm < c.arg!) { resp = c.alt!; extra = this.comtxt[0x16].replace('%b', String(c.arg)); }
+      if (c.op === 'C' && this.hero.charm < c.arg!) { resp = c.alt!; extra = '\n' + this.small.lines[15]; }   // dialogue.md
     }
     return { text: this.say(texts[resp] + extra), end: false };
+  }
+
+  /** Menu item 1: a random small-talk line for the current weather (P91 pairs at file 0x48). */
+  weather(weather: number): string | null {
+    const run = this.small.weather.filter(([w]) => w === weather);
+    return run.length ? this.say(this.small.lines[run[Math.floor(Math.random() * run.length)][1]]) : null;
   }
 
   /** ovl_0b0e: a random newsr line for this speaker's type and the events that are set (townsfolk). */

@@ -47,6 +47,7 @@ async function main() {
     panel.show();
     speak(t.greeting());
     panel.set([{ label: 'News', act: () => { panel.line('> News', 'you'); speak(t.news() ?? t.ask('').text); } },
+               { label: 'Weather', act: () => { panel.line('> Weather', 'you'); speak(t.weather(clock.weather) ?? t.ask('').text); } },
                { label: 'End', act: end }],
       word => {
         panel.line(`> ${word}`, 'you');
