@@ -1,7 +1,7 @@
 """Build the web port's data pack from the original files (decision 1). Never commit or publish the output.
 usage: export_json.py ORIGDIR OUTDIR -> OUTDIR/locations/*.json, tiledata/Bnn.json, tilesets/Vnn.png, sprites/E0n.png, conversations/Cnn.json,
        blocks.json, rooms.json, sprites.json, comtxt.json, items.json, heroes.json,
-       commands.json, npctypes.json, p90.json, p02text.json, p91text.json, p01.json, p05.json, p09.json, p92text.json, p97.json, p93text.json, conds.json, companions.json, exetables.json, combat.json
+       commands.json, npctypes.json, p90.json, p02text.json, p91text.json, p01.json, p05.json, p09.json, p92text.json, p97.json, p93text.json, p93.json, conds.json, companions.json, exetables.json, combat.json
 Schema: docs/data_schema.md. Byte strings are lowercase hex; every list is in file order."""
 import json, os, struct, sys
 sys.path.insert(0, os.path.dirname(__file__))
@@ -226,6 +226,8 @@ def main(src, dst):
     dump(f'{dst}/p02text.json', [x.decode('latin1') for x in p02[0x67:0x28A].split(b'\0')[:17]])   # town program's own texts
     p93 = open(f'{src}/P93.MCO', 'rb').read()
     dump(f'{dst}/p93text.json', [x.decode('latin1') for x in p93[0x3D:0x254].split(b'\0')])   # camp texts (rules/camp.md)
+    sb = lambda b: b - 256 if b > 127 else b
+    dump(f'{dst}/p93.json', {'hunt': {'terrain': [sb(b) for b in p93[0x03:0x0D]], 'weather': [sb(b) for b in p93[0x0D:0x19]]}})   # hunting odds, -1 = impossible
     dump(f'{dst}/conds.json', [x.decode('latin1') for x in exe[ds + 0x4204:ds + 0x4300].split(b'\0')[:12]])   # _w_conds: OK, then cond1<<8|cond2 bits 15…5
     p97 = open(f'{src}/P97.MCO', 'rb').read()
     p92 = open(f'{src}/P92.MCO', 'rb').read()
@@ -297,6 +299,7 @@ def main(src, dst):
         'useall': [i + 0x31 for i in range(32) if struct.unpack_from('<H', exe, ds + 0x8AE + 2 * i)[0]],   # _AllDoit asks
         # _SetTxtToD: the time-of-day words (morning … night) and TODWORDS, the word by hour
         'attribs': [x.decode('latin1') for x in exe[ds + 0x3AAE:ds + 0x3C00].split(b'\0')[:29]],   # _w_attrib + _w_skills, by HERO offset − 13
+        'speltim': list(exe[ds + 0x2B8F:ds + 0x2BB9]),   # _speltim: learn ticks per spell (_LrnTim)
         'tod': {'words': [x.decode('latin1') for x in exe[ds + 0x41E0:ds + 0x4204].split(b'\0')[:5]], 'hour': list(exe[ds + 0x38F2:ds + 0x390A])}})
     # Combat (rules/combat.md, encounters.md): monsters by code − 5, groups by number − 60, weapons by item − 9.
     p96 = open(f'{src}/P96.MCO', 'rb').read()

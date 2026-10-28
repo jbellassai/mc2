@@ -10,7 +10,7 @@ import { panel, type Button } from './panel';
 import { loadTrade, lot, single, prices, incObj, sellable } from './shop';
 import { ServiceRoom, noon, rent, INN } from './service';
 import { Special, casino, refill, gates } from './special';
-import { camp } from './camp';
+import { camp, OPEN, SHIP, DUNGEON, INNROOM, GUEST } from './camp';
 import { Party, type Member } from './party';
 import { World } from './world';
 import { Patches, type Patch } from './patch';
@@ -31,7 +31,8 @@ async function main() {
     'items', 'p93text', 'conds'].map(n => json<string[]>(`${n}.json`)));
   const p97 = await json<{ texts: string[]; events: Record<string, number> }>('p97.json');
   const tables = await json<{ hungerhours: number[]; nousetext: number[]; useall: number[]; lootvalues: number[]; weathers: string[]; attribs: string[];
-    tod: { words: string[]; hour: number[] } }>('exetables.json');
+    tod: { words: string[]; hour: number[] }; speltim: number[] }>('exetables.json');
+  const p93tables = await json<{ hunt: { terrain: number[]; weather: number[] } }>('p93.json');
   const world = await World.create();
   const p92 = await json<string[]>('p92text.json');
   const patches = await Patches.create();
@@ -402,7 +403,8 @@ async function main() {
     message = '';
     if (ships.sailing) {                                                 // ovl_10f7 @0x114D: the boat moves, no energy
       ships.x[ships.cur] = x; ships.y[ships.cur] = y;
-      for (let n = 4 + ships.d.weather[clock.weather]; n > 0; n--) tick();
+      if (shipCamp) shipCamp();                                          // camping aboard: one camp pass, not the step's time
+      else for (let n = 4 + ships.d.weather[clock.weather]; n > 0; n--) tick();
     } else {
       for (let n = world.stepTicks(ter, clock, party); n > 0; n--) tick();
       world.fatigue(ter, clock, party);
@@ -412,13 +414,16 @@ async function main() {
     world.movePatrols(level, x, y, clock.month);
     // ovl_0846: a live guard spot under the party, else a live patrol (which may just have walked onto it)
     const guard = world.guards().find(g => g.x === x && g.y === y), n = guard ? -1 : world.patrolAt(x, y);
-    if (guard || n >= 0) {
-      const lv = await Level.wild(world.patchTileset(ter), ter), diff = world.diff(cdata.guarddiff);
-      const group = guard ? guard.group : world.patrolGroup(n);
-      return startFight(lv, Fight.wild(cdata, lv, party.members, group, diff), diff,
-        () => guard ? world.cleared.add(guard.bit) : world.dead.add(n));
-    }
+    if (guard || n >= 0) return wildFight(guard, n);
     world.engage(x, y);
+  };
+  /** A world-map fight with a guard spot or patrol n on the party's square (ovl_0846). */
+  const wildFight = async (guard: ReturnType<World['guards']>[number] | undefined, n: number, ambush = false) => {
+    const ter = level.data.nameindex[level.tile(lead.x, lead.y)];
+    const lv = await Level.wild(world.patchTileset(ter), ter), diff = world.diff(cdata.guarddiff);
+    const group = guard ? guard.group : world.patrolGroup(n);
+    startFight(lv, Fight.wild(cdata, lv, party.members, group, diff), diff,
+      () => guard ? world.cleared.add(guard.bit) : world.dead.add(n), null, ambush);
   };
 
   // ---- ships (rules/ships.md; ships.ts) ----
@@ -460,6 +465,7 @@ async function main() {
    *  longer?" (0x16), else "…drop anchor here and wait?" (0x11); Yes buys days (cancel = No). Then the step ashore. */
   const disembark = (dx: number, dy: number) => {
     const s = world.ships, i = s.cur;
+    if (shipCamp) { message = shipText(i, 0x19); return; }              // "End camp activities first."
     const ashore = (n: number) => { s.land(n); panel.hide(); void worldStep(dx, dy).then(render); };
     panel.show();
     panel.line(shipText(i, 0x10));
@@ -797,9 +803,8 @@ async function main() {
         panel.line(ptext(2, h) + ' ' + ch.texts[3 + odd]);
         panel.line(ptext(5, h));
       } else {
-        // _SkillUp0 for lockpick (skill 10): (50 − skill)/4 % below 50, else 1 %; capped by _MaxSkill.
-        const chance = r.h_lockpck < 50 ? (50 - r.h_lockpck) >> 2 : 1;
-        if (r.h_lockpck < cdata.maxtbl[10 * 6 + r.h_race] && rnd(100) < chance) { r.h_lockpck++; panel.line(ctext(0x60, { h: h.name, l: 'Lockpick' })); }
+        const up = skillUp0(h, 10);                                     // lockpick
+        if (up) panel.line(up);
         panel.line(ptext(9, h));
       }
     }
@@ -1169,13 +1174,35 @@ async function main() {
       if (!special?.whisper(w)) close(comtxt[0x83]);
     }, 'Word');
   };
+  /** _SkillUp0 (combat.md): skill `idx` (SKILLS order) +1 with chance (50 − skill)/4 % below 50, else 1 %, up to
+   *  _MaxSkill; returns comtxt 0x60 or ''. */
+  const skillUp0 = (h: Hero, idx: number) => {
+    const r = h.rec as Record<string, number>, [f, l] = SKILLS[idx], v = r[f];
+    if (v >= cdata.maxtbl[idx * 6 + r.h_race] || rnd(100) >= (v < 50 ? (50 - v) >> 2 : 1)) return '';
+    r[f] = v + 1;
+    return ctext(0x60, { h: h.name, l });
+  };
+  let shipCamp: (() => void) | null = null;   // camping aboard: one camp pass per sailing step (P93 SUB_04d4)
+  /** `_CAMPSITE` (P93 ovl_1099): world map 2 (aboard 4), a P07 dungeon room 8, inn rooms 0x40-0x47 0x20, the camp
+   *  rooms 0x5C-0x6B 0x10, else 1. Not built: `_locspec` 0x14 room 9 (also a guest room). */
+  const campsite = () => level.loc.kind === 'world' && !patch ? world.ships.sailing ? SHIP : OPEN : chamber ? DUNGEON
+    : service && service.room >= 0x40 && service.room < 0x48 ? INNROOM : service && service.room >= 0x5c && service.room < 0x6c ? GUEST : 1;
   /** Camp (C). In a P05 inn room P05 first refuses the keeper's side (acting member at x ≥ 4 and y ≥ 5: comtxt 0x24);
    *  when camp ends with the rent used up, the party goes back to the base square and the keeper speaks (ovl_19b0/167f). */
   const campCmd = () => {
     if (world.ships.passage === 1 && world.ships.sailing) { message = shipText(world.ships.cur, 0x27); return render(); }   // working for passage
     const inn = service?.kind === INN && service.room < 0x5c ? service.room - 0x40 : -1;
     if (inn >= 0 && lead.x >= 4 && lead.y >= 5) { message = say(comtxt[0x24]); return render(); }
-    camp({ party, clock, cmd, p93, items, use: () => useCmd(), tick, rent: () => inn >= 0 ? rent[inn] : null, done: () => {
+    camp({ party, clock, cmd, p93, items, comtxt, site: campsite(), terrain: level.data.nameindex[level.tile(lead.x, lead.y)],
+      hunt: p93tables.hunt, speltim: tables.speltim, spells: cdata.spells.names, skillUp: skillUp0,
+      use: () => useCmd(), tick, rent: () => inn >= 0 ? rent[inn] : null, sail: p => { shipCamp = p; },
+      wild: watch => {                                                   // P01 ovl_169e and the fight check (ovl_0846)
+        world.movePatrols(level, lead.x, lead.y, clock.month);
+        const n = world.patrolAt(lead.x, lead.y);
+        if (n < 0) { world.engage(lead.x, lead.y); return false; }
+        void wildFight(undefined, n, !watch);
+        return true;
+      }, done: () => {
       close();
       if (inn < 0 || rent[inn]) return;
       party.place(roomStart.x, roomStart.y);
@@ -1317,7 +1344,7 @@ async function main() {
     casino.splice(0, 8, ...(sv.casino ?? casino.map(() => 1000)));
     gates.clear(); (sv.gates ?? []).forEach(g => gates.add(g));
     [walkSteps, walkTicks] = sv.walk;
-    outside = null; service = null; special = null; patch = null; fight = null; chamber = null; chamberBack = null;
+    outside = null; service = null; special = null; patch = null; fight = null; chamber = null; chamberBack = null; shipCamp = null;
     go(await Level.load(sv.level.id, sv.level.id === 'D01' ? undefined : sv.level.ts), sv.at.x, sv.at.y);
     message = '';
   };

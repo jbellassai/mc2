@@ -74,7 +74,7 @@ Moving onto a tile that is not walkable on foot (`_ChkWlk == 0`) and is not a to
 
 - A ship enters only **water** (terrain class 13, `B01` name "water"). Every other tile a walker is refused (river 12, mountains, chasm, settlements) is refused silently (`ovl_0cb2` @0xEA1 → `stc`), and so are town entrances (@0xD1C) and features (@0xD49) while `_sailsw`. A walkable tile starts the landing (below). Leaving the loaded map area is refused with "The captain says it's unsafe to sail in that direction!" (0x14, `ovl_147c` returning −1; the same text answers a walker at the world edge).
 - Each step moves the boat with the party (`boatx/y[curcap] = party x,y`), costs `4 + sailing_weather[weather]` five-minute ticks (`ovl_10f7` @0x114D; the table byte is added to 4 as a byte, so Clear and Overcast cost 3), none while a camp is running, and **no** energy; the land fatigue loop is skipped.
-- Camping is an open camp with `CAMPSITE` bit 4 (`camp.md`). A **Dwarf** (`h_race == 4`) aboard is seasick: "%o is too seasick to do anything!" (P93 text 0x15) and cannot take a camp activity.
+- Camping aboard is `_CAMPSITE` 4 (`camp.md`): no hunting, watching or patrols, and the loop does not run on its own; every sailing step taken from the camp menu makes one camp pass (one `_CalUpd`) instead of the step's time. Landing is refused until the camp ends (0x19). A **Dwarf** (`h_race == 4`) aboard is seasick: "%o is too seasick to do anything!" (P93 text 0x15) and cannot sleep, fix, watch or hunt (learning is allowed).
 - Teleport spells: "It's impossible to teleport from a moving ship." (0x1A).
 - **Rough sea barrier**: terrain class 13 on row `y == 101` is impassable while sailing — "The sea is unnaturally rough! The *ship* cannot sail to the south!" (0x29) — until event byte 12 bit 0x40 is set. Using the **Conch** (item 0x4B, command key 'K', `ovl_1349`) while aboard on row `y == 100` sets that bit: "When %h blows the conch, the seas calm!" (0x2A). Anywhere else the conch answers "Nothing happens." (comtxt 0x83).
 
@@ -109,7 +109,7 @@ EXE `_CapAtLiberty`: a KNPC row of type 0x1D is shown only while the matching ca
 
 ## Port notes
 
-Built in the web port (`web/src/ships.ts`, `main.ts` *ships*): hiring, buying days, sailing, landing and anchoring, the daily countdown, time is up / working for passage, Amos, the rough sea and the Conch (on Use; the original's K command). Not yet: the seasick Dwarf and the ship campsite (the port has no open camp), the teleport refusal (no teleport spells yet).
+Built in the web port (`web/src/ships.ts`, `main.ts` *ships*): hiring, buying days, sailing, landing and anchoring, the daily countdown, time is up / working for passage, Amos, the rough sea and the Conch (on Use; the original's K command). the ship campsite and the seasick Dwarf (`camp.ts`; in the port Begin aboard closes the camp menu and the arrow keys sail, C reopens it to End). Not yet: the teleport refusal (no teleport spells yet).
 
 - Only `_capsta`, `_boatx/y`, `_capdays`, `_sailsw`, `_curcap` need to persist; everything else is derivable.
 - Quirks a port may want to fix: passage mode not saved; the hire prompt for state 4/5 boats found at sea (unreachable in practice); the "unsafe to sail" text on foot; Amos' theft being irreversible and unexplained.
