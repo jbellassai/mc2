@@ -80,7 +80,7 @@ else:  share = partybucks / 4
 So a hireling expects roughly a quarter of the party's take; giving them less than ~5 coins' worth in a week sends attitude to ≤ 3 and they leave. Attitude is 0–200 (`FFSAVA`: Buzbazgut 200, Somona 20).
 
 ## Volunteers after combat (`P95 ovl_0fc0`)
-For each volunteer (`h_relatn == 1`) after a fight: `attitude = max(0, attitude + h_loyalty − 20)`. If attitude ≤ 40 and `RndCo(80) ≥ attitude` and `RndCo(12) ≥ h_loyalty`, the member leaves the party (P95 local text 0x10D, slot freed, `_swass = 3`). Loyalty is 0–12 per companion, so every fight costs 8–20 attitude; nothing in the trade code raises it (TODO: find what does — gifts do not).
+For each volunteer (`h_relatn == 1`) after a fight: `attitude = max(0, attitude + h_loyalty − 20)`. If attitude ≤ 40 and `RndCo(80) ≥ attitude` and `RndCo(12) ≥ h_loyalty`, the member leaves the party (P95 local text 0x10D, slot freed, `_swass = 3`). Loyalty is 0–12 per companion, so every fight costs 8–20 attitude; nothing in the trade code raises it; the only increase is +1 per day in the party up to 100 (`npcs.md`, *Attitude*).
 
 ## Other gold sinks
 - `P01 ovl_0fcc`: a ship captain's anchored-wait days, `days × rate` (`ships.md`).

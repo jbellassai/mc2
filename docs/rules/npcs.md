@@ -32,4 +32,5 @@ KNPC type 0x1D rows are ship captains, shown only while their ship is docked at 
 - Assigned companions (away from the party) run a separate daily morale check and may quit (`assignments.md`).
 - Every new day (`P92 ovl_02ed`) each volunteer in party slots 1–5 with attitude < 100 gets **+1**.
 - Volunteers (`h_relatn 1`): after every combat `attitude = max(0, attitude + h_loyalty − 20)` (`P95 ovl_0fc0`); at ≤ 40 they leave with probability `P(RndCo(80) ≥ attitude) · P(RndCo(12) ≥ loyalty)`.
+- A companion who leaves (`h_attitude 0xFF`, P97 `ovl_05f7`) is reset to attitude **5**, so one who is recruited again starts out unhappy.
 - Initial values per companion (from `FFSAVA.MCS`): e.g. Buzbazgut 200/loyalty 11, Nazim 150/11, King Rebnard 200/12, Somona 20/6, Strephonio 20/0, Argas 20/0 (hired).
