@@ -1069,6 +1069,53 @@ async function main() {
     panel.line(`${name}: ${fmt(p97.texts[plea] + p97.texts[2])}`);
     panel.set([{ label: cmd[3], act: () => go(false) }, { label: cmd[4], act: () => close() }]);
   };
+  // ---- saving (decision 4): the port's own JSON snapshot in localStorage, three slots, only between activities ----
+  const SLOTS = 3, slotKey = (n: number) => `mc2.save.${n}`;
+  const store = {   // localStorage may be missing or refuse (private windows); a failed save says so
+    get: (k: string) => { try { return localStorage.getItem(k); } catch { return null; } },
+    set: (k: string, v: string) => { try { localStorage.setItem(k, v); return true; } catch { return false; } },
+  };
+  const snapshot = () => ({
+    v: 1, when: new Date().toISOString(), place: place() || world.rec?.name || '',
+    clock: { minute: clock.minute, hour: clock.hour, date: clock.date, month: clock.month, weather: clock.weather, juldate: clock.juldate },
+    events: [...events], party: party.snapshot(), level: { id: level.id, ts: level.tileset }, at: { x: lead.x, y: lead.y },
+    world: world.snapshot(), patches: [...patches.left], dunrms: [...dunrms], duntre: [...duntre], chests: [...chests],
+    ambushed: [...ambushed], rent: [...rent], walk: [walkSteps, walkTicks],
+  });
+  type Save = ReturnType<typeof snapshot>;
+  const canSave = () => !fight && !patch && !chamber && level.loc.kind !== 'room';
+  const restore = async (sv: Save) => {
+    Object.assign(clock, sv.clock);
+    events.clear(); for (const e of sv.events) events.add(e);
+    party.restore(sv.party, items);
+    await world.restore(sv.world);
+    patches.left.splice(0, patches.left.length, ...sv.patches);
+    for (const [set, vals] of [[dunrms, sv.dunrms], [duntre, sv.duntre], [chests, sv.chests]] as [Set<string>, string[]][]) { set.clear(); vals.forEach(v => set.add(v)); }
+    ambushed.clear(); sv.ambushed.forEach(v => ambushed.add(v));
+    rent.splice(0, rent.length, ...sv.rent);
+    [walkSteps, walkTicks] = sv.walk;
+    outside = null; service = null; patch = null; fight = null; chamber = null; chamberBack = null;
+    go(await Level.load(sv.level.id, sv.level.id === 'D01' ? undefined : sv.level.ts), sv.at.x, sv.at.y);
+    message = '';
+  };
+  /** G: the game panel — save to or load from a slot, or start over. */
+  const gameMenu = () => {
+    const saved = (n: number) => { try { return JSON.parse(store.get(slotKey(n)) ?? 'null') as Save | null; } catch { return null; } };
+    const label = (n: number) => { const sv = saved(n); return sv ? `${n}: ${sv.place}, ${new Date(sv.when).toLocaleString()}` : `${n}: empty`; };
+    panel.show();
+    const menu = () => panel.set([
+      ...(canSave() ? Array.from({ length: SLOTS }, (_, i) => ({ label: `Save ${label(i + 1)}`, act: () => {
+        panel.line(store.set(slotKey(i + 1), JSON.stringify(snapshot())) ? `Saved to slot ${i + 1}.` : 'This browser refused to save.'); menu();
+      } })) : []),
+      ...Array.from({ length: SLOTS }, (_, i) => i + 1).filter(n => saved(n)).map(n => ({ label: `Load ${label(n)}`, act: () => {
+        void restore(saved(n)!).then(() => { close(); render(); });
+      } })),
+      { label: 'New game', act: () => location.assign(location.pathname) },
+      { label: cmd[0], act: () => close() }]);
+    if (!canSave()) panel.line('Saving is possible on a town or dungeon level or on the world map.');
+    menu();
+  };
+
   let looking = false, talking = false;
   let marking: ((x: number, y: number) => void) | null = null;   // _Mark: the next direction picks a square
   view.canvas.addEventListener('click', e => {
@@ -1091,6 +1138,7 @@ async function main() {
     }
     if (panel.open) return;
     if (e.key === 'i' || e.key === 'I') { sheet(); return; }
+    if (e.key === 'g' || e.key === 'G') { gameMenu(); return; }
     if (e.key === 'l' || e.key === 'L') { looking = true; message = say(comtxt[0x0d]); render(); return; }   // "Mark the target."
     if (e.key === 'c' || e.key === 'C') { campCmd(); return; }
     if (e.key === 'u' || e.key === 'U') { useCmd(); return; }

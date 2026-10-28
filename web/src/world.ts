@@ -15,7 +15,7 @@ export class World {
   /** `_curwthrs`: {weather, hours left} per region; all {Clear, 0} in a new game (FFSAVA). */
   private readonly wthrs = Array.from({ length: 16 }, () => ({ weather: 0, hours: 0 }));
   /** `_ssnwthrs`: the current region's 4 {threshold, weather, duration} triples; new game [100, Clear, 0x8F]. */
-  private ssn = [100, 0, 0x8f, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+  private ssn: number[] = [100, 0, 0x8f, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 
   private constructor(private p01: P01) {}
   static async create(): Promise<World> { return new World(await json<P01>('p01.json')); }
@@ -40,6 +40,15 @@ export class World {
     const dur = this.ssn[3 * i + 2], hi = dur >> 4;
     clock.weather = cur.weather = this.ssn[3 * i + 1];
     cur.hours = hi + rnd((dur & 15) - hi + 2);
+  }
+
+  /** Saved state (save.ts). */
+  snapshot() { return { region: this.region, wthrs: this.wthrs.map(w => ({ ...w })), ssn: [...this.ssn], cleared: [...this.cleared] }; }
+  async restore(s: ReturnType<World['snapshot']>) {
+    this.region = s.region; this.ssn = [...s.ssn];
+    s.wthrs.forEach((w, i) => Object.assign(this.wthrs[i], w));
+    this.cleared.clear(); for (const b of s.cleared) this.cleared.add(b);
+    this.rec = await json<Location>(`locations/R${32 + this.region}.json`);
   }
 
   /** `_grdsta`: guard spots cleared, bit region·8 + n. */

@@ -35,6 +35,22 @@ export class Party {
 
   get leader(): Member { return this.members[0]; }
 
+  /** Saved state (save.ts): the members' records and cells, `_npcsta`, the companions' records as they last left. */
+  snapshot() {
+    return { members: this.members.map(m => ({ rec: m.hero.rec, cell: m.cell, num: m.num })), away: [...this.away], roster: [...this.roster] };
+  }
+  /** Back to a snapshot; the leader keeps its Member and Hero objects (other code holds them). */
+  restore(s: ReturnType<Party['snapshot']>, items: string[]) {
+    const lead = this.members[0];
+    for (const k of Object.keys(lead.hero.rec)) delete lead.hero.rec[k];
+    Object.assign(lead.hero.rec, structuredClone(s.members[0].rec));
+    lead.cell = s.members[0].cell; lead.num = s.members[0].num;
+    this.members.length = 1;
+    for (const m of s.members.slice(1)) this.members.push({ hero: new Hero(structuredClone(m.rec), items), cell: m.cell, x: 0, y: 0, num: m.num });
+    this.away.clear(); for (const n of s.away) this.away.add(n);
+    this.roster.clear(); for (const [n, r] of s.roster) this.roster.set(n, structuredClone(r));
+  }
+
   /** Everyone into formation from the origin (x, y). */
   place(x: number, y: number) {
     for (const m of this.members) { m.x = x + m.cell % 3; m.y = y + Math.floor(m.cell / 3); }

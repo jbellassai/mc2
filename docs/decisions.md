@@ -47,3 +47,18 @@ Numbered, never reused. Status: DECIDED (not yet built) or IMPLEMENTED (with com
 **Consequences:** Node is required only for development. The port lives in its own directory (`web/`) with its own `package.json`.
 
 **Status:** DECIDED.
+
+## 4. Saved games: the port's own JSON snapshot in the browser, three slots, between activities
+
+**Decision:** The port saves its own state model as a JSON snapshot in `localStorage` (three slots, key `mc2.save.N`), from the Game panel (key G), and only while the party is on a town or dungeon level or the world map — not during a fight, in a P05/P07 room or in a mushroom patch.
+
+**Context:** Nothing persisted, so the port could only be played in one sitting. The original saves a raw DS image (`FFSAVx.MCS`, `formats.md`); the port's state is spread over typed objects (party records, world regions, location sets) rather than one memory image, and rooms/fights hold transient state (overlay locals, combat records) that would all need a serial form.
+
+**Alternatives rejected:**
+- *Write `FFSAVx.MCS` images* — would require mapping every DS global the port does not model yet; worth doing as an **import** later (load a DOS save to continue it), not as the port's working format.
+- *Save anywhere, including mid-fight* — every transient structure (combat records, P05 tasks, P07 chest state) would need serialising; the original's own save points are not traced yet, and saving between activities covers normal play.
+- *IndexedDB* — a save is a few tens of KB; `localStorage` is simpler. It can fail (private windows), and the panel says so.
+
+**Consequences:** `World`, `Party` have `snapshot()`/`restore()`; `main.ts` gathers clock, events, the location sets (`_dunrms`, `_duntre`, `_chests`, `_ambush`), mushroom counts, inn rent and the walk counters. New persistent state must be added to the snapshot (bump `v` when the shape changes). A DOS-save importer remains a separate later step.
+
+**Status:** IMPLEMENTED (this commit).
