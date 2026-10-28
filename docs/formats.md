@@ -93,7 +93,7 @@ Loaded by `_LoadTiles(n)` right after `Vnn.MCT`; six leading u16 offsets are rel
 |---|---|
 | `txttbl` | NUL-separated name pool ("a bridge", "grassland", "a plant", "a door" …) |
 | `txtptr` | 128 bytes: name index per tile |
-| `walkptr` | list(s) of tile ids terminated by `FF` — walkability classes (exact semantics TODO) |
+| `walkptr` | two `FF`-terminated tile-id lists: list 1 = **walkable** tiles; list 2 = extra tiles `_ChkWlk` accepts only while `_losflag` is set — only P02 slot 10 (`ovl_1ae7`, the V02 0x0B flood-fill of reachable squares) sets it |
 | `aniptr` | animation sequences, `FF`-terminated groups |
 | `doorptr` | door tile pairs |
 | `colorptr` | 128 bytes: minimap colour per tile |
