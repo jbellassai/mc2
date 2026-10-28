@@ -1,5 +1,6 @@
 // Drive the dev build in headless Chrome: press keys, then save a screenshot and print the status line.
-// usage: node scripts/shot.mjs URL OUT.png [key ...]   keys: ArrowUp ArrowDown ArrowLeft ArrowRight, or any key name; "xN" repeats the previous key
+// usage: node scripts/shot.mjs URL OUT.png [key ...]   keys: any key name (ArrowUp, Enter …); "xN" repeats the previous key;
+// "type:TEXT" types text into the focused field; "wait:MS" pauses
 import { spawn } from 'node:child_process';
 import { writeFileSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -34,7 +35,10 @@ try {
     if (rep) for (let i = 1; i < +rep[1]; i++) keys.push(keys.at(-1)); else keys.push(k);
   }
   for (const key of keys) {
-    await send('Input.dispatchKeyEvent', { type: 'keyDown', key, code: key });
+    if (key.startsWith('type:')) { await sleep(300); await send('Input.insertText', { text: key.slice(5) }); continue; }
+    if (key.startsWith('wait:')) { await sleep(+key.slice(5)); continue; }
+    const extra = key === 'Enter' ? { windowsVirtualKeyCode: 13, text: '\r' } : {};
+    await send('Input.dispatchKeyEvent', { type: 'keyDown', key, code: key, ...extra });
     await send('Input.dispatchKeyEvent', { type: 'keyUp', key, code: key });
   }
   await sleep(500);

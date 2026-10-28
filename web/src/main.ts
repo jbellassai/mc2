@@ -4,10 +4,21 @@ import { Clock } from './clock';
 import { View } from './view';
 import { resolveRoom } from './room';
 import type { Door, Exit } from './pack';
+import { Talk, type Hero } from './talk';
 
 const status = document.getElementById('status')!;
 const START = { level: 'D02', x: 98, y: 18 };     // new_game.md: window (93,14), leader at window cell (5,4)
 const NEW_GAME_EVENTS = [10, 88, 117];
+const HERO: Hero = { name: 'Lukas', female: false, charm: 6 };   // new_game.md profile A (character creation comes later)
+
+const talkBox = document.getElementById('talk')!, log = document.getElementById('log')!;
+const word = document.getElementById('word') as HTMLInputElement;
+
+function line(text: string, cls = '') {
+  const d = document.createElement('div');
+  d.textContent = text; d.className = cls;
+  log.append(d); log.scrollTop = log.scrollHeight;
+}
 
 async function main() {
   const view = await View.create(document.getElementById('view') as HTMLCanvasElement);
@@ -18,6 +29,36 @@ async function main() {
   let outside: { level: Level; x: number; y: number } | null = null;   // where to return from a room
   let figures: Figure[] = level.figures(clock, events);
   let message = 'You have landed in Telermain.';
+  let talk: Talk | null = null;
+
+  const endTalk = () => {
+    const bye = talk?.farewell();
+    if (bye) message = `${talk!.name}: ${bye}`;
+    talk = null; talkBox.hidden = true; render();
+  };
+  const startTalk = async (who: Figure) => {
+    talk = await Talk.open(level.loc, who, HERO, events);
+    log.textContent = '';
+    line(`${who.name ? who.name + ': ' : ''}${talk.greeting()}`);
+    talkBox.hidden = false; word.value = ''; word.focus();
+  };
+  document.getElementById('ask')!.addEventListener('submit', e => {
+    e.preventDefault();
+    if (!talk || !word.value.trim()) return;
+    line(`> ${word.value}`, 'you');
+    const r = talk.ask(word.value);
+    word.value = '';
+    if (r.end) return endTalk();
+    line(r.text);
+  });
+  document.getElementById('news')!.addEventListener('click', () => {
+    if (!talk) return;
+    line('> News', 'you');
+    line(talk.news() ?? talk.ask('').text);
+    word.focus();
+  });
+  document.getElementById('bye')!.addEventListener('click', endTalk);
+  word.addEventListener('keydown', e => { if (e.key === 'Escape') endTalk(); });
 
   const render = () => {
     const room = level.loc.kind === 'room';
@@ -61,7 +102,7 @@ async function main() {
     const who = figures.find(f => f.x === x && f.y === y);
     const door = level.loc.doors.find(d => d.x === x && d.y === y);
     const exit = level.loc.exits.find(e => e.x === x && e.y === y);
-    if (who) message = who.name ? `${who.name} is in the way.` : 'Someone is in the way.';   // assumption: NPCs block
+    if (who) { message = ''; await startTalk(who); }   // walking into someone talks to them (the original uses a Talk command)
     else if (level.walkable(x, y) && !(level.loc.kind === 'room' && exit)) {
       hero.x = x; hero.y = y;
       message = '';
@@ -80,7 +121,7 @@ async function main() {
   let queue = Promise.resolve();   // steps run in order; keys pressed while a room loads are not lost
   addEventListener('keydown', e => {
     const k = KEYS[e.key];
-    if (!k) return;
+    if (!k || talk) return;
     e.preventDefault();
     queue = queue.then(() => step(...k)).catch(err => { status.textContent = String(err); console.error(err); });
   });

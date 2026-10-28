@@ -19,6 +19,8 @@ export interface Location {
   exits: Exit[];
   townsfolk: Townsfolk[];
   npcs: Npc[];
+  script: { word: number; resp: number; cmds: { op: 'E' | 'C' | 'S'; arg?: number; alt?: number; song?: number }[] }[];
+  news: { npctype: number; event: number; text: number }[];
   residents: { name: number; num: number; appear: number; disappear: number; ifevent: number; ifnevent: number }[];
   roommap?: { g: number; chunks: number[] } | null;
 }

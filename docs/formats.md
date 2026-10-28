@@ -137,8 +137,8 @@ Same 20-pointer header as `LOCTYPE`; loaded by `_LoadVar('R', 0x20+region)` when
 ## Save games — `FFSAVx.MCS` is a raw image of the data segment
 `FFSAVA.MCS` is exactly 10,839 bytes = `DS:4CF6` (`_startsvdta`) … `DS:774D` (`_endsvdta`); file offset = DS offset − 0x4CF6. Everything the overlays reach through `[SI+disp]` (SI = 0x4CF6) is therefore saved: clock (`_startsvdta` minute, `_hour`, `_date`, `_month`, `_daynite`, `_weather`, `_season`), `_party[6]` (hero index or 0xFF), `_member0` (37 × 220-byte `HERO`, player = 0, companions = 6–36), `_capsta`, `_knpcstats`, `_npcsta` (32-byte bitmap of removed NPCs), `_events` (32-byte bitmap), `_curwthrs[16]`, `_assgn0` (31 × 25). `FFSAV.MCI` (128 B) is the slot index. `MC2.INT` (2,183 B) is not a save image (TODO).
 
-## Other extensions (unknown)
-`Cnn.MCV` text with offset tables (conversations), `MCE` screens, `E00/E01.MCC` creature tile packs, `CMF`/`MID` music, `VOC` sfx.
+## Other extensions
+`MCE` full screens (not decoded), `CMF`/`MID` music and `VOC` sound effects (standard formats). Conversations and creature tiles: see their sections.
 
 ## `Cnn.MCV` — conversation files (24 files, 8 NPCs each)
 Loaded by `_Tobo(npc)` into `_convbufptr` (12 KB): file `C(npc>>3)`, slot `_convix = npc & 7`. Header: 42 words of in-file offsets (`_FixPointers` adds the buffer base to words 0..0x52):
@@ -151,6 +151,6 @@ Loaded by `_Tobo(npc)` into `_convbufptr` (12 KB): file `C(npc>>3)`, slot `_conv
 | 10–17 | per-slot byte lists (`03 01 02 FF` …) — **read by nothing** (P91 uses words 2–9 and 34–41, P90 18–33; the EXE only 34–41): leftover data |
 | 18–25 | per-slot **gift list**: 5-byte `{item, min_qty, msg_if_fewer, msg_if_enough, event_bit}`, 0xFF-terminated (`docs/rules/economy.md`) |
 | 26–33 | per-slot **shop list**: 5-byte `{item, pays_hi, pays_lo, charges_hi, charges_lo}`, prices `hi·100+lo`, 0xFF-terminated |
-| 34–41 | per-slot `{greet, bye}` text indices, 0xFF = use the location defaults (`loc+60`/`loc+61`) |
+| 34–41 | per-slot 0xFF-terminated `{greet[, bye]}` text indices (a lone 0xFF = none: use the location defaults `loc+60`/`loc+61`) |
 
 Then at 0x54: 8 bytes **trade skill** per slot, 0x5C: 8 bytes **no-buy** flag, 0x64: 8 bytes = per-slot **text number of the NPC's reply to an unknown keyword** (`P91 ovl_0a08`: 0xFF → the generic common-text line, else that string of the file's text block, e.g. C22 "I got no time for questions!", "Go to hell!", C20 "I have no clue, mighty %h!"), text from 0x6C. `tools/convdump.py original [Cnn …]` dumps skills, shops and gifts with the message texts; `tools/talkdump.py original out/talk` decodes every script. C04 slot 0's gift list is not 0xFF-terminated (runs into the next data).

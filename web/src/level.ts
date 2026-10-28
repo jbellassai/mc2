@@ -3,7 +3,7 @@ import { hex, json, image, two, type Location, type RoomRecord, type TileData } 
 import type { Clock } from './clock';
 import type { RoomRef } from './room';
 
-export interface Figure { x: number; y: number; tile: number; num: number; name?: string }
+export interface Figure { x: number; y: number; type: number; tile: number; num: number; name?: string }
 
 export class Level {
   readonly w: number;

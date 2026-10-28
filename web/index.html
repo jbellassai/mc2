@@ -9,11 +9,22 @@
   body { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; }
   canvas { image-rendering: pixelated; max-width: 100vw; max-height: 85vh; }
   #status { min-height: 1.4em; }
+  #talk { width: min(1008px, 96vw); background: #1d1d24; border: 1px solid #444; padding: 8px 12px; box-sizing: border-box; }
+  #log { max-height: 9em; overflow-y: auto; white-space: pre-wrap; margin-bottom: 6px; }
+  #log .you { color: #9cf; }
+  #ask { display: flex; gap: 6px; }
+  #ask input { flex: 1; background: #111; color: #eee; border: 1px solid #555; padding: 4px 6px; font: inherit; }
+  #ask button { background: #333; color: #eee; border: 1px solid #555; padding: 4px 10px; font: inherit; cursor: pointer; }
 </style>
 </head>
 <body>
 <canvas id="view"></canvas>
 <div id="status">Loading…</div>
+<div id="talk" hidden>
+  <div id="log"></div>
+  <form id="ask"><input id="word" autocomplete="off" placeholder="Ask about… (type a word, Enter)">
+    <button type="button" id="news">News</button><button type="button" id="bye">End</button></form>
+</div>
 <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

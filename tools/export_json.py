@@ -1,5 +1,6 @@
 """Build the web port's data pack from the original files (decision 1). Never commit or publish the output.
-usage: export_json.py ORIGDIR OUTDIR -> OUTDIR/locations/*.json, tiledata/Bnn.json, tilesets/Vnn.png, sprites/E0n.png, blocks.json, rooms.json, sprites.json
+usage: export_json.py ORIGDIR OUTDIR -> OUTDIR/locations/*.json, tiledata/Bnn.json, tilesets/Vnn.png, sprites/E0n.png, conversations/Cnn.json,
+       blocks.json, rooms.json, sprites.json, comtxt.json
 Schema: docs/data_schema.md. Byte strings are lowercase hex; every list is in file order."""
 import json, os, struct, sys
 sys.path.insert(0, os.path.dirname(__file__))
@@ -26,6 +27,34 @@ def lists(b, size):
         if b[i] == 0xFF: out.append(cur); cur = []; i += 1
         else: cur.append(list(b[i:i + size])); i += size
     return out
+
+def script(b):
+    """Conversation script (P91 ovl_05e2): entries `word resp cmd* 0`, 0xFF ends; cmd = 'E' ev alt | 'C' need alt | 'S' song."""
+    out, i = [], 0
+    while i + 1 < len(b) and b[i] != 0xFF:
+        e = {'word': b[i], 'resp': b[i + 1], 'cmds': []}; i += 2
+        if e['resp'] != 0xFF:
+            while i < len(b) and b[i] not in (0, 0xFF):
+                c = chr(b[i])
+                if c == 'S': e['cmds'].append({'op': 'S', 'song': b[i + 1]}); i += 2
+                elif c in 'EC' and i + 2 < len(b): e['cmds'].append({'op': c, 'arg': b[i + 1], 'alt': b[i + 2]}); i += 3
+                else: raise ValueError(f'script byte {b[i]:#x} at {i}')
+            i += 1
+        out.append(e)
+    return out
+
+def conversation(d):
+    """Cnn.MCV: text block, word list, and per-slot script, gifts, shop, greet/bye, trade skill, no-buy, unknown-word reply."""
+    p = struct.unpack_from('<42H', d)
+    seg = lambda i: d[p[i]:p[i + 1]]
+    slots = []
+    for k in range(8):
+        gb = d[p[34 + k]:].split(b'\xff')[0] + b'\xff\xff'   # 0xFF-terminated {greet[, bye]}
+        slots.append({'script': script(d[p[2 + k]:p[3 + k] if k < 7 else p[10]]),
+                      'gifts': [dict(zip(('item', 'min', 'fewer', 'enough', 'event'), r)) for r in recs(seg(18 + k), 5, lambda r: r[0] == 0xFF)],
+                      'shop': [{'item': r[0], 'pays': r[1] * 100 + r[2], 'charges': r[3] * 100 + r[4]} for r in recs(seg(26 + k), 5, lambda r: r[0] == 0xFF)],
+                      'greet': gb[0], 'bye': gb[1], 'skill': d[0x54 + k], 'nobuy': d[0x5C + k], 'unknown': d[0x64 + k]})
+    return {'texts': strings(seg(0)), 'words': d[p[1]:p[2]].split(b'\xff')[0].decode('latin1').split('\0')[:-1] or [], 'slots': slots}
 
 def tables(d):
     """The 20 header pointers and each sub-table's bytes, bounded by the next larger pointer.
@@ -65,7 +94,7 @@ def location(d, kind):
         L['npcs'] = [dict(zip(('x', 'y', 'type', 'tile', 'num', 'name', 'appear', 'disappear', 'ifevent', 'ifnevent'), r))
                      for r in recs(t['knpcptr'], 10, lambda r: r[0] == 0xFF)]
     L['residents'] = [dict(zip(('name', 'num', 'appear', 'disappear', 'ifevent', 'ifnevent'), r)) for r in recs(t['resids'], 6)]
-    L['people'] = [dict(zip(('word', 'npc', 'x'), r)) for r in recs(t['peopr'], 3, lambda r: r[0] == 0xFF)]
+    L['script'] = script(t['peopr'])   # generic townsfolk conversation (dialogue.md): words = `words`, responses = `texts`
     L['news'] = [dict(zip(('npctype', 'event', 'text'), r)) for r in recs(t['newsr'], 3, lambda r: r[0] == 0xFF)]
     if kind == 'level':
         L['look'] = [dict(zip(('x', 'y', 'text'), r)) for r in recs(t['lkdata'], 3, lambda r: r[0] == 0)]
@@ -150,6 +179,12 @@ def main(src, dst):
             rooms[f[:3]] = [d[i + 2:i + 101].hex() for i in range(0, len(d) - 100, 101) if d[i:i + 2] == b'\x0b\x09']
     dump(f'{dst}/rooms.json', rooms)
     dump(f'{dst}/sprites.json', sprites(src, dst, load_mct(f'{src}/V01.MCT').palette[:16]))
+    os.makedirs(f'{dst}/conversations', exist_ok=True)
+    for f in sorted(os.listdir(src)):
+        if f[0] == 'C' and f[1:3].isdigit() and f.endswith('.MCV'):
+            dump(f'{dst}/conversations/{f[:3]}.json', conversation(open(f'{src}/{f}', 'rb').read()))
+    exe = open(f'{src}/MC2.EXE', 'rb').read(); ct = 0x1800 + 0x15B50 + 0x9F8   # common text, message n = n-th string
+    dump(f'{dst}/comtxt.json', [x.decode('latin1') for x in exe[ct:ct + 0x4000].split(b'\0')[:400]])
     print(f'{n} locations, {len(blocks)} blocks, {sum(map(len, rooms.values()))} room chunks')
 
 if __name__ == '__main__': main(*sys.argv[1:3])
