@@ -1,7 +1,7 @@
 """Build the web port's data pack from the original files (decision 1). Never commit or publish the output.
 usage: export_json.py ORIGDIR OUTDIR -> OUTDIR/locations/*.json, tiledata/Bnn.json, tilesets/Vnn.png, sprites/E0n.png, conversations/Cnn.json,
        blocks.json, rooms.json, sprites.json, comtxt.json, items.json, heroes.json,
-       commands.json, npctypes.json, p90.json, p02text.json, p91text.json, p01.json, p05.json, p09.json, p92text.json, p97.json, p93text.json, p93.json, conds.json, companions.json, exetables.json, combat.json
+       commands.json, npctypes.json, p90.json, p02text.json, p91text.json, p01.json, p05.json, p09.json, p92text.json, p97.json, p93text.json, p93.json, p89.json, conds.json, companions.json, exetables.json, combat.json
 Schema: docs/data_schema.md. Byte strings are lowercase hex; every list is in file order."""
 import json, os, struct, sys
 sys.path.insert(0, os.path.dirname(__file__))
@@ -224,6 +224,10 @@ def main(src, dst):
                              'lots': {str(lots[i]): lots[i + 1] for i in range(0, len(lots) - 1, 2)}})
     p02 = open(f'{src}/P02.MCO', 'rb').read()
     dump(f'{dst}/p02text.json', [x.decode('latin1') for x in p02[0x67:0x28A].split(b'\0')[:17]])   # town program's own texts
+    p89 = open(f'{src}/P89.MCO', 'rb').read()   # the Teleport picker (rules/spells.md)
+    dump(f'{dst}/p89.json', {'tiers': list(p89[0x09:0x0E]), 'x0': list(p89[0x10:0x15]), 'y0': list(p89[0x15:0x1A]),
+                             'x1': list(p89[0x1A:0x1F]), 'y1': list(p89[0x1F:0x24]),
+                             'rects': [[p89[0x10C + i], p89[0x10F + i], p89[0x112 + i], p89[0x115 + i]] for i in range(p89[0x10A])]})
     p93 = open(f'{src}/P93.MCO', 'rb').read()
     dump(f'{dst}/p93text.json', [x.decode('latin1') for x in p93[0x3D:0x254].split(b'\0')])   # camp texts (rules/camp.md)
     sb = lambda b: b - 256 if b > 127 else b
@@ -333,7 +337,8 @@ def main(src, dst):
                    'energy': list(exe[ds + 0x2BC6:ds + 0x2BC6 + 42]),   # _enetbl
                    'where': list(exe[ds + 0x2BF0:ds + 0x2BF0 + 42]),    # _splocs (16 = combat)
                    'side': list(open(f'{src}/P94.MCO', 'rb').read()[0x1529:0x1529 + 42]),   # TALIGN: 0 own, 1 enemy
-                   'skill': list(exe[ds + 0x390C:ds + 0x390C + 20])},   # SKLSPLS
+                   'skill': list(exe[ds + 0x390C:ds + 0x390C + 20]),   # SKLSPLS
+                   'here': list(exe[ds + 0x2C1A:ds + 0x2C1A + 10])},   # _spellshere by location program
         'songs': {'instruments': list(v06[0x28FF:v06.index(0, 0x28FF)]),                 # INT61_1d: item per instrument
                   'races': [list(v06[0x4EC + 8 * k:0x4EE + 8 * k]) for k in range(4)],       # song 0/1 → monster race
                   'names': [[x.decode('latin1') for x in exe[ds + 0x4014:ds + 0x4200].split(b'\0')[8 * k:8 * k + 2]] for k in range(4)]},

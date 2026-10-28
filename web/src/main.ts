@@ -33,6 +33,7 @@ async function main() {
   const tables = await json<{ hungerhours: number[]; nousetext: number[]; useall: number[]; lootvalues: number[]; weathers: string[]; attribs: string[];
     tod: { words: string[]; hour: number[] }; speltim: number[] }>('exetables.json');
   const p93tables = await json<{ hunt: { terrain: number[]; weather: number[] } }>('p93.json');
+  const p89 = await json<{ tiers: number[]; x0: number[]; y0: number[]; x1: number[]; y1: number[]; rects: number[][] }>('p89.json');
   const world = await World.create();
   const p92 = await json<string[]>('p92text.json');
   const patches = await Patches.create();
@@ -70,10 +71,14 @@ async function main() {
 
   let phase = 0;   // animation step; 300 ms is a guess (the original's timer unit is not traced)
   setInterval(() => { phase++; render(); }, 300);
+  /** P01 ovl_076c: guard posts and patrols are drawn only while event 105 is set or a Locate spell lasts (patrols next
+   *  to the party are seen anyway, ovl_0a94). */
+  let locate = 0;   // P01 OV_0x1bb: world-map draws left in which a Locate spell shows every patrol and guard post
+  const seeAll = () => events.has(105) || locate > 0;
   const render = () => {
     const room = level.loc.kind === 'room', wild = level.loc.kind === 'world';
     const icons: Icon[] = fight ? fight.recs.filter(r => r.side && fight!.alive(r)).map(r => ({ x: r.x, y: r.y, frame: r.tile, sheet: 'E01' }))
-      : wild ? [...world.guards(), ...world.patrols(lead.x, lead.y, events.has(105))].map(g => ({ x: g.x, y: g.y, frame: 0x0f }))
+      : wild ? [...(seeAll() ? world.guards() : []), ...world.patrols(lead.x, lead.y, seeAll())].map(g => ({ x: g.x, y: g.y, frame: 0x0f }))
           .concat(world.ships.boats().map(b => ({ ...b, frame: 0x12 })))
       : patch?.icons() ?? [];
     const people = fight ? fight.recs.filter(r => !r.side && fight!.alive(r)) : wild ? [lead] : party.members;   // world: the leader alone
@@ -113,6 +118,8 @@ async function main() {
   /** _CalUpd: five minutes; _DecEnergy at minute 0 and 30; the hour tick. */
   const tick = () => {
     const hour = clock.tick();
+    for (const { hero: h } of party.members)                            // _DecSpells: Glamour wears off with charm
+      if ((h.rec.h_glamcnt as number) > 0) { h.rec.h_glamcnt = (h.rec.h_glamcnt as number) - 1; h.rec.h_charm = (h.rec.h_charm as number) - 1; }
     if (clock.minute % 30 === 0) party.decEnergy();
     if (hour) hourly();
     render();
@@ -410,6 +417,7 @@ async function main() {
       world.fatigue(ter, clock, party);
     }
     await world.at(x, y, clock);
+    if (locate) locate--;                                                // ovl_076c counts the Locate draws down
     shipEvents();
     world.movePatrols(level, x, y, clock.month);
     // ovl_0846: a live guard spot under the party, else a live patrol (which may just have walked onto it)
@@ -1174,6 +1182,96 @@ async function main() {
       if (!special?.whisper(w)) close(comtxt[0x83]);
     }, 'Word');
   };
+  // ---- magic outside combat (spells.md, _Magic; P01 slots 13-15, FFFAR) ----
+  /** The location program (`__curmpg`) for `_spellshere`: 1 world map, 2 town or dungeon level, 4 patch, 5 service
+   *  room, 7 dungeon room, 9 special room. */
+  const program = () => special ? 9 : chamber ? 7 : service ? 5 : patch ? 4 : level.loc.kind === 'world' ? 1 : 2;
+  /** Magic (M): the caster and one of their memorised spells (the original readies it with Recall, `h_rdyspl`, then
+   *  casts with Magic). Refused, at no cost, without the energy (`_EneUsg`, comtxt 0x41) or where `_splocs[spell] &
+   *  _spellshere[program]` is 0 (0x56). Cast: the effect; a spell that did not go off (carry set) costs nothing;
+   *  else a magic skill roll for SKLSPLS, one memorised copy and the energy. */
+  const magicCmd = () => {
+    panel.show();
+    const cast = (h: Hero) => {
+      const r = h.rec, known = r.h_spells.flat().map((n, i) => [n, i]).filter(([n]) => n > 0);
+      if (!known.length) return close(ctext(0x40, { h: h.name }));                          // "%h must recall a spell first."
+      panel.set([...known.map(([n, sp]) => ({ label: `${cdata.spells.names[sp]} (${n})`, act: () => {
+        r.h_rdyspl = sp;
+        const need = Math.max(1, cdata.spells.energy[sp] - (r.h_magic >> 2));
+        if (r.h_energy < need) return close(comtxt[0x41]);                                  // "Not enough energy!"
+        if (!(cdata.spells.where[sp] & cdata.spells.here[program()])) return close(ctext(0x56, { h: h.name }));
+        spell(h, sp, (text: string) => {
+          const rr = h.rec as Record<string, number>, up = cdata.spells.skill.includes(sp) ? magicUp(h) : '';
+          const row = Math.floor(sp / 7), col = sp % 7;
+          if (--r.h_spells[row][col] <= 0) { r.h_spells[row][col] = 0; r.h_rdyspl = 0xff; }
+          rr.h_energy = Math.max(0, rr.h_energy - need); h.isHeTr();
+          close([text, up].filter(Boolean).join(' '));
+        });
+      } })), { label: cmd[0], act: () => close() }]);
+    };
+    pick(cast);
+  };
+  /** The acting member: asked when the party has more than one. */
+  const pick = (then: (h: Hero) => void) => {
+    if (party.members.length < 2) return then(lead.hero);
+    panel.set([...party.members.map(m => ({ label: m.hero.name, act: () => then(m.hero) })), { label: cmd[0], act: () => close() }]);
+  };
+  /** _SkillUp for magic (skill 3) outside a fight: chance 20 + (50 − skill)/4 % below 50, else 20 − (skill − 50)/2
+   *  (at least 1 off), up to _MaxSkill (combat.md, Skill advancement). */
+  const magicUp = (h: Hero) => {
+    const r = h.rec as Record<string, number>, v = r.h_magic;
+    if (v >= cdata.maxtbl[3 * 6 + r.h_race] || rnd(100) >= 20 + (v < 50 ? (50 - v) >> 2 : -Math.max(1, (v - 50) >> 1))) return '';
+    r.h_magic = v + 1;
+    return ctext(0x60, { h: h.name, l: SKILLS[3][1] });
+  };
+  /** The spell's effect (SPLVECS); `done(text)` when it went off. Spells not built yet answer "The spell fails." */
+  const spell = (h: Hero, sp: number, done: (text: string) => void) => {
+    const m = h.rec.h_magic, member = (then: (t: Hero) => void) => panel.set([...party.members.map(p => ({ label: p.hero.name,
+      act: () => then(p.hero) })), { label: cmd[0], act: () => close() }]);
+    const heal = (t: Hero) => { t.rec.h_hitpts = t.rec.h_hpmax; return ctext(0x5c, { a: t.name }); };
+    const shield = (t: Hero, n: number) => { t.rec.h_shield = n; return ctext(0x5e, { a: t.name, b: n }); };
+    const dead = (t: Hero) => (t.rec.h_cond1 as number) & 0x80;
+    switch (sp) {
+      case 8: return member(t => done(dead(t) ? comtxt[0x95] : heal(t)));                  // Heal: HP to the maximum
+      case 20: return done(party.members.filter(p => !dead(p.hero)).map(p => heal(p.hero)).join(' '));   // Zengrl
+      case 12: return member(t => done(dead(t) ? comtxt[0x95] : (t.use(0x33, 0), ctext(0x5d, { a: t.name }))));   // Energy = a Sermin
+      case 16: return member(t => done(dead(t) ? comtxt[0x95] : shield(t, m)));             // Shield = magic skill
+      case 21: return done(party.members.filter(p => !dead(p.hero)).map(p => shield(p.hero, m >> 1)).join(' '));   // Zishoxe
+      case 26: return member(t => {                                                         // Glamour (FFFAR ovl_3440)
+        const c = t.rec.h_charm as number, g = Math.min(c, 12 - c);
+        if (c > 11 || dead(t)) return close(comtxt[0x119]);
+        t.rec.h_charm = c + g; t.rec.h_glamcnt = (t.rec.h_glamcnt as number) + g;
+        done(`${t.name}: ${STATS[6][1]} ${c + g}`);
+      });
+      case 1:                                                                               // Confuse (P01 ovl_1ae3)
+        for (let n = 8 * world.region; n < 8 * world.region + 8; n++) world.engaged.delete(n);
+        return done(comtxt[0x43]);
+      case 4: locate = m >> 2; return done('');                                             // Locate (P01 ovl_1ac2)
+      case 7: return teleport(m, done);
+    }
+    close(comtxt[0x119]);
+  };
+  /** Teleport (P01 ovl_1b02 → P89): not aboard (region text 0x1A) or while camping (0x19). The magic skill picks a
+   *  tier ([10, 30, 50, 70, 90], below 10 nothing) and the window rectangle the target must lie in; the target is not
+   *  the party's square, a live guard post or patrol, a town entrance or feature, or in P89's three no-teleport
+   *  rectangles, and is walkable. A bad target or cancelling casts nothing (assumed: P89's carry is not traced). */
+  const teleport = (m: number, done: (text: string) => void) => {
+    const rec = world.rec!;
+    if (world.ships.sailing) return close(rec.texts[0x1a]);
+    if (shipCamp) return close(rec.texts[0x19]);
+    const t = p89.tiers.filter(v => v <= m).length - 1, wx = lead.x - 5, wy = lead.y - 4;
+    close();
+    mark(say(comtxt[0x0d]), (x, y) => {
+      const sx = x - wx, sy = y - wy;
+      const ok = t >= 0 && sx >= p89.x0[t] && sx < p89.x1[t] && sy >= p89.y0[t] && sy < p89.y1[t] && !(sx === 5 && sy === 4)
+        && !world.guards().some(g => g.x === x && g.y === y) && world.patrolAt(x, y) < 0
+        && !rec.exits.some(e => e.x === x && e.y === y) && !rec.doors.some(d => d.x === x && d.y === y)
+        && !p89.rects.some(([x0, y0, x1, y1]) => x >= x0 && x <= x1 && y >= y0 && y <= y1) && level.walkable(x, y);
+      if (!ok) { message = comtxt[0x119]; return; }
+      party.shift(x - lead.x, y - lead.y);
+      void world.at(x, y, clock).then(() => { world.engage(x, y); done(''); render(); });
+    });
+  };
   /** _SkillUp0 (combat.md): skill `idx` (SKILLS order) +1 with chance (50 − skill)/4 % below 50, else 1 %, up to
    *  _MaxSkill; returns comtxt 0x60 or ''. */
   const skillUp0 = (h: Hero, idx: number) => {
@@ -1371,6 +1469,7 @@ async function main() {
   view.canvas.addEventListener('click', e => {
     if (panel.open) return;
     const t = view.cellAt(e, level.loc.kind === 'room' ? 5 : lead.x, level.loc.kind === 'room' ? 4 : lead.y);
+    if (marking) { const f = marking; marking = null; message = ''; f(t.x, t.y); render(); return; }   // _Mark by clicking
     look(t.x, t.y);
   });
 
@@ -1393,6 +1492,8 @@ async function main() {
     if (e.key === 'c' || e.key === 'C') { campCmd(); return; }
     if (e.key === 'u' || e.key === 'U') { useCmd(); return; }
     if (e.key === 'h' || e.key === 'H') { whisper(); return; }
+    if (e.key === 'm' || e.key === 'M') { magicCmd(); return; }
+    if (e.key === 'Escape' && marking) { marking = null; message = ''; render(); return; }
     if (e.key === 't' || e.key === 'T') { talking = true; message = say(comtxt[0x0d]); render(); return; }
     const k = KEYS[e.key];
     if (!k) return;

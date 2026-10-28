@@ -245,7 +245,7 @@ State: `_ptrlxy` (128 squares, x 0 = no patrol), `_ptrlsta` (bit *n* = destroyed
 5. **Wander** (`ovl_18c1`): `RndCo(8)` picks a start in the order table (P01 file 0x18B7: directions 0, 6, 2, 3, 7, 1, 5, 4, then 0, 6 again); the first of three consecutive directions whose square is free is taken, else the patrol stays.
 6. **Fight** (`ovl_0846`): a live guard spot under the party wins over a patrol; otherwise a live patrol on the party's square fights with group `newsr[n & 7]`, the guard's terrain, difficulty and arena rules (`combat.md`). A chasing patrol whose square the party steps on stays put (`ovl_17c0` returns at once), so the fight follows; an idle one may wander off first.
 7. **Engage** (`ovl_0a94`): a live patrol on one of the 8 squares around the party is drawn and its `_ptrleng` bit is set. So a patrol starts chasing only once it has been next to the party.
-8. **Draw** (`ovl_076c`): every live patrol in view is drawn (E00 icon 0x0F, the guard's skull) only while event 105 is set (`_events` byte 13 bit 1) or a *Locate* spell's `magic/4` moves last (`OV_0x1bb`). Otherwise the party sees a patrol only when it is next to it.
+8. **Draw** (`ovl_076c`): every live patrol and the region's live guard posts in view are drawn (E00 icon 0x0F, the skull) only while event 105 is set (`_events` byte 13 bit 1) or a *Locate* spell's `magic/4` draws last (`OV_0x1bb`, `spells.md`). Otherwise the party sees a patrol only when it is next to it, and a guard post not at all.
 
 ## Loot (`P95 ovl_09xx`, per slain monster, not for bribed fights)
 

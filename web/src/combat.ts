@@ -18,7 +18,7 @@ export interface CombatData { monsters: Monster[]; groups: number[][]; weapons: 
   loot: { thresholds: number[]; items: number[]; amounts: number[][]; an: number[] };
   d06: { cast: number[]; crit: number[]; crit2: number[]; prey: number[]; counts: number[]; armor: number[]; dodge: number[];
     gonshi: number[]; sermin: number[]; potion: number[] };
-  spells: { names: string[]; energy: number[]; where: number[]; side: number[]; skill: number[] };
+  spells: { names: string[]; energy: number[]; where: number[]; side: number[]; skill: number[]; here: number[] };
   songs: { instruments: number[]; races: number[][]; names: string[][] };
   parley: { texts: string[]; kins: string[]; attitudes: string[]; worth: number[]; rolls: number[] } }
 

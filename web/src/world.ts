@@ -82,8 +82,8 @@ export class World {
   /** `_grdsta`: guard spots cleared, bit region·8 + n. */
   readonly cleared = new Set<number>();
 
-  /** The region's 8 guard spots (`gwrds` {x, y, group}, x 0 = none) not yet cleared. P01 draws each as E00 icon 0x0F
-   *  while it is in view (ovl_0833) and fights it when the party stands on it (ovl_0846, `_ctype` 0). */
+  /** The region's 8 guard spots (`gwrds` {x, y, group}, x 0 = none) not yet cleared. P01 draws them (E00 icon 0x0F,
+   *  ovl_0833) only while event 105 is set or a Locate spell lasts (ovl_076c), and fights it when the party stands on it (ovl_0846, `_ctype` 0). */
   guards(): { x: number; y: number; group: number; bit: number }[] {
     const g = hex(this.rec?.tables.gwrds ?? '');
     return Array.from({ length: 8 }, (_, n) => ({ x: g[3 * n], y: g[3 * n + 1], group: g[3 * n + 2], bit: this.region * 8 + n }))
@@ -173,7 +173,7 @@ export class World {
   }
 
   /** The patrols drawn (E00 icon 0x0F, like a guard): those next to the party (ovl_0a94), or every live one while event
-   *  105 is set (ovl_076c; also while a Locate spell lasts, not built). */
+   *  105 is set or a Locate spell lasts (ovl_076c). */
   patrols(px: number, py: number, all: boolean): { x: number; y: number }[] {
     return this.ptrl.filter(([x, y], n) => x && !this.dead.has(n) && (all || (Math.abs(x - px) <= 1 && Math.abs(y - py) <= 1)))
       .map(([x, y]) => ({ x, y }));
