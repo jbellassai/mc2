@@ -165,4 +165,7 @@ So the party always enters from one wall, melee monsters fill the far half and s
 ## Open items
 - `ovl_0a2b/ovl_0394`: weapon → type lookup table is built at run time (P06 private data).
 - Parley details: truce/bribe amounts (`G_BRIBEAMT`, V06 strings 0x337/0x3CB). Song effects: `encounters.md`. Monster stats, groups, loot: `encounters.md`.
-- INT 61h = V06 (see spells.md / overlays.md); P06's own INT 61h uses (0x00, 0x2B, 0x25, 0x23, 0x27–0x2A, 0x22, 0x2C, 0x24) are the arena/blob-map helpers, not yet described.
+- INT 61h = V06 (see spells.md / overlays.md). The services P06 itself calls are small helpers: 0x00 builds a combatant from a hero (armour, `items.md`); 0x22 `_OrTile` at the current square; 0x23 index (0–23, 24 = none) of the combat record standing at square DX; 0x27/0x28 redraw the attacker/target sprite (`_PDraw`), 0x29/0x2A restore the background under the attacker/target; 0x2B idle animation of living records (random 0–50 tick timers); 0x25 fills `_blobmap` (walkable cells for movement and pathing); 0x2C a table lookup; 0x24 the Doombeast rule below.
+
+### Doombeasts (race 32: P96 `ovl_1405`, V06 `INT61_24`)
+Every Doombeast placed in an arena brings **five images** (six records; `_doombstlst[record]` = group number, with bit 0x80 on the real one). Attacks on a Doombeast never miss (dodge skipped, see *Attack*). Hitting an **image** makes it vanish (record removed, `c_state = 8`); killing the **real** one removes all of its images. P96 `ovl_064d` re-places each living real Doombeast together with its images (effect `MultiThing(9)`); exactly when in the round it runs was not traced.
