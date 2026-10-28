@@ -23,12 +23,16 @@ def main(src):
         while d[o]:
             x, y, pi, tx, ty = d[o:o + 5]; o += 5
             print(f'  entrance ({x},{y}) {prog(pi)} -> ({tx},{ty})')
-        o = p['locptr']
+        o = p['locptr']; evs = []
         while d[o] != 0xff:
             r = d[o:o + 10]; o += 10
+            if r[7] != 0xfe: evs.append(r[7])
             print(f'  spot ({r[0]},{r[1]}) {prog(r[2])} id {r[3]} [{r[4]},{r[5]},{r[6]}] ev {"always" if r[7] == 0xfe else r[7]} -> ({r[8]},{r[9]})')
-        ev = d[p['locevptr']:p['locevptr'] + 64]
-        if ev[0] != 0xff: print(f'  event lists {list(ev[:ev.index(0xff) + 1])}')
+        nev = max(evs + [-1]) + 1  # spot ev n = n-th 0xFF-terminated list of {event, tx}
+        o, lists = p['locevptr'], []
+        for _ in range(nev):
+            e = d.index(0xff, o); lists.append(list(d[o:e])); o = e + 1
+        if lists: print(f'  event lists {lists}')
         g, nw = p['gwrds'], p['newsr']
         guards = [tuple(d[g + 3 * i:g + 3 * i + 3]) for i in range(8)]
         print(f'  guards {[x for x in guards if x[0]]} groups {list(d[nw:nw + 8])}')
