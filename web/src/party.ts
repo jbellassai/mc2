@@ -123,6 +123,14 @@ export class Party {
     return gone;
   }
 
+  /** `_member6[num − 1]` while the companion is away: as they last left, else none. */
+  stored(num: number): HeroRecord | undefined { return this.roster.get(num); }
+  /** The same, kept from their starting record (R90) when they never joined (P92 changes it in place). */
+  kept(num: number, start: HeroRecord): HeroRecord {
+    let r = this.roster.get(num);
+    if (!r) this.roster.set(num, r = structuredClone(start));
+    return r;
+  }
   /** The record a companion joins with: as they last left, else their starting record (R90). */
   async record(num: number): Promise<HeroRecord> {
     return this.roster.get(num) ?? structuredClone((await json<HeroRecord[]>('companions.json'))[num - 1]);

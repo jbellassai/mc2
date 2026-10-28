@@ -5,10 +5,11 @@ import { View } from './view';
 import { resolveRoom, BASE_X, BASE_Y } from './room';
 import { json, hex, two, type Door, type Exit } from './pack';
 import { Talk, format, wmatch } from './talk';
-import { Hero, PICK, STATS, SKILLS } from './hero';
+import { Hero, PICK, STATS, SKILLS, type HeroRecord } from './hero';
+import { Assignments, JAILED } from './assign';
 import { panel, type Button } from './panel';
 import { loadTrade, lot, single, prices, incObj, sellable } from './shop';
-import { ServiceRoom, noon, rent, INN } from './service';
+import { ServiceRoom, noon, rent, INN, SCHOOL, JOB, LODGE } from './service';
 import { Special, casino, refill, gates } from './special';
 import { Scene, sceneBase } from './scene';
 import { camp, OPEN, SHIP, DUNGEON, INNROOM, GUEST } from './camp';
@@ -40,6 +41,8 @@ async function main() {
   const p92 = await json<string[]>('p92text.json');
   const patches = await Patches.create();
   const cdata = await Fight.data();
+  const assigns = await Assignments.create();
+  const r90 = await json<HeroRecord[]>('companions.json');   // the companions' starting records (names, Recall)
   // Dev aids: ?hour=20 starts in the evening, ?at=74,25 starts on another square; any of them skips the new-game
   // screens (?profile=0-4 picks the hero).
   const q = new URLSearchParams(location.search);
@@ -72,6 +75,9 @@ async function main() {
   let patch: Patch | null = null;                                        // the mushroom patch the party is in
   let fight: Fight | null = null;                                        // the fight in progress
   let roomStart = { x: 0, y: 0 };                                       // its formation origin (base square)
+  let roomAt = { loc: 0, room: 0xff };                                  // `_locspec`/`_currm` while in a room
+  let wildAt = { x: 29, y: 56 };                                        // `_wildxy` while off the world map (new game)
+  let been = 0x8000;                                                    // `_beenflg`: strongholds entered, bit 15 = entry 0
   let figures: Figure[] = level.figures(clock, events, party.away);
   let message = await landed(hero);
   const say = (s: string, other = '') => format(s, hero, other);
@@ -97,19 +103,32 @@ async function main() {
     const where = wild || patch || (fight && outside?.level.loc.kind === 'world') ? `${world.rec?.name.replace(/\s*[MX]$/, '') ?? ''}, ${tables.weathers[clock.weather]}` : place();
     status.textContent = `${clock}  —  ${where}${message ? '  —  ' + message : ''}`;
   };
-  /** School and job D-files have no location name: show the town's. */
-  const place = () => (level.loc.name.trim() || outside?.level.loc.name || chamberBack?.level.loc.name || '').replace(/\s*[MX]$/, '').trim();
+  /** School and job D-files have no location name: show the town's (the region's, from the world map). */
+  const place = () => (level.loc.name.trim() || (outside?.level.loc.kind === 'world' ? world.rec?.name : outside?.level.loc.name)
+    || chamberBack?.level.loc.name || '').replace(/\s*[MX]$/, '').trim();
   /** To a level with the formation origin at (x, y). */
   const go = (lv: Level, x: number, y: number) => {
+    if (level.loc.kind === 'world' && lv.loc.kind !== 'world') wildAt = { x: lead.x, y: lead.y };
     level = lv; party.place(x, y);
     if (lv.loc.kind === 'level') { walkwater = 0; sensed = ''; }        // P02 start; INT60_14 puts the removed barriers back
     for (const [id, x1, y1, t] of snakes) if (id === lv.id) lv.set(x1, y1, t);
-    figures = level.figures(clock, events, party.away);
+    figures = people();
   };
   const close = (msg = '') => { panel.hide(); message = msg; render(); };
+  const wildxy = () => level.loc.kind === 'world' ? { x: lead.x, y: lead.y } : wildAt;
+  /** `_locspec`, `_currm` and `_hroomrec` as _AssignedHere reads them. */
+  const spot = () => chamber ? { loc: chamberBack!.level.loc.locnum, room: 0xff, hroom: chamber.hr.id }
+    : level.loc.kind === 'room' ? { ...roomAt, hroom: 0xff } : { loc: level.loc.locnum, room: 0xff, hroom: 0xff };
+  /** Who stands about: the location's people and the companions on assignment here (not drawn on the world map). */
+  const people = (): Figure[] => {
+    if (level.loc.kind === 'world') return level.figures(clock, events, party.away);
+    const at = spot();
+    return [...level.figures(clock, events, party.away), ...assigns.here(at.loc, at.room, at.hroom)
+      .map(a => ({ x: a.as_x, y: a.as_y, type: 0, tile: a.as_tile, num: a.as_npc, name: r90[a.as_npc - 1].h_name }))];
+  };
   /** The hour tick: who is about, and the inns' noon checkout (P92). */
   const hourly = () => {
-    figures = level.figures(clock, events, party.away);
+    figures = people();
     if (clock.hour === 0 && !(clock.juldate & 7)) patches.regrow();
     if (clock.hour === 0 && clock.date === 1) refill();                 // new month: the casino banks (P92 ovl_02ac)
     if (clock.hour === 0) {                                             // P92 ovl_01cd, the new day's events
@@ -120,6 +139,8 @@ async function main() {
     if (clock.hour === 0 && world.ships.daily()) for (const m of party.members) m.hero.rec.h_gold = 0;   // Amos (P92 ovl_0447)
     party.hunger(tables.hungerhours);
     world.hour(clock);
+    const lrnTim = (sp: number, h: HeroRecord) => Math.max(2, tables.speltim[sp] - (h.h_intellg as number));   // _LrnTim
+    for (const n of assigns.daily(clock, n => party.kept(n, r90[n - 1]), lrnTim)) party.away.delete(n);   // quit: home
     // Hirelings' payday (P92 ovl_09ff): 17:00 warning when the week earns under 6, 18:00 settlement; then departures.
     const speak = (m: Member, s: string) => { const t = `${m.hero.name}: ${format(s, m.hero, hero.name)}`; if (panel.open) panel.line(t); else message = t; };
     if (clock.minute === 0 && (clock.hour === 17 || clock.hour === 18))
@@ -128,7 +149,7 @@ async function main() {
         if (clock.hour === 18 && att < 4) speak(m, p92[1]);
       }
     for (const m of party.members.filter(p => p.hero.rec.h_attitude === 0xff)) party.partyEvents(events, p97.events, m.num, false);
-    if (party.departures().length) figures = level.figures(clock, events, party.away);
+    if (party.departures().length) figures = people();
     if (clock.hour !== 12 || clock.minute !== 0) return;
     if (!noon().includes(service?.kind === INN ? service.room : -1)) return;
     if (panel.open) panel.line(level.loc.texts[9]); else message = level.loc.texts[9];   // "It's time to check out."
@@ -240,9 +261,13 @@ async function main() {
       const rec = await party.record(who.num);
       const join = () => {
         party.add(rec, items, cell, who.x, who.y);
+        const a = assigns.take(who.num), t = a?.as_task ?? 0xff;          // P97: the record folds back in (ovl_0511)
+        if (a) Object.assign(rec, { h_gold: (rec.h_gold as number) + a.as_gold }, t >= 10 && t < 0x28
+          ? { h_actvty: t, h_actmisc: a.as_misc, h_actdate: a.as_date, h_acthour: a.as_hour, h_actroom: spot().room, h_actdays: a.as_daysleft }
+          : { h_actvty: 0xff });
         party.partyEvents(events, p97.events, who.num, true);
         if (!room) party.place(lead.x, lead.y);                       // _NewPXY: town programs only
-        figures = level.figures(clock, events, party.away);
+        figures = people();
         close(`${who.name}: ${comtxt[0x21]}`);                        // "I am honored."
       };
       if (rec.h_relatn === 3 && !events.has(65)) return speak(say(p97.texts[0]));   // the King: `_events+8 & 2`
@@ -280,6 +305,8 @@ async function main() {
     outside = { level, x: lead.x, y: lead.y };
     const lv = await Level.loadRoom(ref);
     roomStart = ref.pgm.program === 8 ? await sceneBase(lv.loc.exits, lastStep.dx, lastStep.dy) : ref.start;
+    roomAt = { loc: locspec, room: ref.room };
+    if (ref.pgm.program === 5 && ref.room >= 0x5c && ref.room < 0x6c) been |= 0x8000 >> ref.room - 0x5c;   // a stronghold
     go(lv, roomStart.x, roomStart.y);
     message = level.loc.name.trim() ? `${hero.name} enters ${level.loc.name}.` : '';   // which of D08/D09's room names applies is not traced
     scene = ref.pgm.program === 8 ? await Scene.open({ party, events, items, comtxt, figures: () => figures, scroll,
@@ -426,9 +453,14 @@ async function main() {
       // (assumption: P01's entrance path for a room program is not traced)
       if (!rec.doors.some(d => d.x === x && d.y === y)) { message = `${level.tileName(x, y)}: not built yet.`; return; }
     }
-    const feature = rec.doors.find(d => d.x === x && d.y === y);
+    const spot = ships.sailing ? null : world.spot(x, y, events);
+    if (spot && rec.pgms[spot.pgm].program === 2) {                   // an event-gated town (Demonspine, Shumaran)
+      go(await Level.load(`D${two(rec.pgms[spot.pgm].datafile)}`), spot.tx + 4, spot.ty + 3); message = ''; return;
+    }
+    const feature = rec.doors.find(d => d.x === x && d.y === y)
+      ?? (spot && [5, 8, 9].includes(rec.pgms[spot.pgm].program) ? { x, y, pgm: spot.pgm, id: spot.id, type: 0 } : undefined);
     if (feature && rec.pgms[feature.pgm].program === 4) return enterPatch(feature.id, x, y);
-    if (feature && [8, 9].includes(rec.pgms[feature.pgm].program)) {   // ovl_0d01: the step's time, then the room
+    if (feature && [5, 8, 9].includes(rec.pgms[feature.pgm].program)) {   // ovl_0d01: the step's time, then the room
       for (let n = world.stepTicks(level.data.nameindex[level.tile(x, y)], clock, party); n > 0; n--) tick();
       return enterRoom(feature, rec.pgms);
     }
@@ -819,7 +851,7 @@ async function main() {
   let chamberBack: { level: Level; x: number; y: number } | null = null;
   const enterChamber = (ch: Chamber, side: number, back: { level: Level; x: number; y: number }, fromFight: boolean) => {
     const recs = fight?.recs;
-    level = ch.level; chamber = ch; chamberBack = back; figures = []; outside = null;
+    level = ch.level; chamber = ch; chamberBack = back; outside = null;
     const taken: Member[] = [];
     party.members.forEach((m, i) => {
       const r = recs?.[i];
@@ -828,6 +860,9 @@ async function main() {
       m.x = at.x; m.y = at.y; taken.push(m);
     });
     message = '';
+    const freed = assigns.rescue(back.level.loc.locnum, ch.hr.id, (x, y) => level.place(x, y, (a, b) => taken.some(t => t.x === a && t.y === b)), events);
+    if (freed.length) message = assigns.rescueText;                    // P07 ovl_05ad: a prison cell
+    figures = people();
   };
   /** The chest and fountain need the acting member next to them (`_ChkRng` 1); otherwise " %w considers moving closer
    *  to it." (text 8; text 7 when another member makes the suggestion — `_Advice` chooses). */
@@ -1237,7 +1272,7 @@ async function main() {
     const member = party.members.find(m => m.hero === who)!;
     panel.set([...(party.members.length > 1 ? party.members.map(m => ({ label: m.hero.name, act: () => sheet(m.hero) })) : []),
                ...(party.members.length > 1 ? [{ label: cmd[42], act: () => transfer(member) }] : []),   // Transfr
-               ...(member !== lead ? [{ label: cmd[12], act: () => dismiss(member) }] : []),   // Dismiss
+               ...(member !== lead ? [{ label: cmd[6], act: () => assign(member) }, { label: cmd[12], act: () => dismiss(member) }] : []),   // Assign, Dismiss
                { label: cmd[0], act: () => close(message) }]);   // End
   };
   /** Talk + direction: the person there, or "%h talks to" the square (comtxt 0x11). In a service room the keeper
@@ -1482,6 +1517,7 @@ async function main() {
           if (to) void toWorldAt(to.x, to.y).then(render);
         });
       }
+      if (item === 0x40) return who === hero ? recallAway() : done(format(comtxt[0x1d], hero, hero.name));   // "Only %h can do that."
       if (chamber && item === 0x50 && chamber.hr.reward && !(chamber.hr.reward & 0x80)) return openChest(who);
       if (level.loc.kind === 'level' && (item === 0x50 || item === 0x46)) { close(); return item === 0x50 ? lockpick(who) : dig(who); }
       if (!tables.useall.includes(item) || party.members.length < 2) return done(once(who, item));
@@ -1529,6 +1565,67 @@ async function main() {
                ...slots.map(i => ({ label: items[r.h_invitem[i]], act: () => target(r.h_invitem[i], i, r.h_invamt[i] & 0x80 ? 1 : r.h_invamt[i]) })),
                { label: cmd[0], act: back }]);
   };
+  /** Assign (P88 entry 0): a volunteer leaves the party to wait here and then go to a stronghold, to go to one now, or
+   *  — in a school, library or lodge — to finish the task they started there (a job has no afterwards). The record
+   *  takes their task and purse; they stand where they were (_AssignedHere) and rejoin when invited. */
+  const assign = (m: Member) => {
+    const r = m.hero.rec as HeroRecord & Record<string, number>, name = m.hero.name, fmt = (s: string) => format(s, hero, name);
+    panel.show();
+    if (r.h_relatn !== 1) return close(comtxt[0x6f]);                   // "Only companions can be assigned tasks."
+    const at = { ...spot(), x: m.x, y: m.y }, w = wildxy(), make = (go: number | null) => assigns.make(m.num, r, clock, at, w, world.region, go);
+    const part = () => {                                                // P97 with `_swass` 1: out of the party, kept off the tables
+      party.partyEvents(events, p97.events, m.num, false);
+      party.remove(m); party.away.add(m.num);
+      figures = people(); close(`${name} leaves the party.`);
+    };
+    const pick = (q: string, then: (n: number) => void) => {
+      panel.line(`${name}: ${fmt(q)}`);
+      panel.set([...assigns.dests(been).map(n => ({ label: assigns.destName(n), act: () => then(n) })), { label: cmd[0], act: () => close() }]);
+    };
+    const kind = service?.kind ?? 0;
+    if (kind >= SCHOOL && kind <= LODGE) {                              // `_curvar` 8-11: the task started here
+      if (r.h_actvty === 0xff) return close(fmt(comtxt[0x70] + comtxt[0x11a + kind + 0x12] + comtxt[0x71]));   // "%o must talk to the instructor first."
+      const keep = (go: number | null) => {
+        Object.assign(make(go), { as_task: r.h_actvty, as_misc: r.h_actmisc, as_date: r.h_actdate, as_hour: r.h_acthour, as_daysleft: r.h_actdays });
+        r.h_helped |= 0x80; part();
+      };
+      return kind === JOB ? keep(null) : pick(comtxt[0x73], keep);
+    }
+    panel.line(name);
+    panel.set([
+      { label: assigns.menu[0], act: () => pick(comtxt[0x74], n => {   // Go to: "Should %o get going now?"
+        panel.line(fmt(comtxt[0x75]));
+        panel.set([{ label: cmd[3], act: () => { assigns.travel(make(null), n, w); part(); } }, { label: cmd[4], act: () => close() }]);
+      }) },
+      { label: assigns.menu[1], act: () => {                            // Stay: 1-30 days, then a stronghold
+        panel.line(`${name}: ${comtxt[0x72]}`);
+        panel.set([{ label: cmd[0], act: () => close() }], word => {
+          const days = Number(word);
+          if (!Number.isInteger(days) || days < 1 || days > 30) return close();
+          pick(comtxt[0x73], go => { Object.assign(make(go), { as_task: 7, as_daysleft: days }); part(); });
+        }, '1–30');
+      } },
+      { label: cmd[0], act: () => close() }]);
+  };
+  /** Recall (P88 entry 1, Use the Mindstone): the companions away from the party who carry a Mindstone, then one's
+   *  Assignment Report; anyone but a prisoner can be sent to another stronghold from where they are now (Go to). */
+  const recallAway = () => {
+    const away = r90.map((_, i) => i + 1).filter(n => !party.members.some(m => m.num === n) && (party.stored(n) ?? r90[n - 1]).h_invitem.includes(0x40));
+    if (!away.length) return close();                                   // the original just returns
+    const report = (n: number) => {
+      const name = r90[n - 1].h_name, a = assigns.get(n);
+      panel.show();
+      for (const l of assigns.report(n, name, items, hero.name, tables.tod.words[tables.tod.hour[clock.hour]])) panel.line(l);
+      if (!a) return panel.set([{ label: cmd[0], act: () => close() }]);
+      panel.set([...(a.as_task === JAILED ? [] : [{ label: assigns.menu[0], act: () => {
+        panel.line(format(assigns.text(57), hero, name));                   // "Where will %o go?"
+        panel.set([...assigns.dests(been).map(d => ({ label: assigns.destName(d), act: () => { assigns.redirect(a, d, clock); figures = people(); close(); } })),
+          { label: cmd[0], act: () => close() }]);
+      } }]), { label: assigns.menu[2], act: () => close() }]);           // Continue
+    };
+    panel.show();
+    panel.set([...away.map(n => ({ label: r90[n - 1].h_name, act: () => report(n) })), { label: cmd[0], act: () => close() }]);
+  };
   /** Dismiss (P97 ovl_01fd, ovl_02e8). Buzbazgut pleads (text 3); Lady Subia without event 4 says text 4, with it in
    *  `_locspec` 3, 20 or 21 thanks the party with three Emeralds for the leader and sets event 5, elsewhere asks for an
    *  escort (text 5); a plea adds " Dismiss %d anyway?" and Yes dismisses silently. Otherwise the companion leaves with
@@ -1540,7 +1637,7 @@ async function main() {
     const go = (farewell: boolean) => {
       party.partyEvents(events, p97.events, num, false);
       party.remove(m);
-      figures = level.figures(clock, events, party.away);
+      figures = people();
       close(farewell ? `${name}: ${thanks}${say(comtxt[6])}` : '');
     };
     panel.show();
@@ -1570,6 +1667,7 @@ async function main() {
     world: world.snapshot(), patches: [...patches.left], dunrms: [...dunrms], duntre: [...duntre], chests: [...chests],
     ambushed: [...ambushed], rent: [...rent], walk: [walkSteps, walkTicks], casino: [...casino], gates: [...gates],
     detect, snakes: snakes.map(r => [...r] as [string, number, number, number]), scroll: scroll.item, disasterday,
+    assigns: assigns.snapshot(), wild: wildAt, been,
   });
   type Save = ReturnType<typeof snapshot>;
   const canSave = () => !fight && !patch && !chamber && level.loc.kind !== 'room';
@@ -1586,6 +1684,8 @@ async function main() {
     gates.clear(); (sv.gates ?? []).forEach(g => gates.add(g));
     detect = sv.detect ?? 0; snakes.splice(0, snakes.length, ...(sv.snakes ?? []));
     scroll.item = sv.scroll ?? 0; disasterday = sv.disasterday ?? 0;
+    if (sv.assigns) assigns.restore(sv.assigns); else assigns.reset();
+    wildAt = sv.wild ?? { x: 29, y: 56 }; been = sv.been ?? 0x8000;
     [walkSteps, walkTicks] = sv.walk;
     outside = null; service = null; special = null; scene = null; patch = null; fight = null; chamber = null; chamberBack = null; shipCamp = null;
     go(await Level.load(sv.level.id, sv.level.id === 'D01' ? undefined : sv.level.ts), sv.at.x, sv.at.y);
@@ -1658,7 +1758,7 @@ async function main() {
     await world.at(x, y, clock);
     message = '';
   }
-  if (import.meta.env.DEV) Object.assign(window, { dbg: { party, world, clock, events, get level() { return level; } } });   // for scripts/shot.mjs eval:
+  if (import.meta.env.DEV) Object.assign(window, { dbg: { party, world, clock, events, assigns, get level() { return level; } } });   // for scripts/shot.mjs eval:
   render();
 }
 

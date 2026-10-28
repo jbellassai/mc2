@@ -54,7 +54,7 @@ Four elden are imprisoned in candle flames; each room is reached through a dunge
 The freed elden then speak `D98` texts 9–12 (meet at Wanasol Hall; Zidoni: bring King Rebnard) and the Wanasol Hall scene in `quest_scenes.md` takes over. The Blue Scroll comes from that scene; the others are found/bought and deciphered through library research (`services.md`).
 
 ### Prisoners (`_hroomtype == 1`)
-Companions captured earlier (stealth failure while travelling, `assignments.md`) are stored as assignment records with task 0x65 at this location/room/hroom (`_AssignedHere` compares `as_loc/as_room/as_hroom`). On entry each such record is cleared, the companion is placed at (2,4) and says "Many thanks for the rescue!"; four specific captives (P07 table @0x56A) also set an event bit. Leaving clears their `_npcsta` bit so they re-appear per the normal placement rules (`npcs.md`).
+Companions captured earlier (stealth failure while travelling, `assignments.md`) are stored as assignment records with task 0x65 at this location/room/hroom (`_AssignedHere` compares `as_loc/as_room/as_hroom`). On entry (P07 `ovl_05ad`) each such record's task becomes 0xFF (idle here: the record stays), the companion is placed near (2,4) (`_PlacePerson`, stored in `as_x/as_y`) and P07 text 0x539 "The prisoner says: 'Many thanks for the rescue!'" is shown; four captives (P07 file 0x56A: NPCs 5, 10, 30, 28) also set events 40, 42, 43, 44. The freed companion then stands in the cell until invited (`assignments.md`, *Rejoining*).
 
 ## Town searches (`P02`, *Search* command)
 At a `spetbl` spot of type 2/3: same pick formula as chests (`dex/2 + lockpick` vs d100, failure breaks a Pick), lockpick skill-up, then the spot's `treasptr` group lists `{item, amount}` pairs; "%h will take…" picks a hero (`HeroSel`) and sets the spot's bit in `_chests`. A spot with `d3 ≠ 0` first runs the V02 trapped-chest service.
@@ -136,6 +136,8 @@ The world map is one 256×256 map; the party is always inside one of 16 **region
 | `loctext` | 0 "A mushroom patch!", 1 "A port of ethereal travel!", 2–7 ship names, 9–14 captain names, 0x0F–0x2C sailing/world-map messages (identical in all 16 regions) |
 
 Ships and captains: `ships.md`.
+
+Web port: features (programs 4, 8, 9) and spots (programs 2, 5, 8, 9) are entered by stepping on them (`world.ts` *spot*); a spot of a room program is treated like a feature with `rmid` as the room id. Not traced: P01's own handling of a spot's `tx, ty` for room programs (the port ignores them there).
 
 ### Mushroom patches (program `P04`, data `D04`, map `G00E00.MCM`)
 

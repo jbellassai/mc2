@@ -1,7 +1,7 @@
 """Build the web port's data pack from the original files (decision 1). Never commit or publish the output.
 usage: export_json.py ORIGDIR OUTDIR -> OUTDIR/locations/*.json, tiledata/Bnn.json, tilesets/Vnn.png, sprites/E0n.png, conversations/Cnn.json,
        blocks.json, rooms.json, sprites.json, comtxt.json, items.json, heroes.json,
-       commands.json, npctypes.json, p90.json, p02text.json, p91text.json, p01.json, p05.json, p09.json, p92text.json, p97.json, p93text.json, p93.json, p89.json, v02.json, p08.json, conds.json, companions.json, exetables.json, combat.json
+       commands.json, npctypes.json, p90.json, p02text.json, p91text.json, p01.json, p05.json, p09.json, p92text.json, p97.json, p93text.json, p93.json, p89.json, v02.json, p08.json, assign.json, conds.json, companions.json, exetables.json, combat.json
 Schema: docs/data_schema.md. Byte strings are lowercase hex; every list is in file order."""
 import json, os, struct, sys
 sys.path.insert(0, os.path.dirname(__file__))
@@ -285,6 +285,19 @@ def main(src, dst):
     parts = p81[0x15:0x7B1].split(b'\0')
     scenes = [list(x) for x in parts[40].split(b'\xff')[:5]]
     dump(f'{dst}/p81.json', {'texts': [x.decode('latin1') for x in parts[:40]], 'scenes': scenes})
+    p88, p92 = open(f'{src}/P88.MCO', 'rb').read(), open(f'{src}/P92.MCO', 'rb').read()   # assignments (rules/assignments.md)
+    words = lambda d, a, n: [x.decode('latin1') for x in d[a:].split(b'\0')[:n]]
+    ass, start, o = struct_fields('ASSIGNMENT'), [], 0x167F   # P81 init: 25-byte records until 0xFF
+    while p81[o] != 0xFF: start.append(decode_struct(p81[o:], ass)); o += 25
+    dump(f'{dst}/assign.json', {
+        'start': start, 'menu': words(p88, 6, 4), 'texts': words(p88, 0x2D9, 58),
+        'dests': words(p88, 0x24, 16), 'destxy': [list(p88[0xAB + 3 * i:0xAE + 3 * i]) for i in range(16)],   # {room, x, y}
+        'places': words(p88, 0xDB, 25), 'locplace': list(p88[0x1EE:0x24B]), 'homes': list(p88[0x24B:0x26B]),
+        'jail': list(p88[0xDBD:0xDC5]),   # NPCs 5, 10, 30, 28 / events 40, 42, 43, 44 (the same as P07's rescue table)
+        'rects': [list(p92[0xC2 + 4 * i:0xC6 + 4 * i]) for i in range(16)],
+        'cands': [list(p92[0x64E + 4 * i:0x652 + 4 * i]) for i in range(16)],
+        'prisons': {k: list(p92[0x68E + 9 * i:0x697 + 9 * i]) for i, k in enumerate(('id', 'loc', 'x', 'y'))},
+        'rescue': open(f'{src}/P07.MCO', 'rb').read()[0x539:].split(b'\0')[0].decode('latin1')})
     p02 = open(f'{src}/P02.MCO', 'rb').read()   # special spots (rules/locations.md, Special spots)
     v02 = open(f'{src}/V02.MCO', 'rb').read()
     dump(f'{dst}/spots.json', {'ambush': {'ids': list(p02[0x1743:0x1749]), 'events': list(p02[0x1749:0x174F])},

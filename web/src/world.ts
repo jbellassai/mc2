@@ -48,6 +48,22 @@ export class World {
     this.ssn = [...hex(this.rec.tables.weathr).slice(12 * SEASON[clock.month], 12 * SEASON[clock.month] + 12)];
   }
 
+  /** P01 ovl_0c28 / ovl_0c64: the region's spot at (x, y), `LOCSPOT{x, y, pgmidx, rmid, a, b, c, ev, tx, ty}` until 0xFF.
+   *  `ev` 0xFE: always there; else list `ev` of `locevptr` ({event, tx} pairs, each list ending 0xFF): the first set
+   *  event enables the spot and gives the arrival x. A disabled spot lets a later one on the same square match. */
+  spot(x: number, y: number, events: Set<number>): { pgm: number; id: number; tx: number; ty: number } | null {
+    const t = hex(this.rec?.tables.locptr ?? ''), ev = hex(this.rec?.tables.locevptr ?? '');
+    for (let o = 0; o + 10 <= t.length && t[o] !== 0xff; o += 10) {
+      if (t[o] !== x || t[o + 1] !== y) continue;
+      const s = { pgm: t[o + 2], id: t[o + 3], tx: t[o + 8], ty: t[o + 9] };
+      if (t[o + 7] === 0xfe) return s;
+      let p = 0;
+      for (let n = t[o + 7]; n > 0; n--) p = ev.indexOf(0xff, p) + 1;
+      for (; p + 1 < ev.length && ev[p] !== 0xff; p += 2) if (events.has(ev[p])) return { ...s, tx: ev[p + 1] };
+    }
+    return null;
+  }
+
   /** P92 ovl_04c7, hourly: every region's hours count down; when the current one's are spent, roll the next weather. */
   hour(clock: Clock) {
     for (const w of this.wthrs) if (w.hours) w.hours--;
