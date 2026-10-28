@@ -15,7 +15,8 @@ const rnd = (n: number) => Math.floor(Math.random() * n);   // RndCo(n): 0 … n
 
 async function main() {
   const view = await View.create(document.getElementById('view') as HTMLCanvasElement);
-  const [cmd, p02, comtxt] = await Promise.all([json<string[]>('commands.json'), json<string[]>('p02text.json'), json<string[]>('comtxt.json')]);
+  const [cmd, p02, comtxt, npctypes] = await Promise.all([json<string[]>('commands.json'), json<string[]>('p02text.json'),
+    json<string[]>('comtxt.json'), json<string[]>('npctypes.json')]);
   const hero = await Hero.profile(0);                        // profile A until character creation exists
   const clock = Clock.newGame();
   const hour = Number(new URLSearchParams(location.search).get('hour'));   // dev aid: ?hour=20 starts in the evening
@@ -142,15 +143,40 @@ async function main() {
     render();
   };
 
+  /** _Look (rules/locations.md, Look). Line of sight is not modelled yet: every square counts as visible. */
+  const look = (x: number, y: number) => {
+    let what: string;
+    const who = figures.find(f => f.x === x && f.y === y);
+    if (who && who.num < 0x20 && who.name) what = who.name;
+    else if (who) {
+      const t = npctypes[who.type] ?? '';
+      what = comtxt[/^[aeiou]/i.test(t) ? 0x0f : 0x0e] + t;
+    } else what = level.tileName(x, y);
+    let text = say(comtxt[0x08]) + what + comtxt[0x10];
+    const spot = (level.loc.look ?? []).find(l => l.x === x && l.y === y);
+    if (spot && (!(spot.text & 0x80) || (who && who.num >= 0x20))) text += say(level.loc.texts[spot.text & 0x7f] ?? '');
+    message = text;
+    render();
+  };
+  let looking = false;
+  view.canvas.addEventListener('click', e => {
+    if (panel.open) return;
+    const t = view.cellAt(e, level.loc.kind === 'room' ? 5 : pos.x, level.loc.kind === 'room' ? 4 : pos.y);
+    look(t.x, t.y);
+  });
+
   const KEYS: Record<string, [number, number]> = {
     ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0],
     w: [0, -1], s: [0, 1], a: [-1, 0], d: [1, 0],
   };
   let queue = Promise.resolve();   // steps run in order; keys pressed while a room loads are not lost
   addEventListener('keydown', e => {
+    if (panel.open) return;
+    if (e.key === 'l' || e.key === 'L') { looking = true; message = say(comtxt[0x0d]); render(); return; }   // "Mark the target."
     const k = KEYS[e.key];
-    if (!k || panel.open) return;
+    if (!k) return;
     e.preventDefault();
+    if (looking) { looking = false; look(pos.x + k[0], pos.y + k[1]); return; }
     queue = queue.then(() => step(...k)).catch(err => { status.textContent = String(err); console.error(err); });
   });
   render();

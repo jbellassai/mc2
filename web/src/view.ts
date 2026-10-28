@@ -6,7 +6,7 @@ export const COLS = 21, ROWS = 15, TILE = 16;
 
 export class View {
   private ctx: CanvasRenderingContext2D;
-  private constructor(canvas: HTMLCanvasElement, private heroes: HTMLImageElement, private folk: HTMLImageElement,
+  private constructor(readonly canvas: HTMLCanvasElement, private heroes: HTMLImageElement, private folk: HTMLImageElement,
                       private sprites: Sprites) {
     canvas.width = COLS * TILE; canvas.height = ROWS * TILE;
     canvas.style.width = `${COLS * TILE * 3}px`;
@@ -20,6 +20,13 @@ export class View {
 
   private sheet(im: HTMLImageElement, k: number, cols: number, cx: number, cy: number) {
     this.ctx.drawImage(im, (k % cols) * 16, Math.floor(k / cols) * 16, 16, 16, cx * TILE, cy * TILE, TILE, TILE);
+  }
+
+  /** The map square under a mouse event, for a view centred on (cx, cy). */
+  cellAt(e: MouseEvent, cx: number, cy: number): { x: number; y: number } {
+    const r = this.canvas.getBoundingClientRect();
+    const col = Math.floor((e.clientX - r.left) / r.width * COLS), row = Math.floor((e.clientY - r.top) / r.height * ROWS);
+    return { x: cx - (COLS >> 1) + col, y: cy - (ROWS >> 1) + row };
   }
 
   draw(lv: Level, cx: number, cy: number, figures: Figure[], party: { x: number; y: number; sprite: number }[]) {

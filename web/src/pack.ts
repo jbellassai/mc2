@@ -22,6 +22,7 @@ export interface Location {
   npcs: Npc[];
   script: { word: number; resp: number; cmds: { op: 'E' | 'C' | 'S'; arg?: number; alt?: number; song?: number }[] }[];
   news: { npctype: number; event: number; text: number }[];
+  look?: { x: number; y: number; text: number }[];
   residents: { name: number; num: number; appear: number; disappear: number; ifevent: number; ifnevent: number }[];
   roommap?: { g: number; chunks: number[] } | null;
 }

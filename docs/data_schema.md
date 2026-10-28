@@ -14,6 +14,7 @@ Built by `.venv/bin/python -I tools/export_json.py original out/pack`; never com
 | `comtxt.json` | the EXE's common message texts, message *n* at index *n* |
 | `items.json` | item names by code (`_w_objects`, 0x00–0x5C) |
 | `heroes.json` | the five new-game profiles A–E as `HERO` records (field names from `structs.h`; `h_gold` is `{hundreds, units}` here) |
+| `npctypes.json` | what *Look* calls a person, by GEN/KNPC `type` (DS:2296: man, woman, wizard, …) |
 | `commands.json` | command words (`_menucommands`: End, Quit, None, Yes, No, … Knock, … Pick …) |
 | `p91text.json` | small talk: `lines` (P91 file 0x7F) and `weather` `[weather, line]` pairs (`rules/dialogue.md`) |
 | `p02text.json` | the town program's own texts (P02 file 0x67: locked doors, map flask, scrolls) |

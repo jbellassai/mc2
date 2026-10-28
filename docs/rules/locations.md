@@ -2,6 +2,13 @@
 
 Sources: `P07.MCO` (dungeon-room program), `P01` (entering a dungeon from the world map), `P02` (town search / keys), `P09` (puzzle rooms), `Dnn.MCV` sub-tables (`docs/formats.md`). Dungeon levels are program-2 locations like towns (`P02` + `V02`); `P04` = mushroom patches, `P05` = service rooms, `P06` = the combat room program.
 
+## Look (`_Look`, EXE 1166:049B; Talk at an empty square uses the same tail, FFFAR `ovl_2c1b`)
+Mark a square; the line starts "%h sees " (common text 0x08; in a town with the square out of sight, "It's " 0x115 instead). Then:
+- a party member / known companion (`num < 0x20`) → their name;
+- any other person → "a "/"an " (0x0E/0x0F, chosen by a vowel table) + the **type name** `DS:2296[type]` (man, woman, wizard, elf, … — named NPCs are described by type too); in combat a dead one gets "a dead " (0x112) + the monster name;
+- otherwise the tile's name from the tileset's `txttbl` (names carry their own article: "a signpost", "cobblestones"), then "." (0x10), then the **look spot** text when `lkdata` has a record for the square (below) and the square is in line of sight.
+*Talk* aimed at a square with nobody on it prints "%h talks to " (0x11) + the same tail.
+
 ## Pointer table conventions
 A `Dnn.MCV` starts with 20 u16 pointers in `LOCTYPE` order. An **unused table has the same value as `roomptr`** (the first real table), e.g. D20 `treasptr = spdoors = locptr = 0x47 = roomptr`. `tools/locdump.py` (fixed 2026-10-27) treats those as empty. Real record shapes seen so far:
 
