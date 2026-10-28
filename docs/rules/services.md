@@ -20,7 +20,9 @@ P05 classifies the id with the boundary table (file 0x2BA) `[40 48 6C 7C 80 84 9
 | 0x84–0x89 | 6 | tavern | D12 |
 | 0x90+ | 7… | other (casino 0x90 runs P09) | |
 
-Rooms of kind 1–3 set `_swgreet = 1` (the keeper greets on entry). Only one member can be engaged per room at a time (`ovl_1742`: an assignment record here, else the first party member with `h_actvty != 0xFF`); a second request gets the "when I am through with your friend" text.
+Rooms of kind 1–3 set `_swgreet = 1` (the keeper greets on entry).
+
+**Talking, passing, leaving** (P05 `ovl_031f`). The service dialogue runs when `_swgreet == −1` (entry: kinds 1 inn, 2 school, 3 jobs) or `−3` (Talk: kinds 2–5, so the inn speaks only on entry and the library and lodge only when spoken to). *Pass* runs `_CalUpd` (5 minutes) in a loop and calls `ovl_17bd` whenever the minute is 0, until a key is pressed or the pupil's task ends; `ovl_17bd` advances a task once a day, at the hour it started (`h_acthour == _hour`, `h_actdate != _date`). Stepping onto a room exit (`_RMove` returns 2) always asks before leaving: with a pupil here and a room text in the table at file 0xCD (per `_rmtyp`: `[FF FF 1F FF 0B 10 FF FF FF]`, i.e. school 31, library 11, lodge 16) that text, else comtxt 0x23 "Do you want to leave now?" — in stores and taverns too. *Yes* clears every member's `h_actvty`. Only one member can be engaged per room at a time (`ovl_1742`: an assignment record here, else the first party member with `h_actvty != 0xFF`); a second request gets the "when I am through with your friend" text.
 
 ## Inn (`_rmtyp 1`, D07)
 
@@ -73,14 +75,14 @@ The subject is a keyword (`WMatch` against the library's `gwrds`). Each library 
 | 6 | 7D | 30 | 0 | list 9 |
 | 7 | 7D | 30 | 0 | list 10 |
 | 8 | 7D | 20 | 0 | list 4 |
-| 9 | 7D | 25 | 0 | list 8 (task byte 8, days 3 — data inconsistency) |
-| 10 | 7E | 60 | 4 | task 32 (Pink Scroll) |
-| 11 | 7E | 70 | 0 | task byte 33 (Blue Scroll) with days 0 → reads list 33 = nothing (original data bug?) |
+| 9 | 7D | 25 | 0 | list 8 |
+| 10 | 7E | 60 | 3 | task 32 (Pink Scroll) |
+| 11 | 7E | 70 | 4 | task 33 (Blue Scroll) |
 | 12 | 7E | 55 | 0 | list 5 |
 | 13 | 7E | 45 | 0 | list 3 |
 | 14 | 7E | 55 | 0 | list 11 |
 
-`h_research < required` → "skill is not sufficient". Days 0: the party waits `(100 − research)/4 + 1` five-minute ticks and the text list (file 0x28B: NUL-separated lists of `loctext` numbers of that library's D-file: 1 `[9]`, 2 `[10,11,12]`, 3 `[13,14,15]`, 4 `[17,18,19]`, 5 `[20–24]`, 6 `[25–28]`, 7 `[33,34,35]`, 8 `[36–39]`, 9 `[40,41,42]`, 10 `[43,44]`, 11 `[45,46,47]`) is read aloud. Days > 0: the member must hold the matching scroll (`SearchInv(task + 0x2E)`, else "requires a magical %a"), then `h_actvty = task`, `h_actmisc = scroll item`, `h_actdays = days` and the scroll is "unrolled"; on completion `h_invamt[scroll] |= 0x80` ("places the %a in %p pack"). The flag is read by the Dark Candle rooms (`P07 ovl_06c2`: an undeciphered scroll is "blank", `locations.md`).
+`h_research < required` → "skill is not sufficient". Days 0: the party waits `(100 − research)/4 + 1` five-minute ticks and the text list (file 0x28B: NUL-separated lists of V05 string numbers: 1 `[9]`, 2 `[10,11,12]`, 3 `[13,14,15]`, 4 `[17,18,19]`, 5 `[20–24]`, 6 `[25–28]`, 7 `[33,34,35]`, 8 `[36–39]`, 9 `[40,41,42]`, 10 `[43,44]`, 11 `[45,46,47]`) is read aloud. The list entries count NUL-terminated strings from offset 7 of `V05.MCO`, the room V-file in `_lvarbuf` (`AddScrap(*(lvarbuf+5), n)`; entries 0–8 are the empty strings at 7–0xF), not the D-file's `loctext`. Days per subject (file 0x21F) and task (0x233) re-read from the bytes 2026-10-28. Days > 0: the member must hold the matching scroll (`SearchInv(task + 0x2E)`, else "requires a magical %a"), then `h_actvty = task`, `h_actmisc = scroll item`, `h_actdays = days` and the scroll is "unrolled"; on completion `h_invamt[scroll] |= 0x80` ("places the %a in %p pack"). The flag is read by the Dark Candle rooms (`P07 ovl_06c2`: an undeciphered scroll is "blank", `locations.md`).
 
 ## Wizards' lodge (`_rmtyp 5`, D11) — "memorize spells up to 7 days"
 

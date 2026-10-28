@@ -1,7 +1,7 @@
 """Build the web port's data pack from the original files (decision 1). Never commit or publish the output.
 usage: export_json.py ORIGDIR OUTDIR -> OUTDIR/locations/*.json, tiledata/Bnn.json, tilesets/Vnn.png, sprites/E0n.png, conversations/Cnn.json,
        blocks.json, rooms.json, sprites.json, comtxt.json, items.json, heroes.json,
-       commands.json, npctypes.json, p90.json, p02text.json, p91text.json
+       commands.json, npctypes.json, p90.json, p02text.json, p91text.json, p05.json
 Schema: docs/data_schema.md. Byte strings are lowercase hex; every list is in file order."""
 import json, os, struct, sys
 sys.path.insert(0, os.path.dirname(__file__))
@@ -226,6 +226,19 @@ def main(src, dst):
     end = p91.index(0xFF, 0x48); pairs = p91[0x48:end]
     dump(f'{dst}/p91text.json', {'lines': [x.decode('latin1') for x in p91[end + 1:0x2E0].split(b'\0')[:16]],
                                   'weather': [[pairs[i], pairs[i + 1]] for i in range(0, len(pairs) - 1, 2)]})
+    p05 = open(f'{src}/P05.MCO', 'rb').read()   # service rooms (rules/services.md); lists indexed by room id − kind base
+    u8 = lambda o, n: list(p05[o:o + n])
+    v05 = open(f'{src}/V05.MCO', 'rb').read()    # library books: AddScrap counts NUL-terminated strings from V05 offset 7
+    dump(f'{dst}/p05.json', {
+        'leave': u8(0xCD, 9),   # per _rmtyp: room text asked when leaving with a pupil, 0xFF = comtxt 0x23
+        'inn': {'price': u8(0x283, 8)},
+        'school': {'skill': u8(0x149, 19), 'cost': [struct.unpack_from('<H', p05, 0x4D + 2 * i)[0] for i in range(0x48, 0x5B)],
+                   'days': u8(0x125, 19), 'gain': u8(0x16D, 19), 'cap': [u8(0x17F + 6 * k, 6) for k in range(19)]},  # gain[18] reads past the table (sic)
+        'job': {'trade': u8(0x273, 16)},
+        'library': {'subjects': [u8(0x1F7 + 5 * k, 5) for k in range(3)], 'research': u8(0x20B, 15), 'days': u8(0x21F, 15),
+                    'task': u8(0x233, 15), 'lists': [list(x) for x in p05[0x28B:0x2B9].split(b'\0')],
+                    'texts': [x.decode('latin1') for x in v05[7:].split(b'\0')[:48]]},
+        'lodge': {'mask': u8(0x247, 3), 'cost': 200}})
     ct = ds + 0x9F8   # common text, message n = n-th string
     dump(f'{dst}/comtxt.json', [x.decode('latin1') for x in exe[ct:ct + 0x4000].split(b'\0')[:400]])
     print(f'{n} locations, {len(blocks)} blocks, {sum(map(len, rooms.values()))} room chunks')
