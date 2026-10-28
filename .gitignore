@@ -10,3 +10,5 @@ ghidra/*.lock*
 *.swp
 *.swo
 original/
+web/node_modules/
+web/dist/
