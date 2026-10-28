@@ -8,7 +8,7 @@ Readable decompiles: `decomp/overlays/Pnn.c` (regenerate: `tools/ovl_batch.sh` t
 | P02 | 5 | town program ("The door is locked", "Whom do you seek?", shop/door handling) |
 | P04 | 2 | **mushroom patches** on the world map (`_mushsta` nibbles, regrowth every 8 days) — `docs/rules/locations.md`, *Mushroom patches* |
 | P05 | 2 | **service rooms**: inns, schools, jobs, libraries, wizards' lodges, taverns/stores, region camps — room id selects the tables (`docs/rules/services.md`) |
-| P06 | 26 | **dungeon level program** (PGM `pgmnum` 6, data `D06`): the 26 entry points are the EXE's room-program vector names (`_Attack`, `_MDamage`, `_MAttend`, `_AniMonster`, `_GetRec1/2`…) — monsters on the dungeon map attack/are attacked in place (`combat.md` attack resolution `ovl_050a`); its rooms load P07 at +0x2000 |
+| P06 | 49 | **combat room program**, loaded at 0CA8:2000 by `_DoACmbt` with data `D06` (monster counts by difficulty): entries are the EXE's room-program vector names (`_Attack`, `_MDamage`, `_MAttend`, `_AniMonster`, `_GetRec1/2`…), attack resolution `ovl_050a` (`combat.md`). A dungeon door whose PGM record says `pgmnum` 6 is a guarded room: combat with this program, then P07 (`rules/locations.md`, *Dungeon levels*) |
 | P07 | 1 | dungeon **room** program: prison cells, chests, fountains, Dark Candle rooms, Vankruh's chamber (`rules/locations.md`) |
 | P08 | 2 | **quest scenes**: King's court gifts, Maalaq's crystal key, Altesen Orb, Marked Ones / Blue Scroll, ghost, White Scroll disaster trigger, Oolau nest ending — `docs/rules/quest_scenes.md` |
 | P09 | 1 | **special rooms**: casinos (2d6), teleportals (3-piece combinations), temples (gods, demands, blessings), dungeon gates (passwords), meeting halls — `docs/rules/special_rooms.md` |

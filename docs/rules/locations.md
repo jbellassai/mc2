@@ -1,6 +1,6 @@
 # Locations: dungeon rooms, chests, searches, keys
 
-Sources: `P07.MCO` (dungeon-room program), `P01` (entering a dungeon from the world map), `P02` (town search / keys), `P09` (puzzle rooms), `Dnn.MCV` sub-tables (`docs/formats.md`). Work in progress — the town program `P02` and the dungeon-map programs `P04/P05` are only partly decoded.
+Sources: `P07.MCO` (dungeon-room program), `P01` (entering a dungeon from the world map), `P02` (town search / keys), `P09` (puzzle rooms), `Dnn.MCV` sub-tables (`docs/formats.md`). Dungeon levels are program-2 locations like towns (`P02` + `V02`); `P04` = mushroom patches, `P05` = service rooms, `P06` = the combat room program.
 
 ## Pointer table conventions
 A `Dnn.MCV` starts with 20 u16 pointers in `LOCTYPE` order. An **unused table has the same value as `roomptr`** (the first real table), e.g. D20 `treasptr = spdoors = locptr = 0x47 = roomptr`. `tools/locdump.py` (fixed 2026-10-27) treats those as empty. Real record shapes seen so far:
@@ -9,7 +9,7 @@ A `Dnn.MCV` starts with 20 u16 pointers in `LOCTYPE` order. An **unused table ha
 |---|---|---|
 | `lkdata` | `{x, y, id}` ×n, 0-terminated | positions of lockable/special spots with an id (D30: `(35,87)→11, (54,50)→1, (47,40)→150`) |
 | `hroomptr` | `HROOM` 13 bytes `{hrmid, hrmgrp, hrmreward, hrmrewamt, hrmmap, hrmxy[4]}` | **dungeon rooms** (see below) |
-| `spetbl` (towns, P02) | `{x, y, type, sub, value:u16}` ×n, 0-terminated | special spots: the lookup (`ovl_1926`) matches the party position and a type filter (2 and 3 = searchable spots), returns `value` (= chest/search id) and `sub` (≠ 0 → handled by `V02` INT 60h, e.g. trapped chest service 15) |
+| `spetbl` (towns and dungeon levels, P02) | `{x, y, type, d1, d2, d3}` ×n, 0-terminated | special spots: 0 ambush, 1 teleportal, 2/3 lockpick/search spots (`d2` = `treasptr` group and its `_chests` bit, `d3 ≠ 0` → trapped, V02 service 0x15), 4 pit (unused), 5 hidden chute, 6 companion remark — *Dungeon levels* below |
 | `spetbl` (P09 puzzle rooms) | `{x1, y1, x2, y2}` rectangles | — |
 | `treasptr` (towns) | `id, {item, amount}…, 0xFF` groups | contents of search spot `id`; `item 0x80` prints the special text (local 0x10 + loctext) instead |
 | `spdoors` | `{?, x, y, newtile, ?}` ×n, 0xFF-terminated | doors opened with a key item: every record's tile is replaced by `newtile` (`P02 ovl_0d70`, key = `_useditem & 0x7F`) — exact first/last byte TODO |
@@ -48,7 +48,7 @@ The freed elden then speak `D98` texts 9–12 (meet at Wanasol Hall; Zidoni: bri
 Companions captured earlier (stealth failure while travelling, `assignments.md`) are stored as assignment records with task 0x65 at this location/room/hroom (`_AssignedHere` compares `as_loc/as_room/as_hroom`). On entry each such record is cleared, the companion is placed at (2,4) and says "Many thanks for the rescue!"; four specific captives (P07 table @0x56A) also set an event bit. Leaving clears their `_npcsta` bit so they re-appear per the normal placement rules (`npcs.md`).
 
 ## Town searches (`P02`, *Search* command)
-At a `spetbl` spot of type 2/3: same pick formula as chests (`dex/2 + lockpick` vs d100, failure breaks a Pick), lockpick skill-up, then the spot's `treasptr` group lists `{item, amount}` pairs; "%h will take…" picks a hero (`HeroSel`) and sets the spot's bit in `_chests`. A `sub ≠ 0` spot first runs the V02 service (trap).
+At a `spetbl` spot of type 2/3: same pick formula as chests (`dex/2 + lockpick` vs d100, failure breaks a Pick), lockpick skill-up, then the spot's `treasptr` group lists `{item, amount}` pairs; "%h will take…" picks a hero (`HeroSel`) and sets the spot's bit in `_chests`. A spot with `d3 ≠ 0` first runs the V02 trapped-chest service.
 
 ## Towns (`P02`, program 2)
 - **Time**: every 12 steps = one 5-minute tick (`_CalUpd`); every second tick all members lose 1 energy (`ovl_0fca`). The walk-on-water counter decrements per step.
@@ -58,8 +58,58 @@ At a `spetbl` spot of type 2/3: same pick formula as chests (`dex/2 + lockpick` 
   - *Break*: impossible when `doorstn == 0xFF`; succeeds if `doorstn < h_strngth` of the acting hero → "%h breaks open the door!" (`rmdata+5 = 2`), else "The door withstands %h's assault." `doorstn` is one value per location (`LOCTYPE+56`).
   - *Leave*. "%h resists the urge to break into a quiet private home." guards rooms with nothing in them.
 - **Keys**: using a key item (`_useditem & 0x7F`, e.g. Crystal/Iron Key) runs `spdoors`: every record's tile is swapped (`ovl_0d70`), i.e. all the matching doors in the location open at once.
-- **Lockpick on things** (`ovl_1044`): mark a square; it must be a `spetbl` type-2 spot ("%h can not use a lockpick on that!" otherwise); same pick roll as above, lockpick skill-up, then the spot's `treasptr` group ("Who will take the treasure?", `_chests` bit). *Search* (`ovl_1131/1198`) does the same on type-3 spots without a pick ("%h finds nothing." when there is none). A spot with `sub ≠ 0` first runs V02 service 0x15 (trapped chest, `spells.md`).
+- **Lockpick on things** (`ovl_1044`): mark a square; it must be a `spetbl` type-2 spot ("%h can not use a lockpick on that!" otherwise); same pick roll as above, lockpick skill-up, then the spot's `treasptr` group ("Who will take the treasure?", `_chests` bit). *Search* (`ovl_1131/1198`) does the same on type-3 spots without a pick ("%h finds nothing." when there is none). A spot with `d3 ≠ 0` first runs V02 service 0x15 (trapped chest, `spells.md`).
 - **Map flask** (`ovl_13c4`, locations with `pearlsw`): the *Map* command needs a Pearl (or asks to use a Blu Pearl); the pearl is dropped into the flask and the minimap is shown. With a plain Pearl there is a 1-in-10 roll where `h_dextrty ≤ RndCo(20)` shatters the flask ("The map flask shatters!", −1 Map Flask).
+
+## Dungeon levels (`P02` movement, `spetbl` spots, room doors)
+Dungeon levels ("Cellars 1 X", "Dorak 3 X"…) are ordinary **program-2 locations** (`P02` + `V02` via INT 60h, `_InDungeon()` true); there is no separate dungeon-level program. Everything below also runs in towns. Positions are absolute map coordinates; the party occupies one square per member (`_p1x/_p1y[6]`), the leader at window cell (5,4).
+
+### A step (`P02` 0x45E → direction routine → `ovl_067d`)
+For each occupied party slot (5…0) the target square is tested in order:
+1. a member who is Dead, Paralyzed, Exhausted, Poisoned or Starving (`h_cond1 & 0xFC`) counts as blocked — so nobody moves (read from the code, not yet checked in play);
+2. walkable (`_ChkWlk`) → ok; else a water square while `_wlkwcount > 0` (Walkwater, V02 service 02) → ok;
+3. an **exit** (`exitptr` `{x, y, pgm, tx, ty}`) → change level: PGM record `pgm` (`_curmpg/_curtils/_curvar`) at `(tx, ty)` (in location `_curvar == 0x39` the target comes from a per-member table at `LOCTYPE+22`);
+4. a **door** (`roomptr` `{x, y, pgm, id, type}`) → enter it (below);
+5. otherwise blocked; V02 service 08 records what blocked him in `_bangstg[member]`: 1 = a tileset `aniptr` record of class **'C'** (the barrier Pierce removes), 2 = class **'B'** (the barrier Repel removes), 5 = plain wall.
+
+If any member is blocked the whole party stays put, sound 0x0E plays and V02 service 09 runs: every member with `_bangstg = 1` loses **10 + RndCo(10) energy**, with `_bangstg = 2` loses **1 HP**; HP is then floored at 1 (a barrier never kills), `_IsHeTr`, `MultiBang(0x17)`. A successful step costs time (12 steps = one 5-minute tick, `Towns` above), decrements `_wlkwcount`, then checks the special spots.
+
+### Special spots (`spetbl` 6-byte records `{x, y, type, d1, d2, d3}`, `P02 ovl_151a`)
+After each step `ovl_189d` scans the 3×3 squares around the leader for a record (`ovl_1926`, the first match per square; unmatched types fall through to the next match). Some types fire only if a member actually stands on the square. Counts are over all program-2 locations:
+
+| type | n | trigger | effect |
+|---|---|---|---|
+| 0 | 163 | 3×3 around the leader | **ambush**: `_entrno = d2` (ambush id), `_grpno = d1` (encounter group, `encounters.md`), `_hroomrec = {d2, d1, 0, 0, map d3, …}`. Skipped if `_ambush` bit `d2` is set (set after the fight is won). Otherwise `_cmbtyp = 0` (fight on the street map, members keep their squares), `_diff = locdiff − 1`, `_exitdir[] = 0xFFFF`, `_docmbt = 1`, `_ambflg = 1` (monsters act first). The ambush is **detected** — `_ambflg = 0`, "%o detects an ambush!" — if the spot is the one the last *Sense* spell pointed at (V02 service 0x13 result kept in `cs:0x133`), or if `RndCo(200) < best h_track in party`. Ambush ids 12, 101, 97, 108, 155, 110 also set events 49, 70, 71, 72, 90, 107 when they trigger (P02 file 0x1743/0x1749; Deraum and Drakhelm 2/3). |
+| 1 | 120 | a member on the square | **teleportal**: "The party is swept into a teleportal!" (comtxt 0x7B), sound 0x14, a sprite effect (`_MFXInit`/`_movetileFX`), then level change to PGM record `d1` at `(d2, d3)` (`ovl_196b`). Never used up. Hidden on the map; *Detect* animates type-1 spots while it lasts (V02 service 0x0D, `spells.md`). Several squares often share one target (Maratul 4/5 trap corridors). |
+| 2, 3 | 19, 17 | — (only by command) | lockpick / search spots (`Towns` above; `d2` = `treasptr` group and `_chests` bit, `d3 ≠ 0` = trapped). |
+| 4 | 0 | a member on the square | **pit**: "The party stumbles into a pit!" (0x7D) and nothing else — no data uses it. |
+| 5 | 9 | a member on the square | **hidden chute**: level change to PGM `d1` at `(d2, d3)`, then "The party slides through a hidden chute!" (0x7E). Ruz 1, Shann 2/3, Drakhelm 1/2… |
+| 6 | 38 | 3×3 around the leader | **companion remark**: speaker = the first of members 1–5 (never the player) with `h_race == d1 & 0x7F` when `d1 ≥ 0x80`, else `h_orinum == d1`; `d1 == 0xFE` = no speaker. No such member, or `d2 ≠ 0xFF` and event `d2` is set → nothing (the spot stays armed). Else V02 service 0x0E sets a quest event for some remarks (table below), the location's `loctext[d3]` is printed in the speaker's voice, the record's type becomes 0xFF and its bit is set in `_spetbldone`. |
+
+`_spetbldone` (128 bits, one per record index) survives only while the party stays on the same level: V02 service 0x16, run on every level load, clears all bits when `_curvar` differs from the last program-2 level (`_lastp02var`) and otherwise re-disables the marked records. **Quirk**: leaving a level and coming back re-arms every remark (ambushes are permanent through `_ambush`).
+
+Remark → event table (V02 file 0xBDB: 27 remark text ids, then 27 events, then 27 `_locspec` values; the event is set only when the remark id *and* the current `_locspec` match):
+
+| `_locspec` | remark id → event |
+|---|---|
+| 29 | 5→54, 0→48, 2→83, 7→108, 3→109 |
+| 30 | 0→48, 18→97, 15→51 |
+| 31 | 21→110 |
+| 32 | 4→98, 5→99, 6→111 |
+| 33 | 4→116 |
+| 35 | 6→112, 2→113 |
+| 62 | 3→73, 24→74, 30→75, 10→76, 14→77, 4→78 |
+| 64 | 3→80, 15→81 |
+| 65 | 7→59 |
+| 69 | 13→68, 19→106 |
+| 70 | 28→118 |
+
+### Doors into dungeon rooms (`roomptr` type 6–9, `P02` 0x8F8)
+A door whose type is 6–9 (the type is also the arena formation side, `combat.md`) is a **dungeon room**. Its PGM record is always `{6, tileset, 6, …}` — "program 6" here means *room with guards*, not an overlay that runs on its own:
+1. `_rmdata+4` = the PGM's tileset; the `HROOM` record with `hrmid == id` is copied from the level's own `hroomptr` table into `_hroomrec`; `_cmbtyp = 5`.
+2. Group 0xCA (rooms 251 in Dragos 3 and D93) is replaced by group 0xDE, room id 0xFC, map 12 while event 32 (in `_locspec 0x41` = Dragos 3) or event 31 (elsewhere) is clear.
+3. `_grpno = hrmgrp`, `_diff = locdiff − 1`, `_hroomtype` from V02 service 0x12 (`Dungeon rooms` above).
+4. If the room's `_dunrms` bit is set (guards already beaten): `_curmpg = 7`, `_curvar = 0x62` (D98) — the party walks straight into the room program **P07**. Otherwise `_docmbt = 1`, `_ambflg = 0`: the fight runs first (`_DoACmbt`: **P06 is the combat room program** at 0CA8:2000, P96/P94/P95 at 0CA8:0000). Winning sets the `_dunrms` bit and P95 switches to P07 the same way (`_p07flg`).
 
 ## World map (`P01`, region records `R32`–`R47`)
 
@@ -81,4 +131,4 @@ Ships and captains: `ships.md`.
 30 patches (feature ids 0–29) across 14 regions; the item grown at patch `id` is `D04.gwrds[id]` (0x33 Sermin, 0x34 Gonshi, 0x35 Nift, 0x36 Mirget, 0x37 Luffin, 0x3C Loka — Turpin is never grown). The patch map is variant `_curter` (terrain under the party) of the 16 11×9 maps in `G00E00.MCM`. State: `_mushsta` (DS:7067, 32 bytes, one **nibble per patch**: even id = high nibble) = mushrooms left, 0–15, all 15 in a new game; **regrowth** +1 every 8th day (`_juldate & 7 == 0`, `P92 ovl_02cb`). Entering draws `count` mushrooms at the first `count` of 15 fixed positions (P04 file 0x88/0x97: x `[3,3,4,6,7,7,8,8,8,7,6,3,2,2,1]`, y `[2,1,1,1,1,2,2,3,5,7,7,6,6,5,4]`, placed with `_PlacePerson` so occupied cells shift); stepping on one asks "%h may pick %b %as" and gives `amount[kind]` = Sermin 6, Gonshi 4, Nift 3, Mirget 2, Luffin 3, Turpin 2, Loka 2 (file 0x72) to the acting member (`_IncObj`; a full pack refuses and the mushroom stays), then `count−1` is written back. Empty patch: "No more mushrooms are growing here."
 
 ## Still to extract
-Town `spetbl` types other than 2/3 and the callers of `ovl_1926` (0x1082, 0x1105, 0x119E, 0x18CA); `spdoors` first/last bytes; lock types 2–5 and the `lkdata` 4-byte stride in P07; `P06` (dungeon level program: roaming monsters/attacks, traps, pits, teleportals, mindstones); `P08` court scenes; `P09` engraved-word puzzles; the `notyet0` pointer.
+`spdoors` first/last bytes; lock types 2–5 and the `lkdata` 4-byte stride in P07; the exit special case for `_curvar 0x39`; `P08` court scenes; `P09` engraved-word puzzles; the `notyet0` pointer.

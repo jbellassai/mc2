@@ -1,6 +1,6 @@
 # Encounters: monsters, groups, where fights come from, loot
 
-Sources: EXE tables `_monstats` (DS:308E, 23 B × 37, names `_w_monstrs` DS:40A4), `_grps` (DS:340B, 5 B × 60), `_monsptr`; `P96.MCO` (combat setup, `decomp/overlays/P96.c`), `P95.MCO` (loot `ovl_09xx`), `P01.MCO` (world-map guards/patrols), `P02` (town ambush), `P07` (`HROOM.hrmgrp`), region records (`tools/worldspots.py`). Combat itself: `combat.md`.
+Sources: EXE tables `_monstats` (DS:308E, 23 B × 37, names `_w_monstrs` DS:40A4), `_grps` (DS:340B, 5 B × 163), `_monsptr`; `P96.MCO` (combat setup, `decomp/overlays/P96.c`), `P95.MCO` (loot `ovl_09xx`), `P01.MCO` (world-map guards/patrols), `P02` (town ambush), `P07` (`HROOM.hrmgrp`), region records (`tools/worldspots.py`). Combat itself: `combat.md`.
 
 ## Monster codes
 
@@ -51,7 +51,7 @@ Unused bytes 16/17/18 per monster (probably design notes — the first grows wit
 
 Leader rank (P96 file 0x39): Orc 5, Zorlim 40, Tekhir 10, Troll 15, Goblin 20, Minotaur 35, Domug 30, Jerrah 50, Gnoll 25, Ogre 55, Gaem 60, Zumagin 45, Hibliss 65, Naur 75, Farazu 70, Kazih 48; others never lead (0xFF).
 
-## Encounter groups (`_grps`, group numbers 60–119)
+## Encounter groups (`_grps`, group numbers 60–222)
 
 `_grpno < 60` means "n monsters of code `_grpno`" (`_monstlist = {g,g,g,g}`). Otherwise row `grpno − 60` = `{count, m0, m1, m2, m3}`; count 0 → the number comes from `D06.ptr8[7·diff + _semiranseed % 7]` (D06 counts by difficulty 0–7: `3 6 0 0 0 0 0 | 4 6 0 3 0 4 5 | 4 7 1 5 1 7 6 | 5 7 1 7 1 8 9 | 5 8 1 9 2 10 10 | 6 8 2 12 2 11 12 | 7 10 2 16 2 13 13 | 8 12 2 20 3 15 15`). Each monster drawn picks one of the four entries at random (`ovl_1323`) until its quota (`OV_0x19b` counters) is spent. A fourth entry marked `*` (bit 0x80) adds **one extra monster of that code** on top of the count (six if it is a Doombeast) and makes it the group's leader (`ovl_06b8/06c7`).
 
@@ -117,6 +117,111 @@ Leader rank (P96 file 0x39): Orc 5, Zorlim 40, Tekhir 10, Troll 15, Goblin 20, M
 | 117 | table | Ghoul *, Skeleton *, Zombie *, Zumagin |
 | 118 | table | Orc, Barg, Tekhir, Zumagin * |
 | 119 | 2 | Doombeast *, Doombeast *, Doombeast *, Farazu * |
+| 120 | table | Skeleton *, Skeleton *, Zombie *, Zombie |
+| 121 | table | Zombie, Skeleton, Slime, Gaem * |
+| 122 | table | Skeleton, Skeleton, Slime, Slime |
+| 123 | 4 | Zumagin *, Ghoul *, Zorlim *, Zombie |
+| 124 | table | Troll, Troll, Zumagin, Jerrah * |
+| 125 | table | Ghoul, Zombie, Slime *, Zebani * |
+| 126 | table | Flamebelly, Ghoul, Domug, Gaem * |
+| 127 | 12 | Slime, Slime, Slime, Jerrah * |
+| 128 | 4 | Jerrah, Jerrah, Jerrah, Gaem * |
+| 129 | 4 | Gaem, Gaem, Zombie, Jerrah * |
+| 130 | table | Fermigon, Flamebelly, Jerrah *, Skeleton |
+| 131 | table | Fermigon, Fermigon, Aciden, Gaem * |
+| 132 | table | Fermigon, Aciden, Tekhir, Gaem * |
+| 133 | table | Fermigon, Urgodot, Skeleton, Zorlim * |
+| 134 | table | Troll, Troll, Aciden, Gaem * |
+| 135 | table | Aciden, Aciden, Fermigon, Zorlim * |
+| 136 | table | Tekhir, Flamebelly, Domug, Ogre * |
+| 137 | table | Tekhir, Zebani, Domug, Ogre * |
+| 138 | 4 | Tekhir, Ogre *, Ogre *, Jerrah * |
+| 139 | table | Mongor, Mongor, Ogre, Ogre * |
+| 140 | table | Ogre *, Mongor, Gragan *, Zumagin |
+| 141 | table | Zorlim, Zorlim, Ghoul, Ogre * |
+| 142 | 4 | Zorlim, Jerrah *, Ogre, Kazih * |
+| 143 | table | Domug, Zebani, Gragan, Zumagin |
+| 144 | table | Orc, Tekhir, Domug, Zorlim |
+| 145 | table | Zebani, Mongor, Zumagin, Jerrah * |
+| 146 | 4 | Zumagin, Jerrah *, Kazih *, Kazih * |
+| 147 | table | Ogre *, Ogre *, Zumagin *, Zebani |
+| 148 | table | Tekhir, Troll, Mongor, Ogre |
+| 149 | table | Tekhir, Flamebelly, Gragan, Jerrah * |
+| 150 | table | Minotaur, Minotaur, Minotaur, Jerrah * |
+| 151 | table | Domug, Tekhir, Zebani, Gragan |
+| 152 | table | Domug, Ogre, Mongor, Zumagin |
+| 153 | table | Gragan, Mongor, Zumagin, Jerrah * |
+| 154 | table | Goblin, Goblin, Goblin, Jerrah |
+| 155 | table | Goblin, Goblin, Barg, Gaem * |
+| 156 | table | Slime, Slime, Goblin, Goblin |
+| 157 | table | Goblin, Goblin, Minotaur, Zorlim |
+| 158 | table | Goblin, Goblin, Skeleton, Skeleton |
+| 159 | table | Goblin, Goblin, Skeleton, Gaem * |
+| 160 | table | Goblin, Goblin, Barg *, Gaem * |
+| 161 | table | Goblin, Goblin, Kazih, Kazih |
+| 162 | table | Goblin, Goblin, Mongor, Gragan |
+| 163 | table | Goblin, Goblin, Zebani, Gnoll |
+| 164 | table | Goblin, Goblin, Slime, Mongor |
+| 165 | 1 | Vankruh, Vankruh, Vankruh, Vankruh |
+| 166 | table | Mizigu, Mizigu, Farazu, Gaem |
+| 167 | table | Mizigu, Zombie, Farazu, Gragan |
+| 168 | table | Mizigu, Mizigu, Mongor, Zebani |
+| 169 | table | Mizigu, Mizigu, Gaem, Domug |
+| 170 | table | Mizigu, Flamebelly, Jerrah *, Troll |
+| 171 | table | Mizigu, Mizigu, Farazu, Gaem * |
+| 172 | table | Troll, Mizigu, Ogre, Gaem * |
+| 173 | table | Troll, Flamebelly, Ogre, Gaem * |
+| 174 | table | Troll, Troll, Gaem, Farazu * |
+| 175 | table | Troll, Farazu *, Ogre, Gaem * |
+| 176 | 5 | Domug, Ogre, Gaem *, Gaem * |
+| 177 | 5 | Ogre, Troll, Ogre *, Troll |
+| 178 | 6 | Farazu *, Farazu *, Ogre, Troll |
+| 179 | table | Domug, Troll, Flamebelly, Ogre * |
+| 180 | table | Aciden, Hibliss *, Doombeast *, Jerrah |
+| 181 | table | Zebani, Domug, Jerrah, Farazu * |
+| 182 | table | Zumagin, Domug, Mongor, Doombeast * |
+| 183 | table | Gragan, Zumagin, Farazu, Hibliss * |
+| 184 | table | Hibliss, Aciden, Hibliss, Flamebelly |
+| 185 | table | Farazu, Aciden, Aciden, Doombeast * |
+| 186 | table | Flamebelly, Gragan, Domug, Farazu * |
+| 187 | table | Flamebelly, Aciden, Zebani, Doombeast * |
+| 188 | table | Zumagin, Aciden, Jerrah, Farazu * |
+| 189 | table | Jerrah, Hibliss, Jerrah, Farazu * |
+| 190 | table | Jerrah, Zebani, Domug, Hibliss * |
+| 191 | table | Mongor, Jerrah, Zumagin, Doombeast * |
+| 192 | table | Gragan, Flamebelly, Mongor, Farazu * |
+| 193 | table | Domug, Zumagin, Jerrah, Hibliss * |
+| 194 | table | Zumagin, Zumagin, Gragan, Farazu |
+| 195 | table | Farazu, Farazu, Jerrah, Jerrah |
+| 196 | table | Hibliss *, Hibliss, Gragan, Jerrah |
+| 197 | table | Aciden, Hibliss, Farazu, Gragan |
+| 198 | table | Zumagin, Zebani, Mongor, Gragan |
+| 199 | table | Jerrah, Hibliss, Farazu, Doombeast * |
+| 200 | 4 | Farazu, Farazu, Farazu, Farazu |
+| 201 | 4 | Hibliss, Hibliss, Hibliss, Hibliss |
+| 202 | 6 | Kazih, Hibliss, Gaem, Zakhad * |
+| 203 | table | Kazih, Gaem *, Doombeast *, Naur * |
+| 204 | table | Gragan, Jerrah, Kazih, Naur * |
+| 205 | table | Dreadknight, Dreadknight, Gaem, Farazu |
+| 206 | table | Dreadknight, Zumagin, Zorlim, Jerrah |
+| 207 | table | Hibliss, Slime, Flamebelly, Dreadknight |
+| 208 | table | Gnoll, Dreadknight, Mongor, Dreadknight |
+| 209 | table | Mongor, Gragan, Dreadknight, Dreadknight |
+| 210 | table | Farazu, Hibliss, Dreadknight, Doombeast * |
+| 211 | table | Gaem, Jerrah, Dreadknight, Doombeast * |
+| 212 | table | Zebani, Zebani, Dreadknight, Hibliss * |
+| 213 | table | Domug, Dreadknight, Dreadknight, Zumagin |
+| 214 | table | Domug, Flamebelly, Dreadknight, Hibliss * |
+| 215 | table | Zebani, Tekhir, Flamebelly, Dreadknight |
+| 216 | table | Jerrah, Jerrah, Dreadknight, Dreadknight |
+| 217 | table | Doombeast *, Farazu *, Dreadknight, Dreadknight |
+| 218 | table | Dreadknight, Hibliss, Gaem, Doombeast * |
+| 219 | table | Mongor, Mongor, Dreadknight, Dreadknight |
+| 220 | table | Gragan, Zumagin, Flamebelly, Dreadknight |
+| 221 | table | Farazu, Ogre, Gaem *, Naur * |
+| 222 | 10 | Orc, Orc, Orc, Orc |
+
+Groups 120–222 are used by dungeon-room guards (`HROOM.hrmgrp`) and type-0 ambush spots; the table ends at 222 (DS:373A is `_animtilecount`). Group 0xCA (202) rooms are swapped for group 0xDE (222) until an event is set (`locations.md`, *Doors into dungeon rooms*).
 
 ## Where the group number comes from
 
@@ -125,8 +230,8 @@ Leader rank (P96 file 0x39): Orc 5, Zorlim 40, Tekhir 10, Troll 15, Goblin 20, M
 | **world-map guard spot** (R `gwrds` 3-byte `{x, y, group}`, 8 per region) | record byte 2 | P01 table 0x33A per region `[0,7,3,4,2,1,5,6,4,3,3,4,5,7,6,5]` (R32…R47) | stepping on it; `_grdsta` bit `region·8+n` = cleared; `_ctype 0` |
 | **patrol** (8 per region, start positions P01 file 0x136; group = R `newsr[n]`) | `newsr[n & 7]` | same table | patrols wander (`ovl_18c1`, random of 8 directions, 3 tries) or, once engaged (`_ptrleng` bit, set when the patrol is on screen), step toward the party (`ovl_17c0`); reaching the party starts the fight (`_ctype 1`); `_ptrlsta` bit = destroyed. Guards, patrols and `_ptrleng` of a region **respawn** when the party enters it and `_lastgen[region] + interval ≥ month` (interval per region P01 file 0x32A `[6,1,3,3,3,3,3,2,2,3,3,3,2,2,1,2]` months); patrols are drawn only while event 106 is set or a short `OV_0x1bb` timer runs |
 | **camp ambush** | the patrol that walks into the camp | region | a member on *Watch* (`h_actvty 9`) prevents the ambush flag (`camp.md`) |
-| **town ambush** (`P02`, `spetbl` type-2 spots) | spot value | `locdiff − 1` | `_ambush` bit per spot = already fought; best `track` vs `RndCo(200)` detects it (`skills.md`); `_ambflg` → monsters act first |
-| **dungeon room** (`P07`, `HROOM.hrmgrp`) | `hrmgrp` | `locdiff − 1` | `_dunrms` bit = guards cleared (`locations.md`) |
+| **town / dungeon ambush** (`P02`, `spetbl` type-0 spots, `locations.md` *Dungeon levels*) | spot `d1` | `locdiff − 1` | `_ambush` bit per ambush id = already fought; best `track` vs `RndCo(200)`, or a *Sense* that pointed at the spot, detects it (`skills.md`); `_ambflg` → monsters act first |
+| **dungeon room** (door type 6–9, `HROOM.hrmgrp`, then `P07`) | `hrmgrp` | `locdiff − 1` | `_dunrms` bit = guards cleared (`locations.md`) |
 | scripted | P08/P09 scenes | | |
 
 ## Loot (`P95 ovl_09xx`, per slain monster, not for bribed fights)
