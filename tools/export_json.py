@@ -1,7 +1,7 @@
 """Build the web port's data pack from the original files (decision 1). Never commit or publish the output.
 usage: export_json.py ORIGDIR OUTDIR -> OUTDIR/locations/*.json, tiledata/Bnn.json, tilesets/Vnn.png, sprites/E0n.png, conversations/Cnn.json,
        blocks.json, rooms.json, sprites.json, comtxt.json, items.json, heroes.json,
-       commands.json, npctypes.json, p90.json, p02text.json, p91text.json, p01.json, p05.json, p09.json, p92text.json, p97.json, p93text.json, p93.json, p89.json, v02.json, conds.json, companions.json, exetables.json, combat.json
+       commands.json, npctypes.json, p90.json, p02text.json, p91text.json, p01.json, p05.json, p09.json, p92text.json, p97.json, p93text.json, p93.json, p89.json, v02.json, p08.json, conds.json, companions.json, exetables.json, combat.json
 Schema: docs/data_schema.md. Byte strings are lowercase hex; every list is in file order."""
 import json, os, struct, sys
 sys.path.insert(0, os.path.dirname(__file__))
@@ -224,6 +224,16 @@ def main(src, dst):
                              'lots': {str(lots[i]): lots[i + 1] for i in range(0, len(lots) - 1, 2)}})
     p02 = open(f'{src}/P02.MCO', 'rb').read()
     dump(f'{dst}/p02text.json', [x.decode('latin1') for x in p02[0x67:0x28A].split(b'\0')[:17]])   # town program's own texts
+    p08 = open(f'{src}/P08.MCO', 'rb').read()   # quest scene rooms (rules/quest_scenes.md)
+    gifts = p08[0x1092:p08.index(0xFF, 0x1092)]
+    dump(f'{dst}/p08.json', {'texts': [x.decode('latin1') for x in p08[0x123:0x500].split(b'\0')[:18]],
+                             'gifts': [[gifts[i], gifts[i + 1]] for i in range(0, len(gifts), 2)],   # King Rebnard (OV_0x1192)
+                             'ghosts': {'npcs': list(p08[0xBA:0xBD]), 'scrolls': list(p08[0xB7:0xBA]),
+                                        'paras': [p08[0xBD + 2 * i:0xBF + 2 * i].decode('latin1') for i in range(3)],
+                                        'spoken': list(p08[0xB1:0xB4]), 'rested': list(p08[0xB4:0xB7])},
+                             'base': [[w & 0xFF, w >> 8] for w in struct.unpack_from('<16H', p08, 0x83)],   # by exit-side flags / 2
+                             'side': {'odd': list(p08[0xA3:0xAC]), 'even': list(p08[0xAC:0xB1])},   # by _lastdir
+                             'junk': list(p08[0xE49:p08.index(b'\0\0', 0xE49)])})   # dropped to make room for a gift (ovl_0e86)
     v02 = open(f'{src}/V02.MCO', 'rb').read()   # town spells (rules/spells.md)
     dump(f'{dst}/v02.json', {'vision': {'ids': list(v02[0x8C:0x9C]), 'texts': list(v02[0x9C:0xAC])},   # door id bands → comtxt
                              'sense': [struct.unpack_from('<H', v02, 0x7FE + 2 * i)[0] for i in range(16)]})   # direction by flags

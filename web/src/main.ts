@@ -10,6 +10,7 @@ import { panel, type Button } from './panel';
 import { loadTrade, lot, single, prices, incObj, sellable } from './shop';
 import { ServiceRoom, noon, rent, INN } from './service';
 import { Special, casino, refill, gates } from './special';
+import { Scene, sceneBase } from './scene';
 import { camp, OPEN, SHIP, DUNGEON, INNROOM, GUEST } from './camp';
 import { Party, type Member } from './party';
 import { World } from './world';
@@ -63,6 +64,11 @@ async function main() {
   let outside: { level: Level; x: number; y: number } | null = null;   // where to return from a room
   let service: ServiceRoom | null = null;                               // the P05 room the party is in
   let special: Special | null = null;                                   // the P09 room the party is in
+  let scene: Scene | null = null;                                       // the P08 room the party is in
+  const scroll = { item: 0 };                                           // `_scrollonfloor` (P08, saved)
+  let disasterday = 0;                                                  // `_disasterday` (White Scroll; 0 = none)
+  let speaker: Member | null = null;                                    // who talks next (P08 rooms ask)
+  let lastStep = { dx: 0, dy: -1 };                                     // `_lastdir`: the last step, for P08 placement
   let patch: Patch | null = null;                                        // the mushroom patch the party is in
   let fight: Fight | null = null;                                        // the fight in progress
   let roomStart = { x: 0, y: 0 };                                       // its formation origin (base square)
@@ -106,6 +112,11 @@ async function main() {
     figures = level.figures(clock, events, party.away);
     if (clock.hour === 0 && !(clock.juldate & 7)) patches.regrow();
     if (clock.hour === 0 && clock.date === 1) refill();                 // new month: the casino banks (P92 ovl_02ac)
+    if (clock.hour === 0) {                                             // P92 ovl_01cd, the new day's events
+      if (disasterday && clock.juldate - disasterday === 7) events.add(1);   // the White Scroll's disaster
+      if (clock.juldate === 20) events.add(114);
+      if (clock.date === 1 && clock.month === 9) events.add(27);       // month 9 begins (Ziyx's Book of Emenad)
+    }
     if (clock.hour === 0 && world.ships.daily()) for (const m of party.members) m.hero.rec.h_gold = 0;   // Amos (P92 ovl_0447)
     party.hunger(tables.hungerhours);
     world.hour(clock);
@@ -143,7 +154,16 @@ async function main() {
 
   // ---- talking (dialogue.md) ----
   const talkTo = async (who: Figure) => {
-    const t = await Talk.open(level.loc, who, hero, events);
+    if (scene && party.members.length > 1 && !speaker) {                // P08 scenes care who speaks (`_curpla`)
+      panel.show(); panel.line(say(comtxt[0x11]).trim());
+      return void panel.set([...party.members.map(m => ({ label: m.hero.name, act: () => { speaker = m; void talkTo(who); } })),
+        { label: cmd[0], act: () => close() }]);
+    }
+    const by = speaker ?? party.members[0];
+    speaker = null;
+    const opening = scene?.greet(who, by);
+    if (opening?.leave) { await leave(level.loc.exits[0]); message = opening.text; return render(); }   // the priest sends the party out
+    const t = await Talk.open(level.loc, who, by.hero, events);
     const speak = (s: string) => panel.line(`${who.name ? who.name + ': ' : ''}${s}`);
     const end = () => { const bye = t.farewell(); close(bye ? `${who.name}: ${bye}` : ''); };
     await loadTrade();
@@ -249,18 +269,22 @@ async function main() {
       }, 'Ask about… (type a word, Enter)');
     }
     panel.show();
-    speak(t.greeting());
+    if (opening) panel.line(opening.text); else speak(t.greeting());
     menu();
   };
 
   // ---- doors (rules/locations.md, Towns; P02 ovl_196b) ----
-  const enterRoom = async (door: Door, pgms = level.loc.pgms) => {
+  const enterRoom = async (door: Door, pgms = level.loc.pgms, locspec = level.loc.locnum) => {
     const ref = await resolveRoom(door, pgms[door.pgm]);
     if (!ref) return void (message = 'This door leads somewhere not built yet.');
     outside = { level, x: lead.x, y: lead.y };
-    roomStart = ref.start;
-    go(await Level.loadRoom(ref), ref.start.x, ref.start.y);
+    const lv = await Level.loadRoom(ref);
+    roomStart = ref.pgm.program === 8 ? await sceneBase(lv.loc.exits, lastStep.dx, lastStep.dy) : ref.start;
+    go(lv, roomStart.x, roomStart.y);
     message = level.loc.name.trim() ? `${hero.name} enters ${level.loc.name}.` : '';   // which of D08/D09's room names applies is not traced
+    scene = ref.pgm.program === 8 ? await Scene.open({ party, events, items, comtxt, figures: () => figures, scroll,
+      disaster: () => { disasterday = clock.juldate; } }, locspec, ref.room, level) : null;
+    if (scene) message = scene.enter() || message;
     service = ref.pgm.program === 5 ? await ServiceRoom.open(ctx, ref.room, ref.kind, level.loc.texts, level.loc.words) : null;
     service?.greet();
     special = ref.pgm.program === 9 ? await Special.open({ hero, clock, cmd, comtxt, party, tod: tables.tod, attribs: tables.attribs,
@@ -342,6 +366,14 @@ async function main() {
   const leave = async (exit: Exit) => {
     const id = `D${String(exit.datafile).padStart(2, '0')}`, pgm = level.loc.pgms[exit.pgm];
     special = null;
+    if (scene?.transport) {                                              // P08 ovl_0f20: the White Scroll's council
+      const said = format(level.loc.texts[3] ?? '', hero, hero.name).trim();
+      scene = null; outside = null;
+      await enterRoom(level.loc.doors[0], level.loc.pgms, 3);
+      message = said;
+      return;
+    }
+    scene = null;
     if (pgm?.program === 1) return toWorld(exit);                      // a P09 room on the world map
     if (exit.datafile !== undefined && exit.datafile !== 255)
       go(outside?.level.id === id ? outside.level : await Level.load(id, pgm?.tileset), exit.tx + 4, exit.ty + 3);
@@ -377,7 +409,7 @@ async function main() {
     await world.at(lead.x, lead.y, clock);
     world.movePatrols(level, lead.x, lead.y, clock.month);              // P01 start: ovl_169e, then ovl_0a94
     world.engage(lead.x, lead.y);
-    outside = null; service = null; special = null; message = '';
+    outside = null; service = null; special = null; scene = null; message = '';
   };
   /** A world-map step (P01): a town entrance of the current region (`exitptr`) loads that town with the window at
    *  (tx, ty); a mushroom patch opens; a boat is boarded or, aboard, water is sailed and land disembarks (ships.md);
@@ -390,11 +422,13 @@ async function main() {
     if (entrance) {
       const pgm = rec.pgms[entrance.pgm];
       if (pgm.program === 2) { go(await Level.load(`D${two(pgm.datafile)}`), entrance.tx + 4, entrance.ty + 3); message = ''; return; }
-      message = `${level.tileName(x, y)}: not built yet.`; return;
+      // Ziyx's (R36 47,38) is both an entrance and a feature of program 8; the feature's record names the room
+      // (assumption: P01's entrance path for a room program is not traced)
+      if (!rec.doors.some(d => d.x === x && d.y === y)) { message = `${level.tileName(x, y)}: not built yet.`; return; }
     }
     const feature = rec.doors.find(d => d.x === x && d.y === y);
     if (feature && rec.pgms[feature.pgm].program === 4) return enterPatch(feature.id, x, y);
-    if (feature && rec.pgms[feature.pgm].program === 9) {             // ovl_0d01: the step's time, then the room
+    if (feature && [8, 9].includes(rec.pgms[feature.pgm].program)) {   // ovl_0d01: the step's time, then the room
       for (let n = world.stepTicks(level.data.nameindex[level.tile(x, y)], clock, party); n > 0; n--) tick();
       return enterRoom(feature, rec.pgms);
     }
@@ -944,6 +978,7 @@ async function main() {
     } }, { label: cmd[4], act: () => close() }]);
   };
   const step = async (dx: number, dy: number) => {
+    lastStep = { dx, dy };
     if (level.loc.kind === 'world') { await worldStep(dx, dy); return render(); }
     const room = level.loc.kind === 'room';
     const who = figureAt(lead.x + dx, lead.y + dy);
@@ -953,6 +988,8 @@ async function main() {
       return render();
     }
     const movers = room ? [lead] : [...party.members].reverse();
+    const scared = scene?.step(dy, lead.hero);
+    if (scared) { message = scared; return render(); }
     const unable = movers.find(m => (m.hero.rec.h_cond1 as number) & 0xfc);   // Dead, Paralyzed, Exhausted, Poisoned, Starving
     if (unable) { message = `${unable.hero.name}: ${unable.hero.condition(conds)}.`; return render(); }
     for (const m of movers) {
@@ -962,6 +999,13 @@ async function main() {
       const exit = level.loc.exits.find(e => e.x === x && e.y === y);
       const other = figureAt(x, y);
       if (room && exit) {
+        const no = scene?.refuseLeave();
+        if (no) { message = no; return render(); }
+        if (scene) {                                                     // P08 L_06fa: "Do you want to leave?"
+          panel.show(); panel.line(comtxt[0x23]);
+          panel.set([{ label: cmd[3], act: () => { close(); void leave(exit).then(render); } }, { label: cmd[4], act: () => close() }]);
+          return render();
+        }
         if (service) service.leave(() => void leave(exit).then(render));
         else if (special) special.exit(exit, () => void leave(exit).then(render));
         else await leave(exit);
@@ -1162,6 +1206,12 @@ async function main() {
     const spot = (level.loc.look ?? []).find(l => l.x === x && l.y === y);
     if (spot && (!(spot.text & 0x80) || (who && who.num >= 0x20))) text += say(level.loc.texts[spot.text & 0x7f] ?? '');
     if (special) text += special.look(x, y, lead);
+    if (scene?.scrollAt(x, y)) {                                         // P08 ovl_16e9: the scroll on the floor
+      const near = adjacent(x, y);
+      panel.show(); panel.line(scene.lookScroll(lead.hero, near));
+      if (!near) return void panel.set([{ label: cmd[0], act: () => close() }]);
+      return void panel.set([{ label: cmd[3], act: () => close(scene!.pickScroll(lead.hero) ?? '') }, { label: cmd[4], act: () => close() }]);
+    }
     message = text;
     render();
   };
@@ -1202,18 +1252,22 @@ async function main() {
   };
   /** Whisper (H; the original's Whisper command): "What magic word will %h whisper?" (comtxt 0xCD), matched against
    *  the location's `gwrds`. A word nothing answers gets "Nothing happens." (0x83; assumed, P09 prints `_comtxtptr`). */
-  const whisper = () => {
+  const whisper = (by: Member = lead) => {
     panel.show();
-    panel.line(say(comtxt[0xcd]));
+    if (scene && party.members.length > 1 && by === lead && !speaker) return pick(h => { speaker = party.members.find(m => m.hero === h)!; whisper(speaker); });
+    speaker = null;
+    panel.line(format(comtxt[0xcd], by.hero, by.hero.name));
     panel.set([{ label: cmd[0], act: () => close() }], w => {
       panel.line(`> ${w}`, 'you');
-      if (!special?.whisper(w)) close(comtxt[0x83]);
+      if (special?.whisper(w)) return;
+      const s = scene?.whisper(wmatch(w, level.loc.words), by);
+      close(s ?? comtxt[0x83]);
     }, 'Word');
   };
   // ---- magic outside combat (spells.md, _Magic; P01 slots 13-15, FFFAR) ----
   /** The location program (`__curmpg`) for `_spellshere`: 1 world map, 2 town or dungeon level, 4 patch, 5 service
    *  room, 7 dungeon room, 9 special room. */
-  const program = () => special ? 9 : chamber ? 7 : service ? 5 : patch ? 4 : level.loc.kind === 'world' ? 1 : 2;
+  const program = () => special ? 9 : scene ? 8 : chamber ? 7 : service ? 5 : patch ? 4 : level.loc.kind === 'world' ? 1 : 2;
   /** Magic (M): the caster and one of their memorised spells (the original readies it with Recall, `h_rdyspl`, then
    *  casts with Magic). Refused, at no cost, without the energy (`_EneUsg`, comtxt 0x41) or where `_splocs[spell] &
    *  _spellshere[program]` is 0 (0x56). Cast: the effect; a spell that did not go off (carry set) costs nothing;
@@ -1290,6 +1344,10 @@ async function main() {
         done(comtxt[sp === 13 ? 0xe7 : 0xe8]);
       });
       case 39: return done(sense(h, m));                                                    // Sense
+      case 40: case 41: {                                                                   // Restsoul, Soulspeak (P08)
+        const s = scene?.spell(sp, h);
+        return s === null || s === undefined ? close(ctext(0x56, { h: h.name })) : done(s);
+      }
     }
     close(comtxt[0x119]);
   };
@@ -1413,6 +1471,8 @@ async function main() {
     const pick = (who: Hero, item: number) => {
       panel.line(`> ${items[item]}`, 'you');
       // The Conch (ovl_1349, the original's K command): aboard on row 100 it calms the rough sea (event 102)
+      const sc = scene?.use(item, party.members.find(m => m.hero === who)!);
+      if (sc) return done(sc);
       if (item === 0x4b) return done(world.ships.sailing && lead.y === 100
         ? (events.add(102), format(world.rec!.texts[0x2a], who, who.name)) : comtxt[0x83]);
       if (special?.piece(item)) {                                      // a teleportal piece on a pedestal (P09)
@@ -1509,7 +1569,7 @@ async function main() {
     events: [...events], party: party.snapshot(), level: { id: level.id, ts: level.tileset }, at: { x: lead.x, y: lead.y },
     world: world.snapshot(), patches: [...patches.left], dunrms: [...dunrms], duntre: [...duntre], chests: [...chests],
     ambushed: [...ambushed], rent: [...rent], walk: [walkSteps, walkTicks], casino: [...casino], gates: [...gates],
-    detect, snakes: snakes.map(r => [...r] as [string, number, number, number]),
+    detect, snakes: snakes.map(r => [...r] as [string, number, number, number]), scroll: scroll.item, disasterday,
   });
   type Save = ReturnType<typeof snapshot>;
   const canSave = () => !fight && !patch && !chamber && level.loc.kind !== 'room';
@@ -1525,8 +1585,9 @@ async function main() {
     casino.splice(0, 8, ...(sv.casino ?? casino.map(() => 1000)));
     gates.clear(); (sv.gates ?? []).forEach(g => gates.add(g));
     detect = sv.detect ?? 0; snakes.splice(0, snakes.length, ...(sv.snakes ?? []));
+    scroll.item = sv.scroll ?? 0; disasterday = sv.disasterday ?? 0;
     [walkSteps, walkTicks] = sv.walk;
-    outside = null; service = null; special = null; patch = null; fight = null; chamber = null; chamberBack = null; shipCamp = null;
+    outside = null; service = null; special = null; scene = null; patch = null; fight = null; chamber = null; chamberBack = null; shipCamp = null;
     go(await Level.load(sv.level.id, sv.level.id === 'D01' ? undefined : sv.level.ts), sv.at.x, sv.at.y);
     message = '';
   };
@@ -1597,7 +1658,7 @@ async function main() {
     await world.at(x, y, clock);
     message = '';
   }
-  if (import.meta.env.DEV) Object.assign(window, { dbg: { party, world, clock, get level() { return level; } } });   // for scripts/shot.mjs eval:
+  if (import.meta.env.DEV) Object.assign(window, { dbg: { party, world, clock, events, get level() { return level; } } });   // for scripts/shot.mjs eval:
   render();
 }
 
