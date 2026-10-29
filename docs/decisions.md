@@ -77,3 +77,18 @@ Numbered, never reused. Status: DECIDED (not yet built) or IMPLEMENTED (with com
 **Consequences:** The music is close to, not identical with, a real OPL2 (envelope and level tables are modelled from the data sheet, not cycle-exact). A song renders in well under a second the first time it plays. Sound and music each have an on/off toggle in the Game panel (`localStorage` key `mc2.audio`). Browsers allow audio only after a key or click, so the title fanfare waits for the first one.
 
 **Status:** IMPLEMENTED (this commit).
+
+## 6. Modern music: the MT-32 arrangements played by the port's own synthesisers, by default
+
+**Decision:** By default the music is the game's own Roland MT-32 arrangements (`MC2nnT.MID`, exported as `music/n.mid`) rendered in the browser by `web/src/modern.ts`: synthesised instruments by family (strings and pads, brass, flutes and reeds, plucks, timpani, orchestra hit), synthesised drums, the songs' pan, volume and pitch-bend controls, reverb and a stereo echo, normalised to the FM music's loudness. The Game panel's Music setting cycles Modern / Original FM (decision 5) / Off.
+
+**Context:** The user wanted the music modernised while keeping the melodies. The MT-32 files are the composer's fuller arrangements of the same songs (real instrument choices and a drum track the FM versions lack), so playing them with new instruments keeps every melody and harmony.
+
+**Alternatives rejected:**
+- *A sampled orchestra (FluidR3_GM through the gleitz/midi-js-soundfonts CDN)* — built and compared on `web/preview.html`; the user preferred the synths in most songs, and the samples meant a runtime download from a third-party host and a CC BY credit.
+- *Rearranging or re-recording the songs* — would not keep the original melodies exactly and needs a musician.
+- *General MIDI playback of the MT-32 files* — the MT-32 presets do not match General MIDI's; the port maps the 16 presets the songs use to instrument families itself (`midi.ts` `MT32_GM`).
+
+**Consequences:** A long song renders for a few seconds the first time it plays (cached afterwards). `web/preview.html` (dev only) plays each song both ways for tuning. Drums use the MT-32 rhythm keys the songs need (kick, snare, rim, toms, hats, crash, ride, tambourine, cabasa).
+
+**Status:** IMPLEMENTED (this commit).

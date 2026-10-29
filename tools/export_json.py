@@ -434,6 +434,9 @@ def main(src, dst):
         p = struct.unpack_from('<H', exe, ds + 0x3070 + 2 * n)[0]
         name = exe[ds + p:exe.index(b'\0', ds + p)].decode().upper()
         open(f'{dst}/music/{n}.cmf', 'wb').write(open(f'{src}/{name}', 'rb').read())
+        # the MT-32 arrangement of the same song (_RolandLoad: 11-byte names after the CMF ones), for the modern music
+        mid = exe[ds + p + 14 * 11:exe.index(b'\0', ds + p + 14 * 11)].decode().upper()
+        open(f'{dst}/music/{n}.mid', 'wb').write(open(f'{src}/{mid}', 'rb').read())
     ct = ds + 0x9F8   # common text, message n = n-th string
     dump(f'{dst}/comtxt.json', [x.decode('latin1') for x in exe[ct:ct + 0x4000].split(b'\0')[:400]])
     print(f'{n} locations, {len(blocks)} blocks, {sum(map(len, rooms.values()))} room chunks')

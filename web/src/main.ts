@@ -2001,7 +2001,9 @@ async function main() {
         void restore(saved(n)!).then(() => { close(); render(); });
       } })),
       { label: `Sound: ${audio.sound ? 'on' : 'off'}`, act: () => { audio.sound = !audio.sound; saveAudio(); menu(); } },
-      { label: `Music: ${audio.music ? 'on' : 'off'}`, act: () => { audio.music = !audio.music; saveAudio(); menu(); } },
+      { label: `Music: ${{ modern: 'modern', original: 'original FM', off: 'off' }[audio.music]}`, act: () => {
+        audio.music = audio.music === 'modern' ? 'original' : audio.music === 'original' ? 'off' : 'modern'; saveAudio(); menu();
+      } },
       { label: 'New game', act: () => location.assign(location.pathname) },
       { label: cmd[0], act: () => close() }]);
     if (!canSave()) panel.line('Saving is possible on a town or dungeon level or on the world map.');

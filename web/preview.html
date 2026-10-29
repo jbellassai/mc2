@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Music Preview</title>
+  <style>
+    body { background: #111; color: #ddd; font: 15px system-ui, sans-serif; margin: 24px; }
+    table { border-collapse: collapse; }
+    td { padding: 4px 10px; }
+    button { background: #333; color: #eee; border: 1px solid #555; border-radius: 4px; padding: 4px 10px; cursor: pointer; }
+    button:hover { background: #444; }
+    #status { margin: 12px 0; min-height: 1.4em; color: #9c9; }
+  </style>
+</head>
+<body>
+  <h1>Music preview</h1>
+  <p>Each song two ways: the original Sound Blaster FM music, and the game's own Roland MT-32 arrangement (the same
+    melodies plus drums) played by modern synthesisers.</p>
+  <button id="stop">Stop</button>
+  <div id="status"></div>
+  <table id="songs"></table>
+  <script type="module" src="/src/preview.ts"></script>
+</body>
+</html>

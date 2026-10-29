@@ -1,18 +1,27 @@
-// Sound effects and music (decision 5). `_GameSound(n)` plays the digitised effect n (FFFAR's VOC name table,
-// converted to sounds/n.wav by tools/export_json.py); `_song(n)` plays MC2nnA.CMF through the OPL2 model (opl.ts),
-// and `_finishsong` waits for it to end. The original's sound and music switches (`_e_soundon`, the install-time
-// music board) become two toggles kept in the browser.
+// Sound effects and music (decisions 5, 6). `_GameSound(n)` plays the digitised effect n (FFFAR's VOC name table,
+// converted to sounds/n.wav by tools/export_json.py); `_song(n)` plays song n - by default the modern synth version
+// of its MT-32 arrangement (modern.ts), or the original MC2nnA.CMF through the OPL2 model (opl.ts) - and
+// `_finishsong` waits for it to end. The original's sound switch and music board become settings kept in the browser.
 import { renderCmf, RATE } from './opl';
+import { parseMidi } from './midi';
+import { renderModern } from './modern';
+
+export type Music = 'modern' | 'original' | 'off';
 
 const BASE = './pack/';
 const KEY = 'mc2.audio';
 
 let ctx: AudioContext | null = null;
 const effects = new Map<number, Promise<AudioBuffer | null>>();
-const songs = new Map<number, AudioBuffer>();
+const songs = new Map<string, AudioBuffer>();
 
-function load(): { sound: boolean; music: boolean } {
-  try { return { sound: true, music: true, ...JSON.parse(localStorage.getItem(KEY) ?? '{}') }; } catch { return { sound: true, music: true }; }
+function load(): { sound: boolean; music: Music } {
+  const d = { sound: true, music: 'modern' as Music };
+  try {
+    const s = { ...d, ...JSON.parse(localStorage.getItem(KEY) ?? '{}') };
+    if (typeof s.music === 'boolean') s.music = s.music ? 'modern' : 'off';   // the first build stored on/off
+    return s;
+  } catch { return d; }
 }
 export const audio = load();
 export function saveAudio() { try { localStorage.setItem(KEY, JSON.stringify(audio)); } catch { /* not kept */ } }
@@ -52,16 +61,21 @@ let queue: Promise<void> = Promise.resolve();
  *  off). */
 export function song(n: number): Promise<void> { return queue = queue.then(() => playSong(n)); }
 async function playSong(n: number): Promise<void> {
-  if (!audio.music) return;
+  const style = audio.music;
+  if (style === 'off') return;
   ctx ??= new AudioContext();
-  let b = songs.get(n);
+  let b = songs.get(`${style}${n}`);
   if (!b) {
-    const r = await fetch(`${BASE}music/${n}.cmf`);
+    const r = await fetch(`${BASE}music/${n}.${style === 'modern' ? 'mid' : 'cmf'}`);
     if (!r.ok) return;
-    const s = renderCmf(new Uint8Array(await r.arrayBuffer()));
-    b = ctx.createBuffer(1, s.length, RATE);
-    b.copyToChannel(s, 0);
-    songs.set(n, b);
+    const d = new Uint8Array(await r.arrayBuffer());
+    if (style === 'modern') b = await renderModern(parseMidi(d));
+    else {
+      const s = renderCmf(d);
+      b = ctx.createBuffer(1, s.length, RATE);
+      b.copyToChannel(s, 0);
+    }
+    songs.set(`${style}${n}`, b);
   }
   const src = play(b);
   note(100 + n);
