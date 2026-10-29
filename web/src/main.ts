@@ -849,8 +849,32 @@ async function main() {
     };
     panel.set([{ label: cmd[14], act: () => who(a => drawWeapon(a, prefight)) }, { label: cmd[35], act: () => who(a => recall(a.hero!, prefight)) },
       { label: cmd[41], act: () => panel.set([{ label: cmd[34], act: rally }, { label: cmd[18], act: greet },
-      { label: cmd[0], act: prefight }]) }, { label: cmd[5], act: () => begin(false) }, { label: cmd[38], act: sheathe }]);
+      { label: cmd[0], act: prefight }]) }, { label: cmd[25], act: () => fightLook(fight!.recs.find(r => r.hero && fight!.alive(r))!, prefight) },
+      { label: cmd[5], act: () => begin(false) }, { label: cmd[38], act: sheathe }]);
+    before = true;
     render();
+  };
+  let before = false;                                              // menu 10 is up: arrows move the acting member
+  /** Menu 10's direction keys (`_RMove` for the acting member, here the first living hero): a step to a free square,
+   *  no action counted (the fight has not begun). Stepping off the arena is not allowed here (assumed). */
+  const prestep = (dx: number, dy: number) => {
+    const a = fight!.recs.find(r => r.hero && fight!.alive(r));
+    if (a && fight!.free(a.x + dx, a.y + dy)) { a.x += dx; a.y += dy; sfx(7); }
+    render();
+  };
+  /** Look in a fight (P94 `_mnusel` 0x19, P96 menu 10 → `_Look` with `_swcomb`): "Mark the target."; a record there
+   *  that is not invisible → a hero's name, else "a"/"an" or "a dead " (0x112) + `_w_kins[race]`; otherwise the tile's
+   *  name; "%h sees " … ".". No action is spent. */
+  const fightLook = (a: Rec, back: () => void) => {
+    panel.set([]);
+    mark(comtxt[0x0d], (x, y) => {
+      const r = fight!.recs.find(o => o.x === x && o.y === y && !(o.state & 0x18) && !o.invis);
+      const kin = r ? cdata.parley.kins[r.race] ?? '' : '';
+      const what = !r ? level.tileName(x, y) : r.recno < 6 ? r.name
+        : (r.state & 0x80 ? comtxt[0x112] : comtxt[/^[aeiou]/i.test(kin) ? 0x0f : 0x0e]) + kin;
+      panel.line(ctext(0x08, { h: a.name }) + what + comtxt[0x10]);
+      back();
+    }, back);
   };
   /** Sheathe (_Sheathe): with 2+ members "Is this order for everyone?" (_AllDoit, comtxt 0x3C) - Yes every member, No
    *  the acting member (asked); fists in hand (`h_inhand` 0xFF, `c_rdywpn` 0xFF), then "Done." (0x37). */
@@ -916,6 +940,7 @@ async function main() {
   };
   /** The next hero with actions left acts; when none is left, the monsters' phase. */
   const partyTurn = () => {
+    before = false;
     sprung();
     if (finished()) return;
     actor = fight!.recs.find(r => r.hero && !r.side && fight!.alive(r) && r.moves > 0) ?? null;
@@ -923,6 +948,7 @@ async function main() {
     message = `${actor.name}: ${actor.moves}`;
     if (heading || autoHeroes.has(actor.recno)) return void autoTurn(actor);
     panel.set([{ label: cmd[7], act: aim }, { label: cmd[27], act: magic }, { label: cmd[35], act: () => recall(actor!.hero!, partyTurn) }, { label: cmd[43], act: fightUse },
+      { label: cmd[25], act: () => fightLook(actor!, partyTurn) },
       { label: cmd[19], act: () => { heading = true; partyTurn(); } }, { label: cmd[46], act: () => { autoHeroes.add(actor!.recno); partyTurn(); } },
       { label: cmd[14], act: () => drawWeapon(actor!, partyTurn) }, { label: cmd[30], act: () => { actor!.moves = 0; partyTurn(); } }]);
     render();
@@ -1078,7 +1104,7 @@ async function main() {
   const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
   /** P94 ovl_0b4b: monsters 6-23 in order, each using its actions; then a new round. */
   const monsterPhase = async () => {
-    actor = null;
+    actor = null; before = false;
     panel.set([]);
     fight!.endSide(0);
     for (const m of fight!.timestop ? [] : fight!.recs.filter(r => !r.hero).sort((a, b) => a.recno - b.recno)) {
@@ -2199,6 +2225,7 @@ async function main() {
       if (marking) { if (e.key === 'Escape') { marking = null; message = ''; unmark(); render(); } return; }   // a square by clicking
       const k = e.key.startsWith('Arrow') && KEYS[e.key];                 // letters are the fight's command keys
       if (k && actor && !autoHeroes.has(actor.recno)) { e.preventDefault(); fightStep(...k); }
+      else if (k && before) { e.preventDefault(); prestep(...k); }
       return;
     }
     if (panel.open) return;
