@@ -22,6 +22,7 @@ import { newGame, landed } from './newgame';
 import { aim as spellAim, BUILT, cost as spellCost, effect } from './spells';
 import { sfx, song, audio, saveAudio } from './sound';
 import { Fx, FX } from './fx';
+import { openScenario, editing, saveFile, type Snapshot } from './scenario';
 import type { Icon } from './view';
 
 const status = document.getElementById('status')!;
@@ -2033,6 +2034,32 @@ async function main() {
     go(await Level.load(sv.level.id, sv.level.id === 'D01' ? undefined : sv.level.ts), sv.at.x, sv.at.y);
     message = '';
   };
+  /** Dev: the scenario editor (scenario.ts) on a snapshot of the game, applied with `restore`. */
+  const scenarioCmd = () => {
+    if (!canSave()) { message = 'The scenario editor opens on a town or dungeon level or on the world map.'; return render(); }
+    void openScenario({
+      snapshot: () => snapshot() as unknown as Snapshot,
+      apply: async sv => {
+        await restore(sv as unknown as Save);
+        if (level.loc.kind === 'world') await world.at(lead.x, lead.y, clock);
+        render();
+      },
+      items, spells: cdata.spells.names, conds, weathers: tables.weathers, companions: r90,
+      slots: {
+        get: n => { try { return JSON.parse(store.get(slotKey(n)) ?? 'null'); } catch { return null; } },
+        set: (n, sv) => store.set(slotKey(n), JSON.stringify(sv)),
+      },
+    });
+  };
+  /** A save file chosen by the player, restored like a slot. */
+  const uploadSave = () => {
+    const input = Object.assign(document.createElement('input'), { type: 'file', accept: '.json,application/json' });
+    input.onchange = async () => {
+      try { await restore(JSON.parse(await input.files![0].text())); close('Loaded.'); }
+      catch (e) { panel.line(`That file could not be loaded: ${e}`); }
+    };
+    input.click();
+  };
   /** G: the game panel — save to or load from a slot, or start over. */
   const gameMenu = () => {
     const saved = (n: number) => { try { return JSON.parse(store.get(slotKey(n)) ?? 'null') as Save | null; } catch { return null; } };
@@ -2045,6 +2072,9 @@ async function main() {
       ...Array.from({ length: SLOTS }, (_, i) => i + 1).filter(n => saved(n)).map(n => ({ label: `Load ${label(n)}`, act: () => {
         void restore(saved(n)!).then(() => { close(); render(); });
       } })),
+      ...(canSave() ? [{ label: 'Download save', act: () => saveFile(snapshot(), 'save') }] : []),
+      { label: 'Upload save', act: uploadSave },
+      ...(import.meta.env.DEV ? [{ label: 'Scenario', act: () => { close(); scenarioCmd(); } }] : []),
       { label: `Sound: ${audio.sound ? 'on' : 'off'}`, act: () => { audio.sound = !audio.sound; saveAudio(); menu(); } },
       { label: `Music: ${{ modern: 'modern', original: 'original FM', off: 'off' }[audio.music]}`, act: () => {
         audio.music = audio.music === 'modern' ? 'original' : audio.music === 'original' ? 'off' : 'modern'; saveAudio(); menu();
@@ -2070,6 +2100,8 @@ async function main() {
   };
   let queue = Promise.resolve();   // steps run in order; keys pressed while a room loads are not lost
   addEventListener('keydown', e => {
+    if (import.meta.env.DEV && editing()) return;
+    if (import.meta.env.DEV && e.key === 'F2' && !fight && !panel.open) { e.preventDefault(); scenarioCmd(); return; }
     if (fight) {
       if (heading) { heading = false; return; }                   // any key ends Head (after the current action)
       const k = KEYS[e.key];

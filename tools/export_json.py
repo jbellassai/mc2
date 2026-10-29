@@ -222,9 +222,12 @@ def voc_to_wav(v, out):
 def main(src, dst):
     for sub in ('locations', 'tiledata', 'tilesets', 'sprites'): os.makedirs(f'{dst}/{sub}', exist_ok=True)
     dump = lambda path, obj: json.dump(obj, open(path, 'w'), indent=1, ensure_ascii=False)
-    n = 0
+    n, index = 0, []
     for name, d, kind in entries(src):
-        dump(f'{dst}/locations/{name}.json', location(d, kind)); n += 1
+        L = location(d, kind)
+        dump(f'{dst}/locations/{name}.json', L); n += 1
+        if kind != 'room': index.append({'id': name, 'name': L['name'].strip(), 'kind': kind})
+    dump(f'{dst}/locations/index.json', index)                # the dev scenario editor's location list
     for f in sorted(os.listdir(src)):
         if f[0] == 'B' and f.endswith('.MCV'): dump(f'{dst}/tiledata/{f[:3]}.json', tiledata(open(f'{src}/{f}', 'rb').read()))
         if f[0] == 'V' and f.endswith('.MCT'):
