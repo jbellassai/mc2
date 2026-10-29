@@ -1,7 +1,7 @@
 // Scripted quest-scene rooms, program P08 (rules/quest_scenes.md). A P08 room is an ordinary room (map, people, Talk,
 // Look) whose program adds scenes keyed by (`_locspec`, room id): `_rmdata[7]` is the location the door was in (P02
-// 0x792 / P01 copy `_locspec`), `_rmdata[0]` the door's room id. Not built yet: the Oolau nest's ending and the
-// epilogue (ovl_09df), the room-wide colour flashes.
+// 0x792 / P01 copy `_locspec`), `_rmdata[0]` the door's room id. The ending and the epilogue are in main.ts. Not
+// built: the room-wide colour flashes.
 import { json } from './pack';
 import { format } from './talk';
 import type { Figure } from './level';

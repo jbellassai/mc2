@@ -43,6 +43,8 @@ async function main() {
   const cdata = await Fight.data();
   const assigns = await Assignments.create();
   const r90 = await json<HeroRecord[]>('companions.json');   // the companions' starting records (names, Recall)
+  const p90 = await json<{ orb: { texts: string[]; marked: number[]; bits: number[] }; keep: number[] }>('p90.json');   // Give
+  const ORB = 0x49;
   // Dev aids: ?hour=20 starts in the evening, ?at=74,25 starts on another square; any of them skips the new-game
   // screens (?profile=0-4 picks the hero).
   const q = new URLSearchParams(location.search);
@@ -307,7 +309,76 @@ async function main() {
       { label: 'Weather', act: () => { panel.line('> Weather', 'you'); speak(t.weather(clock.weather) ?? t.ask('').text); } },
       { label: cmd[23], act: () => void invite() },                     // Invite
       ...(t.shop.length ? [{ label: cmd[9], act: buy }, { label: comtxt[0x17b], act: sell }] : []),   // Buy, Sell
+      { label: cmd[29], act: offer },                                   // Offer (P90 Give)
       { label: cmd[0], act: end }];
+    /** Offer (P90 Give, ovl_037c; economy.md, Giving): "What will %h offer?" (comtxt 0xD3) and an item of the speaker's.
+     *  The Orb goes to ovl_0621 (orb). Otherwise FAR_OK2GIVE: only the player or a volunteer gives (0x2F); never the
+     *  quest items (FFFAR 0x2235: Brennix, the Orb, the four scrolls, the Crystal and Iron keys; 0x2F), the weapon in
+     *  hand (0x31) or something worn (0x30); _BookChk: a Wizard keeps one spell book (0x2E) and giving the book being
+     *  learnt from stops the learning. Coins and stacks ask how many (0 cancels); equipment goes whole. A companion
+     *  away on assignment gets coins in the record's purse (cap 9999), else the item (_IncObj; refused when full).
+     *  The item leaves the pack whoever takes it, then the person's answer (Talk.gift). */
+    function offer() {
+      const g = by.hero, r = g.rec, fmt = (n: number) => format(comtxt[n], g, who.name ?? '');
+      speak(fmt(0xd3));
+      const slots = r.h_invitem.map((c, i) => i).filter(i => r.h_invitem[i] !== 0xff && r.h_invitem[i] !== 0);
+      const pick = (item: number, slot: number) => {
+        if (item === ORB) return orb(slot);
+        if ((r.h_relatn as number) >= 2 || p90.keep.includes(item)) { speak(fmt(0x2f)); return menu(); }
+        if (slot >= 0 && slot === r.h_inhand) { speak(fmt(0x31)); return menu(); }
+        if (slot >= 0 && r.h_wears.includes(slot)) { speak(fmt(0x30)); return menu(); }
+        if (item >= 0x53 && item <= 0x59) {
+          if (r.h_race === 1 && r.h_invitem.filter(c => c >= 0x53 && c <= 0x59).length < 2) { speak(fmt(0x2e)); return menu(); }
+          const first = (item - 0x53) * 6, learning = r.h_actmisc as number;
+          if (r.h_actvty === 1 && learning >= first && learning < first + 6) r.h_actvty = 0xff;
+        }
+        const whole = item >= 9 && item <= 0x30, max = item === 0 ? r.h_gold : r.h_invamt[slot];
+        if (whole) return give(item, slot, max);
+        panel.set([{ label: cmd[0], act: menu }], w => {
+          const n = Number(w);
+          if (!Number.isInteger(n) || n < 0 || n > max) return;
+          if (n === 0) return menu();
+          give(item, slot, n);
+        }, `0–${max}`);
+      };
+      const give = (item: number, slot: number, n: number) => {
+        if (who.num < 0x20) {
+          const away = assigns.get(who.num);
+          if (item === 0 && away) away.as_gold = Math.min(9999, away.as_gold + n);
+          else {
+            const rec = party.kept(who.num, r90[who.num - 1]), worn = item >= 9 && item <= 0x30;
+            const e = rec.h_invitem.indexOf(0xff);
+            if (item === 0) rec.h_gold = Math.min(9999, rec.h_gold + n);
+            else if (worn ? e < 0 : !incObj(new Hero(rec, items), item, n)) { speak(comtxt[0x20]); return menu(); }
+            else if (worn) { rec.h_invitem[e] = item; rec.h_invamt[e] = n; }
+          }
+        }
+        if (item === 0) r.h_gold -= n;
+        else if (item >= 9 && item <= 0x30) { r.h_invitem[slot] = 0xff; r.h_invamt[slot] = 0; }
+        else for (let k = 0; k < n; k++) g.dec(slot);
+        speak(t.gift(item, n));
+        menu();
+      };
+      panel.set([...(r.h_gold > 0 ? [{ label: `${r.h_gold} ${comtxt[0xb1]}`, act: () => pick(0, -1) }] : []),
+        ...slots.map(i => ({ label: items[r.h_invitem[i]], act: () => pick(r.h_invitem[i], i) })), { label: cmd[0], act: menu }]);
+    }
+    /** P90 ovl_0621, offering the Orb: "%h gives the Altesen's orb to %o." (0); Prince Jemil (166) keeps it - "As the
+     *  prince takes the orb in his hands…" (18), event 123, the Orb leaves the pack. A Marked One (P90 0x10B: 137, 152,
+     *  77 → events 34-36) not yet marked: the blaze in their colour (5, 6+k, 9, 10, 11+k, 14), or the silvery glow when
+     *  the last of them takes it (15, 16); hands it back. Anyone else, or a Marked One again: " %o looks at the orb and
+     *  hands it back to %h. " (1) and one of three remarks (2-4). */
+    function orb(slot: number) {
+      const o = p90.orb, x = o.texts, f = (n: number) => format(x[n], by.hero, who.name ?? '');
+      let line = f(0);
+      const k = o.marked.indexOf(who.num), ev = 32 + Math.log2(o.bits[k] ?? 1);
+      if (who.num === 166) { line += f(18); events.add(123); by.hero.dec(slot); }
+      else if (k >= 0 && !events.has(ev)) {
+        events.add(ev);
+        line += [34, 35, 36].every(n => events.has(n)) ? f(15) + f(16) : [5, 6 + k, 9, 10, 11 + k, 14].map(f).join('');
+      } else line += f(1) + x[2 + rnd(3)];
+      panel.line(line);
+      menu();
+    }
     function menu() {
       panel.set(talkButtons(), word => {
         panel.line(`> ${word}`, 'you');
@@ -333,6 +404,7 @@ async function main() {
     message = level.loc.name.trim() ? `${hero.name} enters ${level.loc.name}.` : '';   // which of D08/D09's room names applies is not traced
     scene = ref.pgm.program === 8 ? await Scene.open({ party, events, items, comtxt, figures: () => figures, scroll,
       disaster: () => { disasterday = clock.juldate; } }, locspec, ref.room, level) : null;
+    if (scene && events.has(122)) return void epilogue();
     if (scene) message = scene.enter() || message;
     service = ref.pgm.program === 5 ? await ServiceRoom.open(ctx, ref.room, ref.kind, level.loc.texts, level.loc.words) : null;
     service?.greet();
@@ -340,6 +412,56 @@ async function main() {
       kins: cdata.parley.kins, serve, close }, ref.kind, ref.kind === 13 ? ref.index - 8 : ref.index, level) : null;
   };
 
+  /** P08 L_0772 (quest_scenes.md, The ending): leaving a P08 room with event 120 set. Event 121, Zakhad's trap (room
+   *  texts 3, 4; %o the best intelligence, _HighStat 0x14). Without event 123 (the Orb given to Jemil): the member
+   *  holding the Orb lifts it (5), everyone is blasted (6), "Alas, your quest has failed." (comtxt 0x50) and the game
+   *  restarts. With it: Jemil banishes Zakhad (7, 8; %o the best magic, _HighStat 0x1A), event 122, Zidoni and the
+   *  Prince (9-12), and the party is transported (ovl_0f20 without the White Scroll's line) to the room behind the
+   *  first door, the banquet. The sounds and redraws of Zakhad are not built. */
+  const ending = () => {
+    const t = level.loc.texts, line = (n: number, h: Hero = hero, o = '') => panel.line(format(t[n], h, o));
+    const best = (f: string) => party.members.reduce((a, m) => (m.hero.rec[f] as number) > (a.hero.rec[f] as number) ? m : a).hero.name;
+    events.add(121); figures = people(); render();
+    line(3); line(4, hero, best('h_intellg'));
+    if (!events.has(123)) {
+      line(5, party.members.find(m => m.hero.slot(ORB) >= 0)?.hero ?? hero); line(6);
+      panel.line(comtxt[0x50]);                                         // "Alas, your quest has failed."
+      return panel.set([{ label: cmd[1], act: () => location.reload() }]);
+    }
+    const mage = best('h_magic');
+    line(7); line(8, hero, mage);
+    events.add(122); figures = people(); render();
+    for (const n of [9, 10, 11, 12]) line(n, hero, mage);
+    panel.set([{ label: cmd[0], act: async () => {
+      scene = null; outside = null;
+      await enterRoom(level.loc.doors[0], level.loc.pgms, 3);
+      render();
+    } }]);
+  };
+  /** P08 ovl_041d with event 122 (OV_0x1d2), the epilogue in the room the party arrives in (the banquet, D16 room 12):
+   *  the evening of that day (hour 20; past 20 the next date), "A banquet is prepared…" (room text 0), ovl_09df - the
+   *  King's thanks (15, 16); with more than two in the party "And to your friends and companions:" (17) and a line per
+   *  member (P08 0x97C by companion number, %o the full name; the player and the King have none); "We must not forget
+   *  the others…" (18) when a companion who helped (`h_helped` & 0x80) is not in the party, and their lines; Jemil and
+   *  the King (19, 20) - then the Queen sends Jemil to bed (1), event 166, and only Quit is left (`_XQSRGame`). The
+   *  music is not built. */
+  const epilogue = async () => {
+    const banquet = (await json<{ banquet: number[] }>('p08.json')).banquet, t = level.loc.texts;
+    if (clock.hour >= 20) clock.date++;
+    clock.hour = 20;
+    const line = (n: number, o = '') => panel.line(format(t[n], hero, o));
+    const rec = (n: number) => party.members.find(m => m.num === n)?.hero.rec ?? party.stored(n) ?? r90[n - 1];
+    const said = new Set([0, 26]), named = (n: number) => { if (!said.has(n)) { said.add(n); line(banquet[n], rec(n).h_fullnm.trim()); } };
+    panel.show();
+    line(0); line(15); line(16);
+    if (party.members.length > 2) { line(17); for (const m of party.members.slice(1)) named(m.num); }
+    const helped = r90.map((_, k) => k + 1).filter(n => (rec(n).h_helped as number) & 0x80);
+    if (helped.some(n => !party.members.some(m => m.num === n))) { line(18); helped.forEach(named); }
+    line(19); line(20); line(1);
+    events.add(166);
+    panel.set([{ label: cmd[1], act: () => location.reload() }]);
+    render();
+  };
   /** A member leaves into a god's service (P09 ovl_1290): the leaving events, the Mindstone (0x40) stays behind, and
    *  the companion is kept out of the location tables (assignment task 100); Somona sets event 96. */
   const serve = (m: Member) => {
@@ -1186,7 +1308,7 @@ async function main() {
         if (no) { message = no; return render(); }
         if (scene) {                                                     // P08 L_06fa: "Do you want to leave?"
           panel.show(); panel.line(comtxt[0x23]);
-          panel.set([{ label: cmd[3], act: () => { close(); void leave(exit).then(render); } }, { label: cmd[4], act: () => close() }]);
+          panel.set([{ label: cmd[3], act: () => { if (events.has(120)) return ending(); close(); void leave(exit).then(render); } }, { label: cmd[4], act: () => close() }]);
           return render();
         }
         if (service) service.leave(() => void leave(exit).then(render));
@@ -1454,6 +1576,7 @@ async function main() {
       panel.line(`> ${w}`, 'you');
       if (special?.whisper(w)) return;
       const s = scene?.whisper(wmatch(w, level.loc.words), by);
+      figures = people();                                               // the egg cracking shows Jemil (event 120)
       close(s ?? comtxt[0x83]);
     }, 'Word');
   };

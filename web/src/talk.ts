@@ -4,7 +4,8 @@ import type { Figure } from './level';
 
 interface Cmd { op: 'E' | 'C' | 'S'; arg?: number; alt?: number; song?: number }
 interface Entry { word: number; resp: number; cmds: Cmd[] }
-interface Slot { script: Entry[]; greet: number; bye: number; unknown: number; skill: number; nobuy: number; shop: { item: number; pays: number; charges: number }[] }
+interface Slot { script: Entry[]; greet: number; bye: number; unknown: number; skill: number; nobuy: number; shop: { item: number; pays: number; charges: number }[];
+  gifts: { item: number; min: number; fewer: number; enough: number; event: number }[] }
 interface Conversation { texts: string[]; words: string[]; slots: Slot[] }
 interface SmallTalk { lines: string[]; weather: [number, number][] }
 
@@ -53,6 +54,17 @@ export class Talk {
   get nobuy() { return (this.slot?.nobuy ?? 0) !== 0; }
   private get slot(): Slot | null { return this.conv ? this.conv.slots[this.who.num & 7] : null; }
   private say(s: string): string { return format(s, this.hero, this.name); }
+
+  /** P90 Give (ovl_037c), the answer of a named person: the slot's gift list {item, min, fewer, enough, event}; enough
+   *  (a count of 256 or more, or `min` ≤ its low byte) sets the event and says `enough`, else `fewer`; anything not on
+   *  the list, or a nameless person: "You are most kind, %y." (comtxt 0xD4). */
+  gift(item: number, n: number): string {
+    const g = this.who.num < 0xfa ? this.slot?.gifts.find(x => x.item === item) : undefined;
+    if (!g) return this.say(this.comtxt[0xd4]);
+    const ok = n > 0xff || g.min <= n;
+    if (ok) this.events.add(g.event);
+    return this.say(this.conv!.texts[ok ? g.enough : g.fewer]);
+  }
 
   /** ovl_045d: the slot's greet text, else "Well met, adventurer. My name is <name>." (common texts 0x17, 0x19, 0x10). */
   greeting(): string {

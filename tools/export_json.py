@@ -221,7 +221,12 @@ def main(src, dst):
     p90 = open(f'{src}/P90.MCO', 'rb').read()   # trade: {step, div} per item at 0x038, {item, lot} pairs at 0x0F2 (economy.md)
     lots = p90[0xF2:p90.index(0xFF, 0xF2)]
     dump(f'{dst}/p90.json', {'haggle': [[p90[0x38 + 2 * i], p90[0x39 + 2 * i]] for i in range(0x5D)],
-                             'lots': {str(lots[i]): lots[i + 1] for i in range(0, len(lots) - 1, 2)}})
+                             'lots': {str(lots[i]): lots[i + 1] for i in range(0, len(lots) - 1, 2)},
+                             # Give (ovl_037c/ovl_0621): the Orb's texts (file 0x113), the Marked Ones (0x10B) and their _events+4 bits (0x10E);
+                             # FAR_OK2GIVE's items no one gives away (FFFAR file 0x2235, 8 bytes)
+                             'orb': {'texts': [x.decode('latin1') for x in p90[0x113:0x113 + 1200].split(b'\0')[:19]],
+                                     'marked': list(p90[0x10B:0x10E]), 'bits': list(p90[0x10E:0x111])},
+                             'keep': list(open(f'{src}/FFFAR.MCO', 'rb').read()[0x2235:0x223D])})
     p02 = open(f'{src}/P02.MCO', 'rb').read()
     dump(f'{dst}/p02text.json', [x.decode('latin1') for x in p02[0x67:0x28A].split(b'\0')[:17]])   # town program's own texts
     p08 = open(f'{src}/P08.MCO', 'rb').read()   # quest scene rooms (rules/quest_scenes.md)
@@ -233,7 +238,8 @@ def main(src, dst):
                                         'spoken': list(p08[0xB1:0xB4]), 'rested': list(p08[0xB4:0xB7])},
                              'base': [[w & 0xFF, w >> 8] for w in struct.unpack_from('<16H', p08, 0x83)],   # by exit-side flags / 2
                              'side': {'odd': list(p08[0xA3:0xAC]), 'even': list(p08[0xAC:0xB1])},   # by _lastdir
-                             'junk': list(p08[0xE49:p08.index(b'\0\0', 0xE49)])})   # dropped to make room for a gift (ovl_0e86)
+                             'junk': list(p08[0xE49:p08.index(b'\0\0', 0xE49)]),   # dropped to make room for a gift (ovl_0e86)
+                             'banquet': list(p08[0x97C:0x97C + 33])})   # epilogue (ovl_099d, cs:0xA7C): the banquet room's line per companion
     v02 = open(f'{src}/V02.MCO', 'rb').read()   # town spells (rules/spells.md)
     dump(f'{dst}/v02.json', {'disguise': {'towns': list(v02[0xCBA:0xCBD]), 'texts': [x.decode('latin1') for x in v02[0x07:0x60].split(b'\0')[:2]]},   # INT60_10
                               'hroomtype': {'ids': list(v02[0xE19:0xE27]), 'types': list(v02[0xE27:0xE35])},   # INT60_12: prison 1, candles 2-5, Vankruh 6
