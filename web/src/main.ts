@@ -1691,8 +1691,8 @@ async function main() {
   };
   /** Type 0, an ambush: group d1, ambush id d2 (its `_ambush` bit set once won; ids 12, 101, 97, 108, 155, 110 also set
    *  events 49, 70, 71, 72, 90, 107 when they trigger). A street fight on the view around the party, `_diff` = locdiff − 1;
-   *  the monsters move first unless `RndCo(200)` is below the party's best tracking ("%o detects an ambush!", 0xBB).
-   *  (The Sense spell's detection is not modelled.) */
+   *  the monsters move first unless `RndCo(200)` is below the party's best tracking, or a Sense pointed at this spot
+   *  (`sensed`, P02 cs:0x133): "%o detects an ambush!" (0xBB). */
   const ambushAt = (p: { x: number; y: number; d1: number; d2: number }) => {
     const k = spotTables.ambush.ids.indexOf(p.d2);
     if (k >= 0) events.add(spotTables.ambush.events[k]);
