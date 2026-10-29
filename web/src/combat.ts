@@ -148,15 +148,19 @@ export class Fight {
   }
 
   /** P96 ovl_020a: monster codes for group `g`. Below 60, `g` itself; else row g − 60 = {count, m0..m3}, a zero count
-   *  taken from D06's row for the difficulty (lo .. hi − 1); each monster is one of the four entries at random, and an entry with bit 0x80 adds
-   *  one more of that code on top. (The per-entry quotas, OV_0x19b, are not modelled.) */
+   *  taken from D06's row for the difficulty (lo .. hi − 1). Bit 0x80 on m3 makes it the leader, one more on top of the
+   *  count (placed first, ovl_06b8) and never drawn (the draws use `ovl_1323(3)`, else 4); bit 0x80 on m0-m2 limits that
+   *  entry to one draw (ovl_0496's quotas, OV_0x19b: 1, else 0xFF). */
   private roster(g: number, diff: number): number[] {
     const row = g < 60 ? [0, g, g, g, g] : this.data.groups[g - 60];
     const c = this.data.d06.counts, lo = c[7 * diff], hi = c[7 * diff + 1];   // P96 0x334: lo + seed mod (hi − lo)
-    const n = row[0] || lo + (hi > lo ? rnd(hi - lo) : 0);
-    const out = Array.from({ length: n }, () => row[1 + rnd(4)] & 0x7f);
-    const extra = row.slice(1).find(c => c & 0x80);
-    if (extra) { out.push(extra & 0x7f); this.speaker = extra & 0x7f; }
+    const n = row[0] || lo + (hi > lo ? rnd(hi - lo) : 0), lead = row[4] & 0x80 ? row[4] & 0x7f : 0;
+    const pool = row.slice(1, lead ? 4 : 5), quota = pool.map(e => e & 0x80 ? 1 : Infinity), out: number[] = [];
+    if (lead) { out.push(lead); this.speaker = lead; }
+    while (out.length < n + (lead ? 1 : 0) && quota.some(q => q > 0)) {   // (the original would loop for ever)
+      const i = rnd(pool.length);
+      if (quota[i]-- > 0) out.push(pool[i] & 0x7f);
+    }
     return out;
   }
 
