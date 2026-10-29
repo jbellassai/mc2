@@ -6,11 +6,14 @@ Sources: `P91.MCO` (town small talk / dialogue overlay; entry 3 = `ovl_05e2` the
 - **Named NPCs** (`_npcno < 0xFA`, KNPC/RESID rows with a number): conversation data comes from `C(n>>3).MCV` slot `n & 7`. Typed words are matched (`_WMatch`) against **that file's word list** (pointer 1 → 2, NUL strings: `...`, `Other`, `End`, `Advice`, `Rumors`, then quest words), and responses are strings of the file's text block (pointer 0).
 - **Generic townsfolk** (`_npcno ≥ 0xFA`, placed by GEN rows): words come from the location's `gwrds`, the script is the location's `peopr` table and responses are `loctext` strings. The menu's *News* entry picks a random `newsr` line: 3-byte records `{npctype | 0xFE = any, event | 0xFE = any, loctext}` filtered on the speaker's type and (`_FindBit`) the event (`ovl_0b0e`, up to `RndCo(count)` candidates). *Weather* picks a line from P91's own `{weather, line}` pairs (file 0x48, 0xFF at 0x7E; lines = the NUL strings from file 0x7F): the run of pairs for the current `_weather`, one chosen with `RndCo(run length)` — Clear → lines 0/14 ("Yes indeed, nice weather for this time of year."), Rain → 4/5/6/14, Gale → 9/10/11, … (`ovl_08xx`, menu item 1). Line 15 is the charm-failure "%o gives %h some good advice.".
 
+**Charm to talk** (FFFAR 0x3245): a generic townsperson (`_npcno` ≥ 0xFA) ignores a speaker whose `h_charm + _tailorcharm` (a byte) is below the location's `lcharm` (LOCTYPE byte 53: 4 in Telermain, 3 in Oshcrun, 6 in Nameless): "The " (0x13) + the type's name + " ignores %h." (0x14) + " (%b charm is needed.)" (0x16, %b = `lcharm`), and there is no conversation. `_tailorcharm` (P97 0x728) = the party's tailor skills summed, / 32; it also lowers the clothing's energy cost per world step (P01 0x11E6). Port: `main.ts` *talkTo*, `Party.tailorcharm` (computed live, an assumption: P97 sets it when the party changes).
+
 ## Script format (both kinds)
 ```
 entry := word resp cmd* 0        word = index into the word list, resp = text index (0xFF = end the conversation)
 cmd   := 'E' ev alt              unless event bit ev is set, answer alt instead   (FindBit(_events, ev) == 0 → alt)
        | 'C' need alt            if h_charm + _tailorcharm < need − _chrmods[slot], answer alt and count a charm failure
+                                 (P91 0x79E, a byte sum; _chrmods is only ever cleared, by _Tobo on loading a C file)
        | 'S' song                the NPC performs: every party member gets h_songs bit `song`; clock +15 min ("'%f' is now in the repertoire")
 script ends with 0xFF
 ```

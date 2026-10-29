@@ -39,13 +39,14 @@ export function format(s: string, hero: Speaker, other: string, vars: Record<str
 
 export class Talk {
   private constructor(private loc: Location, private who: Figure, private hero: Speaker, private events: Set<number>,
-                      private comtxt: string[], private small: SmallTalk, private conv: Conversation | null) {}
+                      private comtxt: string[], private small: SmallTalk, private conv: Conversation | null,
+                      private tailor: number) {}
 
-  static async open(loc: Location, who: Figure, hero: Speaker, events: Set<number>): Promise<Talk> {
+  static async open(loc: Location, who: Figure, hero: Speaker, events: Set<number>, tailor = 0): Promise<Talk> {
     const [comtxt, small] = await Promise.all([json<string[]>('comtxt.json'), json<SmallTalk>('p91text.json')]);
     const named = who.num < 0xfa;
     const conv = named ? await json<Conversation>(`conversations/C${String(who.num >> 3).padStart(2, '0')}.json`) : null;
-    return new Talk(loc, who, hero, events, comtxt, small, conv);
+    return new Talk(loc, who, hero, events, comtxt, small, conv, tailor);
   }
 
   get name(): string { return this.who.name ?? ''; }
@@ -95,8 +96,8 @@ export class Talk {
     let resp = e.resp, extra = '';
     for (const c of e.cmds) {
       if (c.op === 'E' && !this.events.has(c.arg!)) resp = c.alt!;
-      // _tailorcharm and _chrmods start at 0 (not modelled yet)
-      if (c.op === 'C' && this.hero.charm < c.arg!) { resp = c.alt!; extra = '\n' + this.small.lines[15]; }   // dialogue.md
+      // P91 0x79E: charm + _tailorcharm (a byte) against need − _chrmods[slot]; _chrmods is only ever cleared (_Tobo)
+      if (c.op === 'C' && ((this.hero.charm + this.tailor) & 0xff) < c.arg!) { resp = c.alt!; extra = '\n' + this.small.lines[15]; }   // dialogue.md
     }
     return { text: this.say(texts[resp] + extra), end: false };
   }

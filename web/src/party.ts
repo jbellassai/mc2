@@ -34,6 +34,8 @@ export class Party {
   }
 
   get leader(): Member { return this.members[0]; }
+  /** `_tailorcharm` (P97 0x728): the members' tailor skills summed, / 32 (assumed live; P97 sets it when the party changes). */
+  get tailorcharm(): number { return this.members.reduce((s, m) => s + (m.hero.rec.h_tailor as number), 0) >> 5; }
 
   /** Saved state (save.ts): the members' records and cells, `_npcsta`, the companions' records as they last left. */
   snapshot() {

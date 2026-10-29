@@ -251,13 +251,13 @@ export class World {
     return null;
   }
 
-  /** Energy per member and step: terrain energy + clothing penalty in this weather (minus `_tailorcharm`, 0 here). The
+  /** Energy per member and step: terrain energy + clothing penalty in this weather less `_tailorcharm` (P01 0x11E6). The
    *  clothing row is the first worn item in 0x2B-0x30, else "none" (ovl_1a47). */
   fatigue(ter: number, clock: Clock, party: Party) {
     for (const { hero } of party.members) {
       const r = hero.rec, worn = r.h_wears.map(s => s === 0xff ? 0 : r.h_invitem[s]).find(c => c >= 0x2b && c <= 0x30);
       const row = worn ? worn - 0x2b : 6;
-      hero.lose('h_energy', Math.max(0, this.p01.clothing[row][clock.weather]) + this.p01.terrainenergy[ter]);
+      hero.lose('h_energy', Math.max(0, this.p01.clothing[row][clock.weather] - party.tailorcharm) + this.p01.terrainenergy[ter]);
       hero.isHeTr();
     }
   }

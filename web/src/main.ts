@@ -234,7 +234,9 @@ async function main() {
     if (prince) { panel.show(); panel.line(`${who.name}: ${prince}`); return void panel.set([{ label: cmd[0], act: () => close() }]); }
     const opening = scene?.greet(who, by);
     if (opening?.leave) { await leave(level.loc.exits[0]); message = opening.text; return render(); }   // the priest sends the party out
-    const t = await Talk.open(level.loc, who, by.hero, events);
+    if (who.num >= 0xfa && ((by.hero.rec.h_charm as number) + party.tailorcharm & 0xff) < level.loc.lcharm)   // FFFAR 0x3245 → ovl_308e
+      return close(format(comtxt[0x13] + npctypes[who.type] + comtxt[0x14] + comtxt[0x16].replace('%b', String(level.loc.lcharm)), by.hero, ''));
+    const t = await Talk.open(level.loc, who, by.hero, events, party.tailorcharm);
     const speak = (s: string) => panel.line(`${who.name ? who.name + ': ' : ''}${s}`);
     const end = () => { const bye = t.farewell(); close(bye ? `${who.name}: ${bye}` : ''); };
     await loadTrade();

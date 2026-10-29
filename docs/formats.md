@@ -75,7 +75,7 @@ Loaded by `_LoadVar('D', n)` straight into `_loc`; the first 20 words are offset
 | 40 | `locnum` | |
 | 41 | `roomno` | |
 | 42 | `locname[11]` | e.g. `Telermain M`, `Oshcrun`, `Dorak 3   X` (trailing letter looks like a class code: M town, X dungeon) |
-| 53 | `lcharm` | |
+| 53 | `lcharm` | charm a generic townsperson asks for (`dialogue.md`) |
 | 54,55 | `mapsizex, mapsizey` | 11×9 for single-room interiors (store, tavern, library …) |
 | 56–61 | `doorstn locdiff pearlsw greetmsgs[3]` | |
 | 62 | `thedata[5000]` | the sub-tables pointed to above |

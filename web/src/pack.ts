@@ -36,6 +36,7 @@ export interface Location {
   keydoor?: { x: number; y: number; newtile: number; text: number }[];
   spots?: { x: number; y: number; type: number; d1: number; d2: number; d3: number }[];
   locdiff: number;
+  lcharm: number;                       // charm a generic townsperson asks for (FFFAR 0x3245)
 }
 
 /** A room record as exported: exits, townsfolk and NPCs are one list per room index (formats.md, Room maps). */
