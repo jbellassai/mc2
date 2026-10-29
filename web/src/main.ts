@@ -38,7 +38,7 @@ async function main() {
   const p97 = await json<{ texts: string[]; events: Record<string, number> }>('p97.json');
   const tables = await json<{ hungerhours: number[]; nousetext: number[]; useall: number[]; lootvalues: number[]; weathers: string[]; attribs: string[];
     tod: { words: string[]; hour: number[] }; speltim: number[] }>('exetables.json');
-  const p93tables = await json<{ hunt: { terrain: number[]; weather: number[] } }>('p93.json');
+  const p93tables = await json<{ hunt: { terrain: number[]; weather: number[] }; formation: number[][] }>('p93.json');
   const v02 = await json<{ vision: { ids: number[]; texts: number[] }; sense: number[]; disguise: { towns: number[]; texts: string[] } }>('v02.json');
   const p89 = await json<{ tiers: number[]; x0: number[]; y0: number[]; x1: number[]; y1: number[]; rects: number[][] }>('p89.json');
   const world = await World.create();
@@ -837,7 +837,7 @@ async function main() {
       if (heroes.length === 1) return then(heroes[0]);
       panel.set([...heroes.map(r => ({ label: r.name, act: () => then(r) })), { label: cmd[0], act: prefight }]);
     };
-    panel.set([{ label: cmd[14], act: () => who(a => drawWeapon(a, prefight)) }, { label: cmd[35], act: () => who(a => recall(a, prefight)) },
+    panel.set([{ label: cmd[14], act: () => who(a => drawWeapon(a, prefight)) }, { label: cmd[35], act: () => who(a => recall(a.hero!, prefight)) },
       { label: cmd[41], act: () => panel.set([{ label: cmd[34], act: rally }, { label: cmd[18], act: greet },
       { label: cmd[0], act: prefight }]) }, { label: cmd[5], act: () => begin(false) }, { label: cmd[38], act: sheathe }]);
     render();
@@ -911,7 +911,7 @@ async function main() {
     if (!actor) return void monsterPhase();
     message = `${actor.name}: ${actor.moves}`;
     if (heading || autoHeroes.has(actor.recno)) return void autoTurn(actor);
-    panel.set([{ label: cmd[7], act: aim }, { label: cmd[27], act: magic }, { label: cmd[35], act: () => recall(actor!, partyTurn) }, { label: cmd[43], act: fightUse },
+    panel.set([{ label: cmd[7], act: aim }, { label: cmd[27], act: magic }, { label: cmd[35], act: () => recall(actor!.hero!, partyTurn) }, { label: cmd[43], act: fightUse },
       { label: cmd[19], act: () => { heading = true; partyTurn(); } }, { label: cmd[46], act: () => { autoHeroes.add(actor!.recno); partyTurn(); } },
       { label: cmd[14], act: () => drawWeapon(actor!, partyTurn) }, { label: cmd[30], act: () => { actor!.moves = 0; partyTurn(); } }]);
     render();
@@ -968,8 +968,8 @@ async function main() {
     partyTurn();
   };
   /** Recall (_RecSpl): ready one of the spells the hero has memorised (`h_spells`, `h_rdyspl`). Takes no action. */
-  const recall = (a: Rec, back: () => void) => {
-    const r = a.hero!.rec, known = r.h_spells.flat().map((n, i) => [n, i]).filter(([n]) => n > 0);
+  const recall = (h: Hero, back: () => void) => {
+    const r = h.rec, known = r.h_spells.flat().map((n, i) => [n, i]).filter(([n]) => n > 0);
     panel.set([...known.map(([n, i]) => ({ label: `${cdata.spells.names[i]} (${n})`, act: () => {
       r.h_rdyspl = i; back();
     } })), { label: cmd[0], act: back }]);
@@ -1092,7 +1092,7 @@ async function main() {
     const living = f.recs.filter(r => r.hero && f.alive(r));
     const who = (then: (a: Rec) => void) => living.length === 1 ? then(living[0])
       : panel.set([...living.map(r => ({ label: r.name, act: () => then(r) })), { label: cmd[0], act: raise }]);
-    panel.set([{ label: cmd[35], act: () => who(a => recall(a, raise)) }, { label: cmd[27], act: () => who(resurrect) },
+    panel.set([{ label: cmd[35], act: () => who(a => recall(a.hero!, raise)) }, { label: cmd[27], act: () => who(resurrect) },
       { label: cmd[0], act: () => {
         panel.line(cdata.resurrect[0]);
         panel.set([{ label: cmd[3], act: searchAsk }, { label: cmd[4], act: raise }]);
@@ -1660,22 +1660,25 @@ async function main() {
     const cast = (h: Hero) => {
       const r = h.rec, known = r.h_spells.flat().map((n, i) => [n, i]).filter(([n]) => n > 0);
       if (!known.length) return close(ctext(0x40, { h: h.name }));                          // "%h must recall a spell first."
-      panel.set([...known.map(([n, sp]) => ({ label: `${cdata.spells.names[sp]} (${n})`, act: () => {
-        r.h_rdyspl = sp;
-        const need = Math.max(1, cdata.spells.energy[sp] - (r.h_magic >> 2));
-        if (r.h_energy < need) return close(comtxt[0x41]);                                  // "Not enough energy!"
-        const here = cdata.spells.here[program()] | (program() === 2 && level.loc.locdiff ? 4 : 0);   // + _InDungeon
-        if (!(cdata.spells.where[sp] & here)) return close(ctext(0x56, { h: h.name }));
-        spell(h, sp, (text: string) => {
-          const rr = h.rec as Record<string, number>, up = cdata.spells.skill.includes(sp) ? magicUp(h) : '';
-          const row = Math.floor(sp / 7), col = sp % 7;
-          if (--r.h_spells[row][col] <= 0) { r.h_spells[row][col] = 0; r.h_rdyspl = 0xff; }
-          rr.h_energy = Math.max(0, rr.h_energy - need); h.isHeTr();
-          close([text, up].filter(Boolean).join(' '));
-        });
-      } })), { label: cmd[0], act: () => close() }]);
+      panel.set([...known.map(([n, sp]) => ({ label: `${cdata.spells.names[sp]} (${n})`, act: () => { r.h_rdyspl = sp; castOut(h, sp, close); } })),
+        { label: cmd[0], act: () => close() }]);
     };
     pick(cast);
+  };
+  /** `_Magic` outside a fight for spell `sp`: the gates, the effect and its costs; `end(text)` when the cast is over,
+   *  whether it went off or not (the camp's Magic goes back to its menu). */
+  const castOut = (h: Hero, sp: number, end: (text?: string) => void) => {
+    const r = h.rec, need = Math.max(1, cdata.spells.energy[sp] - (r.h_magic >> 2));
+    if (r.h_energy < need) return end(comtxt[0x41]);                                      // "Not enough energy!"
+    const here = cdata.spells.here[program()] | (program() === 2 && level.loc.locdiff ? 4 : 0);   // + _InDungeon
+    if (!(cdata.spells.where[sp] & here)) return end(ctext(0x56, { h: h.name }));
+    spell(h, sp, (text: string) => {
+      const rr = h.rec as Record<string, number>, up = cdata.spells.skill.includes(sp) ? magicUp(h) : '';
+      const row = Math.floor(sp / 7), col = sp % 7;
+      if (--r.h_spells[row][col] <= 0) { r.h_spells[row][col] = 0; r.h_rdyspl = 0xff; }
+      rr.h_energy = Math.max(0, rr.h_energy - need); h.isHeTr();
+      end([text, up].filter(Boolean).join(' '));
+    }, end);
   };
   /** The acting member: asked when the party has more than one. */
   const pick = (then: (h: Hero) => void) => {
@@ -1690,10 +1693,11 @@ async function main() {
     r.h_magic = v + 1;
     return ctext(0x60, { h: h.name, l: SKILLS[3][1] });
   };
-  /** The spell's effect (SPLVECS); `done(text)` when it went off. Spells not built yet answer "The spell fails." */
-  const spell = (h: Hero, sp: number, done: (text: string) => void) => {
+  /** The spell's effect (SPLVECS); `done(text)` when it went off, else `fail(text)` at no cost. Spells not built yet
+   *  answer "The spell fails." */
+  const spell = (h: Hero, sp: number, done: (text: string) => void, fail: (text?: string) => void) => {
     const m = h.rec.h_magic, member = (then: (t: Hero) => void) => panel.set([...party.members.map(p => ({ label: p.hero.name,
-      act: () => then(p.hero) })), { label: cmd[0], act: () => close() }]);
+      act: () => then(p.hero) })), { label: cmd[0], act: () => fail() }]);
     // FFFAR ovl_3228/ovl_3240: Spef4 on each target in the spell's colour (Heal 10, Energy and Zengrl 0xC, Shield and Zishoxe 9).
     const glow = (t: Hero) => { const p = party.members.find(m => m.hero === t); if (p) fx.play(FX.spef4(p, sp === 8 ? 10 : sp === 12 || sp === 20 ? 0xc : 9)); };
     const heal = (t: Hero) => { glow(t); t.rec.h_hitpts = t.rec.h_hpmax; return ctext(0x5c, { a: t.name }); };
@@ -1707,7 +1711,7 @@ async function main() {
       case 21: return done(party.members.filter(p => !dead(p.hero)).map(p => shield(p.hero, m >> 1)).join(' '));   // Zishoxe
       case 26: return member(t => {                                                         // Glamour (FFFAR ovl_3440)
         const c = t.rec.h_charm as number, g = Math.min(c, 12 - c);
-        if (c > 11 || dead(t)) return close(comtxt[0x119]);
+        if (c > 11 || dead(t)) return fail(comtxt[0x119]);
         t.rec.h_charm = c + g; t.rec.h_glamcnt = (t.rec.h_glamcnt as number) + g;
         done(`${t.name}: ${STATS[6][1]} ${c + g}`);
       });
@@ -1716,8 +1720,8 @@ async function main() {
         for (let n = 8 * world.region; n < 8 * world.region + 8; n++) world.engaged.delete(n);
         return done(comtxt[0x43]);
       case 4: sfx(15); locate = m >> 2; return done('');                                             // Locate (P01 ovl_1ac2)
-      case 7: return teleport(m, done);
-      case 10: return target(h, (x, y) => done(format(comtxt[0xdb], h, h.name) + comtxt[vision(x, y)]));   // Vision
+      case 7: return teleport(m, done, fail);
+      case 10: return target(h, (x, y) => done(format(comtxt[0xdb], h, h.name) + comtxt[vision(x, y)]), fail);   // Vision
       case 15:                                                                              // Walkwater: dungeons only
         if (!level.loc.locdiff) return done(comtxt[0x95]);
         walkwater = Math.floor(m / 20) + 2;
@@ -1729,17 +1733,19 @@ async function main() {
         snakes.push([level.id, x, y, r[1]]); level.set(x, y, r[1]);
         fx.play(FX.spef5a({ x, y }));                                   // V02 INT60_06/07: Spef5_a on the square
         done(comtxt[sp === 13 ? 0xe7 : 0xe8]);
-      });
+      }, fail);
       case 39: return done(sense(h, m));                                                    // Sense
       case 40: case 41: {                                                                   // Restsoul, Soulspeak (P08)
         const s = scene?.spell(sp, h);
-        return s === null || s === undefined ? close(ctext(0x56, { h: h.name })) : done(s);
+        return s === null || s === undefined ? fail(ctext(0x56, { h: h.name })) : done(s);
       }
     }
-    close(comtxt[0x119]);
+    fail(comtxt[0x119]);
   };
   /** _Target: mark any square ("Mark the target.", comtxt 0x0D); cancelling (Escape) casts nothing. */
-  const target = (h: Hero, then: (x: number, y: number) => void) => { close(); mark(format(comtxt[0x0d], h, h.name), then); };
+  const target = (h: Hero, then: (x: number, y: number) => void, fail: () => void) => {
+    close(); mark(format(comtxt[0x0d], h, h.name), then, fail);
+  };
   /** V02 INT60_00 (Vision): a door there names what is behind it - rooms of types 6-9 by their HROOM record and whether
    *  their guards were beaten (`_dunrms`): 0xE1-0xE3 / 0xE4-0xE6 for no reward, a chest, a fountain; other doors by the
    *  band of their id (V02 0x8C → comtxt 220-223). No door: "nothing. Try a door." (0xE0). */
@@ -1783,10 +1789,10 @@ async function main() {
    *  tier ([10, 30, 50, 70, 90], below 10 nothing) and the window rectangle the target must lie in; the target is not
    *  the party's square, a live guard post or patrol, a town entrance or feature, or in P89's three no-teleport
    *  rectangles, and is walkable. A bad target or cancelling casts nothing (assumed: P89's carry is not traced). */
-  const teleport = (m: number, done: (text: string) => void) => {
+  const teleport = (m: number, done: (text: string) => void, fail: (text?: string) => void) => {
     const rec = world.rec!;
-    if (world.ships.sailing) return close(rec.texts[0x1a]);
-    if (shipCamp) return close(rec.texts[0x19]);
+    if (world.ships.sailing) return fail(rec.texts[0x1a]);
+    if (shipCamp || camping) return fail(rec.texts[0x19]);
     const t = p89.tiers.filter(v => v <= m).length - 1, wx = lead.x - 5, wy = lead.y - 4;
     close();
     mark(say(comtxt[0x0d]), (x, y) => {
@@ -1810,6 +1816,7 @@ async function main() {
     return ctext(0x60, { h: h.name, l });
   };
   let shipCamp: (() => void) | null = null;   // camping aboard: one camp pass per sailing step (P93 SUB_04d4)
+  let camping = false;                          // the camp menu is up (Teleport: "End camp activities first.")
   /** `_CAMPSITE` (P93 ovl_1099): world map 2 (aboard 4), a P07 dungeon room 8, inn rooms 0x40-0x47 0x20, the camp
    *  rooms 0x5C-0x6B 0x10, else 1. Not built: `_locspec` 0x14 room 9 (also a guest room). */
   const campsite = () => level.loc.kind === 'world' && !patch ? world.ships.sailing ? SHIP : OPEN : chamber ? DUNGEON
@@ -1820,16 +1827,26 @@ async function main() {
     if (world.ships.passage === 1 && world.ships.sailing) { message = shipText(world.ships.cur, 0x27); return render(); }   // working for passage
     const inn = service?.kind === INN && service.room < 0x5c ? service.room - 0x40 : -1;
     if (inn >= 0 && lead.x >= 4 && lead.y >= 5) { message = say(comtxt[0x24]); return render(); }
-    camp({ party, clock, cmd, p93, items, comtxt, site: campsite(), terrain: level.data.nameindex[level.tile(lead.x, lead.y)],
+    camping = true;
+    // P93 ovl_1151: in a dungeon room, inn room or guest room the members move to fixed squares (`_CAMPPXY` keeps
+    // theirs; ovl_11b3 puts them back): P93's table, or the room's `spetbl` words {x, y}, 12 bytes per inn room
+    const site = campsite(), kept = party.members.map(m => ({ x: m.x, y: m.y }));
+    const beds = site === DUNGEON ? p93tables.formation
+      : site & (INNROOM | GUEST) ? Array.from({ length: 6 }, (_, i) => hex(level.loc.tables.spetbl ?? '').slice(2 * i + (site === INNROOM ? 12 * (service!.room - 0x40) : 0)).slice(0, 2)) : [];
+    if (beds.length) { party.members.forEach((m, i) => { m.x = beds[i][0]; m.y = beds[i][1]; }); render(); }
+    const unbed = () => { if (beds.length) party.members.forEach((m, i) => { m.x = kept[i].x; m.y = kept[i].y; }); };
+    camp({ party, clock, cmd, p93, items, comtxt, site, terrain: level.data.nameindex[level.tile(lead.x, lead.y)],
       hunt: p93tables.hunt, speltim: tables.speltim, spells: cdata.spells.names, skillUp: skillUp0,
-      use: () => useCmd(), tick, rent: () => inn >= 0 ? rent[inn] : null, sail: p => { shipCamp = p; },
+      use: () => useCmd(), recall, magic: (h, back) => castOut(h, h.rec.h_rdyspl, back), tick, rent: () => inn >= 0 ? rent[inn] : null, sail: p => { shipCamp = p; },
       wild: watch => {                                                   // P01 ovl_169e and the fight check (ovl_0846)
         world.movePatrols(level, lead.x, lead.y, clock.month);
         const n = world.patrolAt(lead.x, lead.y);
         if (n < 0) { world.engage(lead.x, lead.y); return false; }
+        camping = false;
         void wildFight(undefined, n, !watch);
         return true;
       }, done: () => {
+      camping = false; unbed();
       close();
       if (inn < 0 || rent[inn]) return;
       party.place(roomStart.x, roomStart.y);
@@ -2048,7 +2065,7 @@ async function main() {
     if (sv.assigns) assigns.restore(sv.assigns); else assigns.reset();
     wildAt = sv.wild ?? { x: 29, y: 56 }; been = sv.been ?? 0x8000; disguise = sv.disguise ?? 0;
     [walkSteps, walkTicks] = sv.walk;
-    outside = null; service = null; special = null; scene = null; patch = null; fight = null; chamber = null; chamberBack = null; shipCamp = null;
+    outside = null; service = null; special = null; scene = null; patch = null; fight = null; chamber = null; chamberBack = null; shipCamp = null; camping = false;
     go(await Level.load(sv.level.id, sv.level.id === 'D01' ? undefined : sv.level.ts), sv.at.x, sv.at.y);
     message = '';
   };

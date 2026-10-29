@@ -291,7 +291,8 @@ def main(src, dst):
     p93 = open(f'{src}/P93.MCO', 'rb').read()
     dump(f'{dst}/p93text.json', [x.decode('latin1') for x in p93[0x3D:0x254].split(b'\0')])   # camp texts (rules/camp.md)
     sb = lambda b: b - 256 if b > 127 else b
-    dump(f'{dst}/p93.json', {'hunt': {'terrain': [sb(b) for b in p93[0x03:0x0D]], 'weather': [sb(b) for b in p93[0x0D:0x19]]}})   # hunting odds, -1 = impossible
+    dump(f'{dst}/p93.json', {'hunt': {'terrain': [sb(b) for b in p93[0x03:0x0D]], 'weather': [sb(b) for b in p93[0x0D:0x19]]},   # hunting odds, -1 = impossible
+                             'formation': [list(p93[0x19 + 2 * i:0x1B + 2 * i]) for i in range(6)]})   # ovl_1151: dungeon camp squares {x, y}
     dump(f'{dst}/conds.json', [x.decode('latin1') for x in exe[ds + 0x4204:ds + 0x4300].split(b'\0')[:12]])   # _w_conds: OK, then cond1<<8|cond2 bits 15…5
     p97 = open(f'{src}/P97.MCO', 'rb').read()
     p92 = open(f'{src}/P92.MCO', 'rb').read()

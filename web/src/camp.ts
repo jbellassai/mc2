@@ -1,7 +1,7 @@
 // Camp (P93 ovl_0271, rules/camp.md). The commands set each member's activity (`h_actvty`); Begin runs the loop.
 // Where (`_CAMPSITE`, ovl_1099): 2 open camp on the world map, 4 aboard a ship, 8 a dungeon room (P07), 0x20 a rented
-// inn room, 0x10 a guest room; anywhere else 1, the reduced menu 22 (Use, Recall, Put, Off, End). Not built: Recall
-// (assignments), Magic, the camp formation (ovl_1151: the party drawn on fixed squares).
+// inn room, 0x10 a guest room; anywhere else 1, the reduced menu 22 (Use, Recall, Put, Off, End). Not built: the camp
+// formation (ovl_1151: the party drawn on fixed squares).
 import { panel } from './panel';
 import { format } from './talk';
 import { incObj } from './shop';
@@ -23,6 +23,10 @@ export interface CampCtx {
   skillUp(h: Hero, idx: number): string;
   /** The Use command (_UseItem). */
   use(): void;
+  /** Recall (_RecSpl): `h` readies one of their memorised spells, then `back`. */
+  recall(h: Hero, back: () => void): void;
+  /** Magic (_Magic): `h` casts the readied spell; `back(text)` when it is over (the panel may have been closed to mark a square). */
+  magic(h: Hero, back: (text?: string) => void): void;
   /** One 5-minute tick of the world (_CalUpd). */
   tick(): void;
   /** Open camp: the patrols move and may walk into the camp (P01 cross-overlay calls 6 and 9); true when a fight
@@ -46,13 +50,21 @@ export function camp(ctx: CampCtx) {
   const reset = () => { for (const { hero } of party.members) hero.rec.h_actvty = NONE; };
   const end = () => { reset(); ctx.sail(null); ctx.done(); };
   panel.show();
+  const recall = { label: cmd[35], act: () => who(h => ctx.recall(h, menu)) };
   const menu = () => panel.set(site === 1
-    ? [{ label: cmd[43], act: ctx.use }, { label: cmd[33], act: () => who(put) }, { label: cmd[28], act: () => who(off) },
-      { label: cmd[0], act: end }]                                                          // menu 22: Use, Put, Off, End
-    : [{ label: cmd[43], act: ctx.use }, { label: cmd[39], act: sleep }, { label: cmd[24], act: () => who(learn) },
+    ? [{ label: cmd[43], act: ctx.use }, recall, { label: cmd[33], act: () => who(put) }, { label: cmd[28], act: () => who(off) },
+      { label: cmd[0], act: end }]                                                          // menu 22: Use, Recall, Put, Off, End
+    : [{ label: cmd[43], act: ctx.use }, recall, { label: cmd[39], act: sleep }, { label: cmd[27], act: () => who(magic) }, { label: cmd[24], act: () => who(learn) },
       { label: cmd[28], act: () => who(off) }, { label: cmd[15], act: () => who(h => set(h, FIX, 6)) },
       { label: cmd[44], act: () => who(watch) }, { label: cmd[21], act: () => who(hunt) },
       { label: cmd[33], act: () => who(put) }, { label: cmd[5], act: begin }, { label: cmd[0], act: end }]);   // menu 13
+  /** P93 Magic: not a magic user (`_ChkMag`, comtxt 0x2D); no readied spell (0x40); else `_Magic`. (P93 also lets a
+   *  sleeper cast, marking them awake meanwhile.) */
+  const magic = (h: Hero) => {
+    if (!rec(h).h_magic) { panel.line(format(ctx.comtxt[0x2d], h, h.name)); return menu(); }
+    if (rec(h).h_rdyspl === NONE) { panel.line(format(ctx.comtxt[0x40], h, h.name)); return menu(); }
+    ctx.magic(h, text => { panel.show(); if (text) panel.line(text); menu(); });
+  };
   /** The acting member (`_curpla`); the port asks when the party has more than one. */
   const who = (then: (h: Hero) => void) => {
     if (party.members.length < 2) return then(party.leader.hero);
