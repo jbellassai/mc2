@@ -1,4 +1,5 @@
 // The text panel under the map: a scrolling log, a row of buttons, an optional word input.
+import { sfx } from './sound';
 export interface Button { label: string; act: () => void }
 
 const box = document.getElementById('panel')!, log = document.getElementById('log')!;
@@ -24,6 +25,7 @@ addEventListener('keydown', e => {
     : hotkeys.get(e.key.toLowerCase());
   if (!b || !b.isConnected) return;
   e.preventDefault(); e.stopImmediatePropagation();
+  if (/^[a-z]$/i.test(e.key)) sfx(8);   // _Parser: a letter that _MenuLookup finds ticks (not Space/Enter, Esc or a click)
   b.click();
 });
 
