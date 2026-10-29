@@ -1,7 +1,7 @@
 // Tile view centred on the party leader. Original window is 11×9 with the party's 3×3 formation at (4,3)-(6,5); the port shows more.
 import { image, json, type Sprites } from './pack';
 import type { Level, Figure } from './level';
-import type { Overlay } from './fx';
+import { ORDER, type Overlay, type Ghost } from './fx';
 
 /** The 16 EGA colours, for the effects' colour flashes. */
 const EGA = ['#000', '#00a', '#0a0', '#0aa', '#a00', '#a0a', '#a50', '#aaa', '#555', '#55f', '#5f5', '#5ff', '#f55', '#f5f', '#ff5', '#fff'];
@@ -31,6 +31,31 @@ export class View {
   }
   private drawn = new Map<string, [HTMLImageElement, number, number]>();   // the sprite last drawn in each cell, for tints
   private tintBuf = document.createElement('canvas');
+
+  /** A person's sprite, as `draw` picks it. */
+  private spriteOf(num: number, tile: number): [HTMLImageElement, number] {
+    if (num < 0x18) return [this.heroes, 0x3b + 18 * num];
+    if (num < 0x20) return [this.more, 18 * (num - 0x18)];
+    return [this.folk, this.sprites.npc[tile].start];
+  }
+  /** `_MultiFX` part way: the pixels of the person's sprite that the pass has reached (fx.ts, Ghost). */
+  private ghost(g: Ghost, cx: number, cy: number) {
+    const [im, k] = this.spriteOf(g.num, g.tile), cols = this.sprites.columns, b = this.tintBuf, c = b.getContext('2d', { willReadFrequently: true })!;
+    b.width = b.height = 16;
+    c.drawImage(im, (k % cols) * 16, Math.floor(k / cols) * 16, 16, 16, 0, 0, 16, 16);
+    const img = c.getImageData(0, 0, 16, 16), d = img.data;
+    ORDER.forEach((p, i) => {
+      if (!d[p * 4 + 3]) return;
+      const on = g.out ? i >= g.shown : i < g.shown, rb = on ? g.rainbow : g.under;
+      if (!on && !g.under) { d[p * 4 + 3] = 0; return; }
+      if (rb) {
+        const v = parseInt(EGA[(i + g.shown) & 15].slice(1), 16);
+        d[p * 4] = (v >> 8 & 15) * 17; d[p * 4 + 1] = (v >> 4 & 15) * 17; d[p * 4 + 2] = (v & 15) * 17;
+      }
+    });
+    c.putImageData(img, 0, 0);
+    this.ctx.drawImage(b, cx * TILE, cy * TILE, TILE, TILE);
+  }
 
   /** _movectileFX's XOR recolouring: the figure in the cell, its own pixels blended with `color` (difference). */
   private tint(cx: number, cy: number, color: string) {
@@ -155,10 +180,12 @@ export class View {
     for (const p of party) if (p.frame === undefined) this.hero(p.num, p.x - ox, p.y - oy); else this.sheet(this.heroes, p.frame, cols, p.x - ox, p.y - oy);
     if (!fx) return;
     for (const i of fx.icons) this.sheet(i.sheet === 'E01' ? this.monsters : this.heroes, i.frame, cols, i.x - ox, i.y - oy);
+    for (const g of fx.ghosts ?? []) this.ghost(g, g.x - ox, g.y - oy);
     for (const t of fx.tints) this.tint(t.x - ox, t.y - oy, EGA[t.color & 15]);
     if (fx.invert) {
       ctx.globalCompositeOperation = 'difference';
-      ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, COLS * TILE, ROWS * TILE);
+      ctx.fillStyle = '#fff';                                   // the original's 11×9 map window around the centre
+      ctx.fillRect(((COLS >> 1) - 5) * TILE, ((ROWS >> 1) - 4) * TILE, 11 * TILE, 9 * TILE);
       ctx.globalCompositeOperation = 'source-over';
     }
   }

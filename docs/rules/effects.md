@@ -18,6 +18,12 @@ routines as frame lists on one queue), drawn by `View.draw` over the map.
   (AH); `_egaeffectstimer` sets how long (units not traced). The port blends the EGA colour AH over the figure's own
   pixels (difference).
 
+- **Dissolve** `_MultiFX` (EXE 2709:4551, after `_MFXInit`; `_mfxtnum` the tile, `_mfxcoords` the pixel position,
+  `_mfxcflag` 1 = draw the tile in, 0 = restore the background): `FFAWRK` visits the 256 pixels of the 16×16 square
+  from 0 by `n → ((n + 1)·37 mod 257) − 1` (y = n >> 4, x = n & 15), one `EGAEFFECTSDELAY` (`_egaeffectstimer`) each;
+  pixels of the background colour are skipped. With `_egaeffectsflag` 7 each written pixel takes the colour of a running
+  counter (DS 0xDE1F, & 15) instead of its own: a rainbow sparkle. Flag 3 writes the real colours.
+
 ## The routines (INT 62h)
 | routine | picture | sound | timing |
 |---|---|---|---|
@@ -67,7 +73,7 @@ The missile stops on the first unwalkable or occupied square; `G_TILEXY` is wher
 | Betray (`_0f`) | sound 10, `_Spef7` |
 | Forget (`_18`) | `_Spef5` |
 | Timestop (`_1b`) | `_InvertWindow(0, 11)` |
-| Disappear, Jump, Restsoul (`_14`, `_16`, `_17`), `INT61_47`, `INT61_ff` | `_MultiFX` (not decoded) |
+| Disappear, Jump, Restsoul (`_14`, `_16`, `_17`), `INT61_47`, `INT61_ff` | `_MultiFX` (not built in the port) |
 | `INT61_42`, `ovl_27d0` | `_Bang` on the target |
 | `INT61_60` | `_MultiBang(3)` |
 | Resident spells (FFFAR `ovl_3228`/`ovl_3240`) | sound 10, `_Spef4` on each target in `G_zp_16`: Heal 10, Energy 0x0C, Shield 9, Zengrl 0x0C, Zishoxe 9 |
@@ -76,7 +82,7 @@ The missile stops on the first unwalkable or occupied square; `G_TILEXY` is wher
 | V02 `INT60_00`, Vision | `_Spef6` on the door found there |
 | P07 `ovl_06c2`, the Dark Candle | `_Bang` at the reader |
 | P08 `ovl_0d8e`, the Orb and the bird | sound 10, `_Spef6` at the user |
-| P08 `ovl_187e`/`_18cd`/`_191b`, Zakhad | `_InvertWindow(0, 3)`, `_MultiFX` (not built) |
+| P08 the ending (L_0772) | `ovl_187e` = `_InvertWindow(0, 3)`; 0x1890 (`ovl_191b`) a person appears: four `_MultiFX` passes with flag 7 (timer 4000), then one with flag 3; 0x18B4 (`ovl_18cd`) a person vanishes: one pass, flag 3, timer 60000. Zakhad appears after the flash, vanishes when Jemil banishes him, then Zidoni appears. The doom (`ovl_0c41`): for each member from slot 5 down, then the room's first NPC, `0x1986`: the blob map around them (`ovl_1a52`/`_1a8a`, stages blob + 0x14) through `_MultiBang(0)`, the figure flashed (flag 0x1001), thunder (29), the square restored |
 | P09 `ovl_123e`, a god's thunder | `_Bang(x, y, 0)` on each member |
 | P09 `FUN_1000_db88`, a god's blessing | `_Spef1` at a member (the condition is not traced) |
 | P96 `ovl_05fd`, Doombeast images vanishing | `_MultiThing(9)` |
@@ -91,7 +97,10 @@ Timings the original takes from `_egaeffectstimer` are assumed:
 - Spef3Single: 400 ms;
 - Spef7: 66 ms a frame.
 
+The ending's doom burst is the 3×3 BigBang pattern (the blob map is not decoded) and its flash is Spef3Single in white.
+Ending timings: the appear passes 300 ms each plus 600 ms, the vanish 2.5 s.
+
 Not built:
-- `_MultiFX` (Disappear, Jump, Restsoul, Zakhad);
+- `_MultiFX` in combat (Disappear, Jump, Restsoul);
 - the gods' blessing `_Spef1`;
 - the Doombeast images.

@@ -97,6 +97,7 @@ async function main() {
   let locate = 0;   // P01 OV_0x1bb: world-map draws left in which a Locate spell shows every patrol and guard post
   const seeAll = () => events.has(105) || locate > 0;
   const fx = new Fx(() => render(), sfx);
+  const hidden = new Set<object>();   // people the ending is fading in or has blasted away
   const render = () => {
     const room = level.loc.kind === 'room', wild = level.loc.kind === 'world';
     const icons: Icon[] = fight ? fight.recs.filter(r => r.side && fight!.alive(r)).map(r => ({ x: r.x, y: r.y, frame: r.tile, sheet: 'E01' }))
@@ -104,9 +105,9 @@ async function main() {
           .concat(world.ships.boats().map(b => ({ ...b, frame: 0x12 })))
       : patch?.icons() ?? (detect && level.loc.kind === 'level'   // V02 INT60_0d: Detect shows the teleportal spots
         ? (level.loc.spots ?? []).filter(p => p.type === 1).map(p => ({ x: p.x, y: p.y, frame: 10 + (phase & 1) })) : []);
-    const people = (fight ? fight.recs.filter(r => !r.side && fight!.alive(r)) : wild ? [lead] : party.members)   // world: the leader alone
+    const people = (fight ? fight.recs.filter(r => !r.side && fight!.alive(r)) : wild ? [lead] : party.members.filter(m => !hidden.has(m)))   // world: the leader alone
       .map(p => disguise ? { ...p, frame: 0x246 + Math.min(4, p.hero!.rec.h_race as number) } : p);   // _SetDisgTiles: E00 0x246 + race
-    view.draw(level, room ? 5 : lead.x, room ? 4 : lead.y, figures, people, phase, icons, fx.overlay);
+    view.draw(level, room ? 5 : lead.x, room ? 4 : lead.y, figures.filter(f => !hidden.has(f)), people, phase, icons, fx.overlay);
     const where = wild || patch || (fight && outside?.level.loc.kind === 'world') ? `${world.rec?.name.replace(/\s*[MX]$/, '') ?? ''}, ${tables.weathers[clock.weather]}` : place();
     status.textContent = `${clock}  —  ${where}${message ? '  —  ' + message : ''}`;
   };
@@ -420,20 +421,46 @@ async function main() {
    *  holding the Orb lifts it (5), everyone is blasted (6), "Alas, your quest has failed." (comtxt 0x50) and the game
    *  restarts. With it: Jemil banishes Zakhad (7, 8; %o the best magic, _HighStat 0x1A), event 122, Zidoni and the
    *  Prince (9-12), and the party is transported (ovl_0f20 without the White Scroll's line) to the room behind the
-   *  first door, the banquet. The sounds and redraws of Zakhad are not built. */
-  const ending = () => {
+   *  first door, the banquet. Effects (effects.md): the window flashes (ovl_187e, _InvertWindow(0, 3)) and people
+   *  come and go with _MultiFX (P08 0x1890 appear, 0x18B4 vanish); the doom blasts each member, then the room's first
+   *  person (ovl_0c41 → 0x1986: a burst around them, a flash, thunder, gone). */
+  const ending = async () => {
     const t = level.loc.texts, line = (n: number, h: Hero = hero, o = '') => panel.line(format(t[n], h, o));
     const best = (f: string) => party.members.reduce((a, m) => (m.hero.rec[f] as number) > (a.hero.rec[f] as number) ? m : a).hero.name;
-    events.add(121); figures = people(); render();
+    panel.set([]);
+    const appear = async () => {                                        // ovl_13bb (the room's people), then 0x1890
+      const old = new Set(figures.map(f => f.num));
+      figures = people();
+      const come = figures.filter(f => !old.has(f.num));
+      come.forEach(f => { hidden.add(f); fx.play(FX.appear(f)); });
+      await fx.idle();
+      come.forEach(f => hidden.delete(f)); render();
+      return come;
+    };
+    const blast = async (p: { x: number; y: number }) => {
+      fx.play([...FX.bigBang(p, 0), ...FX.spef3single(p, 0xf)]); sfx(29);  // MultiBang(0), the flash, thunder (no file)
+      await fx.idle();
+      hidden.add(p); render();
+    };
+    fx.play(FX.invert(2400, 3)); await fx.idle();
+    events.add(121); const zakhad = await appear();
     line(3); line(4, hero, best('h_intellg'));
     if (!events.has(123)) {
       line(5, party.members.find(m => m.hero.slot(ORB) >= 0)?.hero ?? hero); sfx(27); line(6);   // the Orb shatters
+      for (const m of [...party.members].reverse()) await blast(m);
+      const first = figures.find(f => !zakhad.includes(f));             // the room's first NPC (npclocs 0), never Zakhad
+      if (first) await blast(first);
       panel.line(comtxt[0x50]);                                         // "Alas, your quest has failed."
       return panel.set([{ label: cmd[1], act: () => location.reload() }]);
     }
     const mage = best('h_magic');
-    line(7); sfx(28); line(8, hero, mage);                              // Zakhad shrieks
-    events.add(122); figures = people(); render();                     // (sound 15 comes after Zakhad's fade, not built)
+    line(7); sfx(28);                                                   // Zakhad shrieks and fades (0x18B4)
+    events.add(122); const stay = new Set(people().map(f => f.num)); events.delete(122);
+    const gone = figures.filter(f => !stay.has(f.num));
+    gone.forEach(f => { hidden.add(f); fx.play(FX.vanish(f)); });
+    await fx.idle();
+    line(8, hero, mage);
+    events.add(122); sfx(15); await appear();                          // Zidoni
     for (const n of [9, 10, 11, 12]) line(n, hero, mage);
     panel.set([{ label: cmd[0], act: async () => {
       scene = null; outside = null;
@@ -1324,7 +1351,7 @@ async function main() {
         if (no) { message = no; return render(); }
         if (scene) {                                                     // P08 L_06fa: "Do you want to leave?"
           panel.show(); panel.line(comtxt[0x23]);
-          panel.set([{ label: cmd[3], act: () => { if (events.has(120)) return ending(); close(); void leave(exit).then(render); } }, { label: cmd[4], act: () => close() }]);
+          panel.set([{ label: cmd[3], act: () => { if (events.has(120)) return void ending(); close(); void leave(exit).then(render); } }, { label: cmd[4], act: () => close() }]);
           return render();
         }
         if (service) service.leave(() => void leave(exit).then(render));
