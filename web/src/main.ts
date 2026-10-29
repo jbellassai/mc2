@@ -1655,7 +1655,7 @@ async function main() {
       if (i < 0) continue;
       const p = list[i], on = party.members.some(m => m.x === x && m.y === y);
       if (p.type === 0 && !ambushed.has(p.d2)) return ambushAt(p);
-      if ((p.type === 1 || p.type === 5) && on) return jump(p.d1, p.d2, p.d3, comtxt[p.type === 1 ? 0x7b : 0x7e]);
+      if ((p.type === 1 || p.type === 5) && on) return jump(p.d1, p.d2, p.d3, p.type);
       if (p.type === 6 && remark(p)) spotsDone.add(i);
     }
   };
@@ -1674,12 +1674,24 @@ async function main() {
     startFight(lv, f, diff, () => ambushed.add(p.d2), null, !seen);
   };
   /** Types 1 (teleportal: "The party is swept into a teleportal!" first) and 5 (hidden chute: "The party slides through
-   *  a hidden chute!" after): another level, PGM record `pgm`, with the window at (x, y) (assumed, as for exits). */
-  const jump = async (pgm: number, x: number, y: number, text: string) => {
-    const g = level.loc.pgms[pgm];
+   *  a hidden chute!" after): another level, PGM record `pgm`, with the window at (x, y) (assumed, as for exits). A
+   *  teleportal plays 0x14 and the party dissolves out (P02 ovl_151a), then `_mfxfadein` has the arrival play 0x14
+   *  again and dissolve it in (ovl_0e9a, after the new map is drawn); the chute has neither. */
+  const jump = async (pgm: number, x: number, y: number, type: number) => {
+    const g = level.loc.pgms[pgm], swept = type === 1, text = comtxt[swept ? 0x7b : 0x7e];
     if (!g || g.program !== 2) { message = text; return; }
+    if (swept) { message = text; sfx(20); await fade(true); }
     go(await Level.load(`D${two(g.datafile)}`, g.tileset), x + 4, y + 3);
     message = text;
+    if (swept) { render(); sfx(20); await fade(false); }
+  };
+  /** The party dissolving out of its squares (and staying hidden) or into them (FX.teleport). */
+  const fade = async (out: boolean) => {
+    party.members.forEach(m => hidden.add(m));
+    fx.play(FX.teleport(party.members.map(m => ({ x: m.x, y: m.y, num: m.num, tile: 0 })), out));
+    await fx.idle();
+    if (!out) party.members.forEach(m => hidden.delete(m));
+    render();
   };
   /** Type 6, a companion's remark: the first of members 1-5 whose race is d1 & 0x7F (d1 ≥ 0x80) or who is companion d1
    *  (0xFE: no speaker needed); none, or event d2 already set (d2 ≠ 0xFF) → nothing, the spot stays armed. Else the
@@ -2022,8 +2034,8 @@ async function main() {
       if (special?.piece(item)) {                                      // a teleportal piece on a pedestal (P09)
         close();
         return mark(say(comtxt[0x0d]), (x, y) => {
-          const to = adjacent(x, y) ? special!.place(item, x, y, who) : null;
-          if (to) void toWorldAt(to.x, to.y).then(render);
+          const to = adjacent(x, y) ? special!.place(item, x, y, who) : null;   // P09 0xC58: the party dissolves, then 0x14
+          if (to) void fade(true).then(() => { sfx(20); return toWorldAt(to.x, to.y); }).then(() => { party.members.forEach(m => hidden.delete(m)); render(); });
         });
       }
       if (item === 0x40) return who === hero ? recallAway() : done(format(comtxt[0x1d], hero, hero.name));   // "Only %h can do that."

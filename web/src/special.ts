@@ -292,7 +292,6 @@ export class Special {
     const t = hex(this.level.loc.tables.hroomptr);
     for (let k = 0; k + 13 <= t.length && t[k] !== 0xff; k += 13)
       if (t[k] === this.pedestals[0] && t[k + 1] === this.pedestals[1] && t[k + 2] === this.pedestals[2]) {
-        this.ctx.sound(20);                                         // P09 0xC6E: the party is swept away
         return { x: t[k + 11], y: t[k + 12] };
       }
     for (let i = 0; i < 3; i++) this.level.set(4 + i, 3, 0x70);

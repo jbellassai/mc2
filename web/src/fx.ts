@@ -78,6 +78,9 @@ export const FX = {
   blink: (from: Person | null, to: Person | null): Frame[] => dissolve([
     ...from ? [{ x: from.x, y: from.y, num: from.num, tile: from.tile, sheet: from.sheet, out: true }] : [],
     ...to ? [{ x: to.x, y: to.y, num: to.num, tile: to.tile, sheet: to.sheet }] : []], 600),
+  /** P02 ovl_151a / ovl_0e9a, P09 0xC58: the whole party dissolves out of a teleportal and into its arrival square
+   *  (`_movetileFX` / `_movectileFX`, flag 6, timer 10000: one pass, about 1 s against combat's 6000 = 600 ms). */
+  teleport: (people: Person[], out: boolean): Frame[] => dissolve(people.map(p => ({ ...p, out })), 1000),
   /** P06 ovl_1144 / ovl_138c: the missile's tile square by square along `path`; types 1-4 cycle three tiles. */
   missile: (path: At[], tile: number, sheet?: 'E01', cycle = false): Frame[] =>
     path.map((p, i) => ({ icons: [{ x: p.x, y: p.y, frame: cycle ? tile + i % 3 : tile, sheet }], ms: 40 })),
