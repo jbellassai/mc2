@@ -2,7 +2,8 @@
 // the wilderness arena (P96 formation 0, random monster squares), rounds and actions (P94 ovl_04a6), melee and bow
 // attacks with dodge, knockdown, armour, weapon wear and skill gains (P06 ovl_050a/ovl_0cde, FAR_SKILLUP), and the
 // monster AI's targeting and movement (P94 ovl_0b4b), magic damage and missiles for the heroes' spells (spells.ts).
-// Monsters cast their two spells by the leader race's D06 chance (spells.ts). The pre-fight Talk (rally, hailing the leader) is here and in main.ts. Not yet: Doombeast images.
+// Monsters cast their two spells by the leader race's D06 chance (spells.ts). The pre-fight Talk (rally, hailing the leader) is here and in main.ts.
+// Records 6-23 act by the AI whichever side they are on (a betrayed monster, a summoned one, a hero's double). Not yet: Doombeast images.
 import { json } from './pack';
 import type { Hero } from './hero';
 import type { Level } from './level';
@@ -19,7 +20,8 @@ export interface CombatData { monsters: Monster[]; groups: number[][]; weapons: 
   loot: { thresholds: number[]; items: number[]; amounts: number[][]; an: number[] }; resurrect: string[];
   d06: { cast: number[]; crit: number[]; crit2: number[]; prey: number[]; counts: number[]; armor: number[]; dodge: number[];
     gonshi: number[]; sermin: number[]; potion: number[] };
-  spells: { names: string[]; energy: number[]; where: number[]; side: number[]; skill: number[]; here: number[] };
+  spells: { names: string[]; energy: number[]; where: number[]; side: number[]; skill: number[]; here: number[];
+    summon: number[]; destroy: number[] };
   songs: { instruments: number[]; races: number[][]; names: string[][] };
   parley: { texts: string[]; kins: string[]; attitudes: string[]; worth: number[]; rolls: number[] } }
 
@@ -167,14 +169,25 @@ export class Fight {
   }
   enemies(r: Rec): Rec[] { return this.recs.filter(e => e.side !== r.side && this.visible(e)); }
 
-  /** INT61_08: 1 = no monster left, 2 = every party member dead, 3 = the rest of the party fled, else 0. */
+  /** INT61_08: 1 = no record 6-23 on the monsters' side alive (or dead undead, who rise), else 0 while anyone on the
+   *  party's side is alive; then 3 when a hero fled (not dead, not removed by a spell), else 2. */
   outcome(): 0 | 1 | 2 | 3 {
     if (this.ended) return 1;
-    const party = this.recs.filter(r => r.side === 0);
-    if (!this.recs.some(r => r.side === 1 && this.alive(r))) return 1;
-    if (party.every(r => r.state & 0x80)) return 2;
-    if (!party.some(r => this.alive(r))) return 3;
-    return 0;
+    if (!this.recs.some(r => !r.hero && r.side === 1 && (this.alive(r) || (r.state & 0x82) === 0x82))) return 1;
+    if (this.recs.some(r => r.side === 0 && this.alive(r))) return 0;
+    return this.recs.some(r => r.hero && !(r.state & 0x88)) ? 3 : 2;
+  }
+
+  /** A record copied into slot `recno` (22 Double, 23 Summon), which replaces whoever held it. */
+  spawn(r: Rec) {
+    const i = this.recs.findIndex(o => o.recno === r.recno);
+    if (i >= 0) this.recs[i] = r; else this.recs.push(r);
+  }
+
+  /** The first free square next to `r` (W N E S NW NE SE SW), where Double and Summon put their copy (assumed). */
+  nextTo(r: Rec): { x: number; y: number } | null {
+    const k = DX.findIndex((dx, k) => this.free(r.x + dx, r.y + DY[k]));
+    return k < 0 ? null : { x: r.x + DX[k], y: r.y + DY[k] };
   }
 
   /** P96 ovl_0b5c: the monsters' attitude (`_w_attitudes` 0-7). No speaker → 6, a speaker of race ≥ 25 → 7. Else
@@ -516,7 +529,7 @@ export class Fight {
       r.target = t ? t.recno : NONE;
     }
     // D06 ptr0: the leader race's chance to cast instead (ovl_1553); a monster's spells cost it nothing here.
-    if (r.side && rnd(100) < this.data.d06.cast[ldrace]) {
+    if (r.race >= 5 && rnd(100) < this.data.d06.cast[ldrace]) {
       const s = monsterSpell(this, r, this.data.monsters[r.race - 5].spells);
       if (s) { r.moves--; return [`${r.name}: ${this.data.spells.names[s.spell]}`, ...effect(this, r, s.spell, s.target, text)]; }
     }

@@ -39,7 +39,7 @@ export class View {
   }
   /** `_MultiFX` part way: the pixels of the person's sprite that the pass has reached (fx.ts, Ghost). */
   private ghost(g: Ghost, cx: number, cy: number) {
-    const [im, k] = this.spriteOf(g.num, g.tile), cols = this.sprites.columns, b = this.tintBuf, c = b.getContext('2d', { willReadFrequently: true })!;
+    const [im, k] = g.sheet ? [this.monsters, g.tile] : this.spriteOf(g.num, g.tile), cols = this.sprites.columns, b = this.tintBuf, c = b.getContext('2d', { willReadFrequently: true })!;
     b.width = b.height = 16;
     c.drawImage(im, (k % cols) * 16, Math.floor(k / cols) * 16, 16, 16, 0, 0, 16, 16);
     const img = c.getImageData(0, 0, 16, 16), d = img.data;
@@ -152,7 +152,7 @@ export class View {
 
   /** `phase` counts animation steps: tile cycles advance every step, animated NPCs flip every few (_NPCANIMATE). */
   /** `icons`: E00 frames (mushrooms, guards) or E01 frames (monsters in combat) under the figures; `fx` on top. */
-  draw(lv: Level, cx: number, cy: number, figures: Figure[], party: { x: number; y: number; num: number; frame?: number }[], phase = 0,
+  draw(lv: Level, cx: number, cy: number, figures: Figure[], party: { x: number; y: number; num: number; frame?: number; faint?: boolean }[], phase = 0,
        icons: Icon[] = [], fx?: Overlay) {
     const ox = cx - (COLS >> 1), oy = cy - (ROWS >> 1);
     const ctx = this.ctx;
@@ -166,7 +166,8 @@ export class View {
         if (cyc) t = cyc[phase % cyc.length];
         if (t !== 0xff) ctx.drawImage(lv.tiles, (t % 16) * 16, (t >> 4) * 16, 16, 16, x * TILE, y * TILE, TILE, TILE);
       }
-    const cols = this.sprites.columns;
+    const cols = this.sprites.columns, hid = new Set((fx?.hide ?? []).map(h => `${h.x},${h.y}`));
+    icons = icons.filter(i => !hid.has(`${i.x},${i.y}`)); party = party.filter(p => !hid.has(`${p.x},${p.y}`));
     for (const i of icons) this.sheet(i.sheet === 'E01' ? this.monsters : this.heroes, i.frame, cols, i.x - ox, i.y - oy);
     for (const f of figures) {
       // _SingleNPCDraw: companions (num < 0x20) use their hero frames; anyone else the E02 sprite `tile`.
@@ -176,7 +177,11 @@ export class View {
         this.sheet(this.folk, n.start + (n.frames > 1 ? (phase >> 2) & 1 : 0), cols, f.x - ox, f.y - oy);   // frames 0/1 only
       }
     }
-    for (const p of party) if (p.frame === undefined) this.hero(p.num, p.x - ox, p.y - oy); else this.sheet(this.heroes, p.frame, cols, p.x - ox, p.y - oy);
+    for (const p of party) {
+      ctx.globalAlpha = p.faint ? 0.4 : 1;                      // an invisible member of the party
+      if (p.frame === undefined) this.hero(p.num, p.x - ox, p.y - oy); else this.sheet(this.heroes, p.frame, cols, p.x - ox, p.y - oy);
+    }
+    ctx.globalAlpha = 1;
     if (!fx) return;
     for (const i of fx.icons) this.sheet(i.sheet === 'E01' ? this.monsters : this.heroes, i.frame, cols, i.x - ox, i.y - oy);
     for (const g of fx.ghosts ?? []) this.ghost(g, g.x - ox, g.y - oy);

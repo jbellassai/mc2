@@ -19,7 +19,7 @@ import { Patches, type Patch } from './patch';
 import { Fight, type Rec } from './combat';
 import { Chamber } from './chamber';
 import { newGame, landed } from './newgame';
-import { aim as spellAim, BUILT, cost as spellCost, effect } from './spells';
+import { BUILT, cost as spellCost, effect, targets as spellTargets } from './spells';
 import { sfx, song, audio, saveAudio } from './sound';
 import { Fx, FX } from './fx';
 import { openScenario, editing, saveFile, type Snapshot } from './scenario';
@@ -104,13 +104,16 @@ async function main() {
   const hidden = new Set<object>();   // people the ending is fading in or has blasted away
   const render = () => {
     const room = level.loc.kind === 'room', wild = level.loc.kind === 'world';
-    const icons: Icon[] = fight ? fight.recs.filter(r => r.side && fight!.alive(r)).map(r => ({ x: r.x, y: r.y, frame: r.tile, sheet: 'E01' }))
+    // in a fight: monsters by their E01 tile, heroes and a double as people; the invisible are not drawn, but for the party's own (faint)
+    const shown = (r: Rec) => fight!.alive(r) && (!r.invis || !r.side);
+    const icons: Icon[] = fight ? fight.recs.filter(r => r.num === 0xff && shown(r)).map(r => ({ x: r.x, y: r.y, frame: r.tile, sheet: 'E01' }))
       : wild ? [...(seeAll() ? world.guards() : []), ...world.patrols(lead.x, lead.y, seeAll())].map(g => ({ x: g.x, y: g.y, frame: 0x0f }))
           .concat(world.ships.boats().map(b => ({ ...b, frame: 0x12 })))
       : patch?.icons() ?? (detect && level.loc.kind === 'level'   // V02 INT60_0d: Detect shows the teleportal spots
         ? (level.loc.spots ?? []).filter(p => p.type === 1).map(p => ({ x: p.x, y: p.y, frame: 10 + (phase & 1) })) : []);
-    const people = (fight ? fight.recs.filter(r => !r.side && fight!.alive(r)) : wild ? [lead] : party.members.filter(m => !hidden.has(m)))   // world: the leader alone
-      .map(p => disguise ? { ...p, frame: 0x246 + Math.min(4, p.hero!.rec.h_race as number) } : p);   // _SetDisgTiles: E00 0x246 + race
+    const people = (fight ? fight.recs.filter(r => r.num !== 0xff && shown(r)).map(r => ({ x: r.x, y: r.y, num: r.num, race: r.race, faint: r.invis > 0 }))
+      : (wild ? [lead] : party.members.filter(m => !hidden.has(m))).map(m => ({ x: m.x, y: m.y, num: m.num, race: m.hero.rec.h_race as number, faint: false })))   // world: the leader alone
+      .map(p => disguise ? { ...p, frame: 0x246 + Math.min(4, p.race) } : p);   // _SetDisgTiles: E00 0x246 + race
     view.draw(level, room ? 5 : lead.x, room ? 4 : lead.y, figures.filter(f => !hidden.has(f)), people, phase, icons, fx.overlay);
     const where = wild || patch || (fight && outside?.level.loc.kind === 'world') ? `${world.rec?.name.replace(/\s*[MX]$/, '') ?? ''}, ${tables.weathers[clock.weather]}` : place();
     status.textContent = `${clock}  —  ${where}${message ? '  —  ' + message : ''}`;
@@ -446,7 +449,10 @@ async function main() {
       return come;
     };
     const blast = async (p: { x: number; y: number }) => {
-      fx.play([...FX.bigBang(p, 0), ...FX.spef3single(p, 0xf)]); sfx(29);  // MultiBang(0), the flash, thunder (no file)
+      // ovl_1a8a: the blob map spreads 8-way from the square, walls ignored (ovl_1b64, the wall test, is empty);
+      // stages blob + 0x14 through MultiBang(0), the flash, thunder (no file)
+      const d = Array.from({ length: 99 }, (_, i) => Math.max(Math.abs(i % 11 - p.x), Math.abs(Math.floor(i / 11) - p.y)));
+      fx.play([...FX.blast(d, true), ...FX.spef3single(p, 0xf)]); sfx(29);
       await fx.idle();
       hidden.add(p); render();
     };
@@ -899,7 +905,7 @@ async function main() {
   /** The next hero with actions left acts; when none is left, the monsters' phase. */
   const partyTurn = () => {
     if (finished()) return;
-    actor = fight!.recs.find(r => !r.side && fight!.alive(r) && r.moves > 0) ?? null;
+    actor = fight!.recs.find(r => r.hero && !r.side && fight!.alive(r) && r.moves > 0) ?? null;
     if (!actor) return void monsterPhase();
     message = `${actor.name}: ${actor.moves}`;
     if (heading || autoHeroes.has(actor.recno)) return void autoTurn(actor);
@@ -976,9 +982,9 @@ async function main() {
     if (sp >= 30 && sp <= 35 && f.magbits.has(sp)) return void panel.line(comtxt[0x42]);
     const need = spellCost(f, sp, r.h_magic);
     if (r.h_energy < need) return void panel.line(comtxt[0x41]);                          // "Not enough energy!"
-    const go = (t: Rec | null) => {
+    const go = (t: Rec | null, at?: { x: number; y: number }) => {
       panel.line(`${a.name}: ${cdata.spells.names[sp]}`);
-      report(BUILT.has(sp) ? effect(f, a, sp, t, ctext) : [comtxt[0x119]]);
+      report(BUILT.has(sp) ? effect(f, a, sp, t, ctext, at) : [comtxt[0x119]]);
       r.h_energy -= need; a.hero!.isHeTr();
       const row = Math.floor(sp / 7), col = sp % 7;
       if (--r.h_spells[row][col] <= 0) { r.h_spells[row][col] = 0; r.h_rdyspl = 0xff; }
@@ -987,11 +993,12 @@ async function main() {
       a.moves--;
       partyTurn();
     };
-    const side = spellAim(f, sp);
-    if (!side) return go(null);
-    const pool = sp === 40 ? f.recs.filter(t => t.side && (t.state & 0x82) === 0x82 && !(t.state & 8))
-      : f.recs.filter(t => (side === 'own' ? t.side === a.side : t.side !== a.side) && f.visible(t));
-    panel.set([...pool.map(t => ({ label: `${t.name} (${t.x},${t.y})`, act: () => go(t) })), { label: cmd[0], act: partyTurn }]);
+    const pool = spellTargets(f, a, sp);
+    if (!pool) return go(null);
+    // Jump (V06 INT61_16): "Mark who jumps." (0x111), then "Jumps where?" (0x65) on the map; Escape gives up the cast
+    const pick = (t: Rec) => sp !== 24 ? go(t) : (panel.set([]), mark(comtxt[0x65], (x, y) => go(t, { x, y }), partyTurn));
+    if (sp === 24) panel.line(comtxt[0x111]);
+    panel.set([...pool.map(t => ({ label: `${t.name} (${t.x},${t.y})`, act: () => pick(t) })), { label: cmd[0], act: partyTurn }]);
   };
   /** Draw (_DrawWeap): a weapon 9-0x1E from the pack; refused for another race (comtxt 0x103), broken (0x39) or too
    *  heavy (0x69). Takes no action. */
@@ -1039,7 +1046,7 @@ async function main() {
     actor = null;
     panel.set([]);
     fight!.endSide(0);
-    for (const m of fight!.timestop ? [] : fight!.recs.filter(r => r.side)) {
+    for (const m of fight!.timestop ? [] : fight!.recs.filter(r => !r.hero).sort((a, b) => a.recno - b.recno)) {
       while (fight && m.moves > 0 && fight.alive(m) && !fight.outcome()) {
         report(fight.monsterAct(m, ctext));
         render();
@@ -1067,7 +1074,7 @@ async function main() {
     const value = fight!.rollLoot(fightDiff, events, tables.lootvalues);
     for (const { hero: h } of party.members)
       if (h.rec.h_relatn === 2) h.rec.h_partybucks = Math.min(30000, (h.rec.h_partybucks as number) + value);
-    if (fight!.recs.some(r => !r.side && (r.state & 0x98) === 0x80)) { panel.line(comtxt[0x110]); raise(); }
+    if (fight!.recs.some(r => r.hero && (r.state & 0x98) === 0x80)) { panel.line(comtxt[0x110]); raise(); }
     else searchAsk();
     render();
     return true;
@@ -1078,9 +1085,9 @@ async function main() {
    *  everyone that you want to?" (P95 text 0); Yes (or nobody dead) goes on to the search. Use, and the dead companion
    *  who will not be left behind with a quest item (ovl_0c87, comtxt 0x114), are not built. */
   const raise = () => {
-    const f = fight!, dead = () => f.recs.some(r => !r.side && (r.state & 0x98) === 0x80);
+    const f = fight!, dead = () => f.recs.some(r => r.hero && (r.state & 0x98) === 0x80);
     if (!dead()) return searchAsk();
-    const living = f.recs.filter(r => !r.side && f.alive(r));
+    const living = f.recs.filter(r => r.hero && f.alive(r));
     const who = (then: (a: Rec) => void) => living.length === 1 ? then(living[0])
       : panel.set([...living.map(r => ({ label: r.name, act: () => then(r) })), { label: cmd[0], act: raise }]);
     panel.set([{ label: cmd[35], act: () => who(a => recall(a, raise)) }, { label: cmd[27], act: () => who(resurrect) },
@@ -1270,7 +1277,7 @@ async function main() {
   const searchAsk = () => {
     if (!fight!.recs.some(r => r.loot)) return void panel.set([{ label: cmd[0], act: endFight }]);
     panel.line(comtxt[0xc8]);
-    const living = fight!.recs.filter(r => !r.side && fight!.alive(r));
+    const living = fight!.recs.filter(r => r.hero && fight!.alive(r));
     panel.set([{ label: cmd[3], act: () => {
       if (living.length === 1) return search(living[0].hero!);
       panel.line(comtxt[0x10f]);
@@ -1429,7 +1436,9 @@ async function main() {
 
   // ---- digging and lockpicking (P02 ovl_1131 Shovel, ovl_1044 Pick; rules/locations.md, Towns) ----
   const chests = new Set<string>();                                  // `_chests`, by level and treasure group
-  const mark = (prompt: string, then: (x: number, y: number) => void) => { message = prompt; marking = then; render(); };
+  const mark = (prompt: string, then: (x: number, y: number) => void, cancel: () => void = () => {}) => {
+    message = prompt; marking = then; unmark = cancel; render();
+  };
   const adjacent = (x: number, y: number) => Math.max(Math.abs(lead.x - x), Math.abs(lead.y - y)) <= 1;
   const spotAt = (x: number, y: number, type: number) => (level.loc.spots ?? []).find(p => p.x === x && p.y === y && p.type === type);
   /** Shovel: "Where shall %h dig?" (0x7F); an unwalkable square without a Look text → "%h is unable to dig there."
@@ -2094,8 +2103,9 @@ async function main() {
 
   let looking = false, talking = false;
   let marking: ((x: number, y: number) => void) | null = null;   // _Mark: the next direction picks a square
+  let unmark = () => {};                                           // Escape while marking
   view.canvas.addEventListener('click', e => {
-    if (panel.open) return;
+    if (panel.open && !marking) return;                           // in a fight the panel stays open (Jump)
     const t = view.cellAt(e, level.loc.kind === 'room' ? 5 : lead.x, level.loc.kind === 'room' ? 4 : lead.y);
     if (marking) { const f = marking; marking = null; message = ''; f(t.x, t.y); render(); return; }   // _Mark by clicking
     look(t.x, t.y);
@@ -2125,6 +2135,7 @@ async function main() {
     if (SANDBOX && e.key === 'F2' && !fight && !panel.open) { e.preventDefault(); scenarioCmd(); return; }
     if (fight) {
       if (heading) { heading = false; return; }                   // any key ends Head (after the current action)
+      if (marking) { if (e.key === 'Escape') { marking = null; message = ''; unmark(); render(); } return; }   // a square by clicking
       const k = e.key.startsWith('Arrow') && KEYS[e.key];                 // letters are the fight's command keys
       if (k && actor && !autoHeroes.has(actor.recno)) { e.preventDefault(); fightStep(...k); }
       return;
@@ -2132,7 +2143,7 @@ async function main() {
     if (panel.open) return;
     const c = commands.find(c => c.key.length === 1 && c.key.toLowerCase() === e.key.toLowerCase());
     if (c) { c.act(); return; }
-    if (e.key === 'Escape' && marking) { marking = null; message = ''; render(); return; }
+    if (e.key === 'Escape' && marking) { marking = null; message = ''; unmark(); render(); return; }
     const k = KEYS[e.key];
     if (!k) return;
     e.preventDefault();
