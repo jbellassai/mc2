@@ -84,6 +84,7 @@ async function main() {
   let scene: Scene | null = null;                                       // the P08 room the party is in
   const scroll = { item: 0 };                                           // `_scrollonfloor` (P08, saved)
   let disasterday = 0;                                                  // `_disasterday` (White Scroll; 0 = none)
+  let vankruhxy: [number, number] = [0, 0];                             // `_VANKRUHXY`: where Vankruh stood when greeted
   let speaker: Member | null = null;                                    // who talks next (P08 rooms ask)
   let lastStep = { dx: 0, dy: -1 };                                     // `_lastdir`: the last step, for P08 placement
   let patch: Patch | null = null;                                        // the mushroom patch the party is in
@@ -889,7 +890,14 @@ async function main() {
     panel.set([{ label: cmd[3], act: () => off(heroes) }, { label: cmd[4], act: () =>
       panel.set([...heroes.map(r => ({ label: r.name, act: () => off([r]) })), { label: cmd[0], act: prefight }]) }]);
   };
-  const begin = (ambush: boolean) => { if (ambush) void monsterPhase(); else partyTurn(); };
+  /** The fight begins (P96 L_0583). In a room fight (`_cmbtyp` ≥ 2) with the first monster Vankruh or Zakhad (ovl_05d5):
+   *  "Vankruh's magic spell is now in place!" (comtxt 0x105) or "The demon seals the chamber!" (0x116), and no flee
+   *  squares (V06 INT61_44: `_fleetbl` emptied). */
+  const begin = (ambush: boolean) => {
+    const f = fight!, race = f.recs.find(r => r.recno === 6)?.race;
+    if (f.room && (race === 28 || race === 30)) { panel.line(comtxt[race === 28 ? 0x105 : 0x116]); f.flee.clear(); }
+    if (ambush) void monsterPhase(); else partyTurn();
+  };
   /** Rally (ovl_06e7 menu 14 item 0): alone → "There is no one to rally!" (0) and back; a coin flip → "The enemy
    *  attacks!!" (4) and the monsters move first; else the speech (1) and RndCo(100) < the leader's leadership gives every
    *  other member bravery + RndCo(3)+1 and agility + 4, each capped at 12 (2; P95 restores both after the fight),
@@ -918,6 +926,8 @@ async function main() {
     const f = fight!, mood = f.mood, kin = cdata.parley.kins[f.speaker], v = { h: lead.hero.name, a: kin, l: kin };
     if (f.recs.find(r => r.side)?.race === 28) {
       if (f.recs.some(r => !r.side && r.weapon !== 0xff)) { panel.line(comtxt[0x107]); return begin(true); }
+      const v = f.recs.find(r => r.recno === 6)!;
+      vankruhxy = [v.x, v.y];                                            // P96 0x84B: _VANKRUHXY, for the chamber
       panel.line(comtxt[0x108]); events.add(66); events.add(150);
       f.leave(); return void finished();
     }
@@ -1227,6 +1237,7 @@ async function main() {
   const enterChamber = (ch: Chamber, side: number, back: { level: Level; x: number; y: number }, fromFight: boolean) => {
     const recs = fight?.recs;
     level = ch.level; chamber = ch; chamberBack = back; outside = null;
+    ch.meet(events, vankruhxy);
     const taken: Member[] = [];
     party.members.forEach((m, i) => {
       const r = recs?.[i];
@@ -1958,7 +1969,7 @@ async function main() {
         });
       }
       if (item === 0x40) return who === hero ? recallAway() : done(format(comtxt[0x1d], hero, hero.name));   // "Only %h can do that."
-      if (chamber?.candle && item === 0x4a + chamber.type && !chamber.freed && !events.has(0x3c + chamber.type)) return done(candle(who, item));
+      if (chamber?.candle && chamber.type <= 5 && item === 0x4a + chamber.type && !chamber.freed && !events.has(0x3c + chamber.type)) return done(candle(who, item));
       if (chamber && item === 0x50 && chamber.hr.reward && !(chamber.hr.reward & 0x80)) return openChest(who);
       if (level.loc.kind === 'level' && (item === 0x50 || item === 0x46)) { close(); return item === 0x50 ? lockpick(who) : dig(who); }
       if (!tables.useall.includes(item) || party.members.length < 2) return done(once(who, item));
@@ -2108,7 +2119,7 @@ async function main() {
     events: [...events], party: party.snapshot(), level: { id: level.id, ts: level.tileset }, at: { x: lead.x, y: lead.y },
     world: world.snapshot(), patches: [...patches.left], dunrms: [...dunrms], duntre: [...duntre], chests: [...chests],
     ambushed: [...ambushed], rent: [...rent], walk: [walkSteps, walkTicks], casino: [...casino], gates: [...gates],
-    detect, snakes: snakes.map(r => [...r] as [string, number, number, number]), scroll: scroll.item, disasterday,
+    detect, snakes: snakes.map(r => [...r] as [string, number, number, number]), scroll: scroll.item, disasterday, vankruhxy,
     assigns: assigns.snapshot(), wild: wildAt, been, disguise,
   });
   type Save = ReturnType<typeof snapshot>;
@@ -2125,7 +2136,7 @@ async function main() {
     casino.splice(0, 8, ...(sv.casino ?? casino.map(() => 1000)));
     gates.clear(); (sv.gates ?? []).forEach(g => gates.add(g));
     detect = sv.detect ?? 0; snakes.splice(0, snakes.length, ...(sv.snakes ?? []));
-    scroll.item = sv.scroll ?? 0; disasterday = sv.disasterday ?? 0;
+    scroll.item = sv.scroll ?? 0; disasterday = sv.disasterday ?? 0; vankruhxy = sv.vankruhxy ?? [0, 0];
     if (sv.assigns) assigns.restore(sv.assigns); else assigns.reset();
     wildAt = sv.wild ?? { x: 29, y: 56 }; been = sv.been ?? 0x8000; disguise = sv.disguise ?? 0;
     [walkSteps, walkTicks] = sv.walk;
@@ -2250,7 +2261,7 @@ async function main() {
     await world.at(x, y, clock);
     message = '';
   }
-  if (import.meta.env.DEV) Object.assign(window, { dbg: { party, world, clock, events, assigns, dunrms, fx, FX, get level() { return level; }, get fight() { return fight; } } });   // for scripts/shot.mjs eval:
+  if (import.meta.env.DEV) Object.assign(window, { dbg: { party, world, clock, events, assigns, dunrms, fx, FX, get level() { return level; }, get fight() { return fight; }, get chamber() { return chamber; } } });   // for scripts/shot.mjs eval:
   render();
   document.body.dataset.ready = '1';                         // scripts/shot.mjs waits for it
 }

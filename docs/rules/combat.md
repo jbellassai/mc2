@@ -142,6 +142,8 @@ Texts are V06's own table (`_txtptr` = V06 word 5 = file 0x0B, `ModTxt(n)`); `%l
 Yes on 2–4: "The monsters leave." (37), every monster `c_state |= 0x10` off the board, `_endcmbt` = 4; No: the fight begins. P95 turns `_endcmbt` 4 into 1 (so the guard or patrol counts as beaten), skips "VICTORY!", keeps Gonshi/Nift, and finds no loot (no monster left; `_BRIBEAMT` ≠ 0).
 
 **Vankruh** (first monster race 28): Greet passes only if no party member has a weapon ready (`c_rdywpn` 0xFF, so Sheathe first): comtxt 0x108 (the rhyme), events 66 and 150, `_endcmbt` 4; otherwise comtxt 0x107 "Vankruh's eyes widen in affront and it attacks!" with `_ambflg`.
+**The fight begins** (P96 L_0583, after menu 10, unless `_endcmbt` is 4): in a fight that is neither a street nor a wilderness fight (`_cmbtyp` ≥ 2), when record 6 is Vankruh (race 28) or Zakhad (30), `ovl_05d5` prints "Vankruh's magic spell is now in place!" (comtxt 0x105) or "The demon seals the chamber!" (0x116) and `INT61_44` empties `_fleetbl`, so no monster can flee. Port: `main.ts` *begin*.
+
 **Sheathe** (`_Sheathe`, EXE 0957:0930): `_AllDoit` ("Is this order for everyone?", comtxt 0x3C, with 2+ members): Yes every member, No the acting member; `h_inhand` = 0xFF and in a fight `c_rdywpn` = 0xFF and the fist skill, then "Done." (0x37). Draw and Recall here are the combat menu's, for the acting member.
 
 Port (`main.ts` *prefight*, *sheathe*, *greet*, *prestep*, *fightLook*): Draw, Recall, Talk (Rally, Greet with Vankruh), Look, Begin, Sheathe, and the arrow keys; Draw and Recall ask which member acts. Assumed: the arrows move the first living hero (`_curpla` before the fight is not traced) and do not step off the arena.

@@ -36,7 +36,17 @@ export class Chamber {
       lv.loc.look = [{ x: 4, y: 1, text: c.type - 2 }];
       if (events.has(0x3c + c.type)) c.snuff();              // freed before: the flame is out
     }
+    if (c.type === 6) {                                      // Vankruh's chamber: its record is D98's KNPC 5 (meet)
+      const d98 = await json<Location>('locations/D98.json');
+      c.candle = { texts: d98.texts, words: d98.words, knpc: hex(d98.tables.knpcptr) };
+    }
     return c;
+  }
+
+  /** P07 ovl_069e on entry: once Vankruh has been greeted (event 66) it stands where it was (`_VANKRUHXY`, the KNPC
+   *  pointer advanced 0x37 to record 5) and speaks like a freed elden (`_swgreet` 2). */
+  meet(events: Set<number>, at: [number, number]) {
+    if (this.type === 6 && events.has(66)) this.freed = { ...this.elden(), x: at[0], y: at[1] };
   }
 
   /** ovl_07c1: the candle square (`_mapyl+6`, cell 5) becomes 0x5D. */
@@ -47,7 +57,7 @@ export class Chamber {
     const k = this.candle!.knpc, o = 11 * (this.type - 1);
     return { x: k[o], y: k[o + 1], tile: k[o + 2], type: k[o + 3], num: k[o + 4], name: this.candle!.words[this.type - 2] };
   }
-  /** What a freed elden says (`_swgreet` 2 → P07 ovl_04ef): D98 text 9 + the record's text byte. */
+  /** What a freed elden, or a greeted Vankruh, says (`_swgreet` 2 → P07 ovl_04ef): D98 text 9 + the record's text byte. */
   says(f: Figure): string | null {
     if (!this.freed || f.num !== this.freed.num) return null;
     return this.candle!.texts[9 + this.candle!.knpc[11 * (this.type - 1) + 5]];

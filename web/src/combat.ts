@@ -69,6 +69,8 @@ export class Fight {
   speaker = 0;
   /** `_cmbtyp` 0: a street fight, which has no pre-fight menu. */
   street = false;
+  /** `_cmbtyp` 5: a dungeon-room fight. */
+  room = false;
   /** `_endcmbt` set before any round: 1 the monsters surrendered (a win, with loot), 4 they left (P95 makes it a win). */
   ended: 0 | 1 | 4 = 0;
   /** P96 `OV_0x197`: the attitude rolled at set-up (`attitude()`), used by Greet. */
@@ -94,7 +96,9 @@ export class Fight {
    *  doors (`doors`, P96 ovl_0e19), taken one step inside the room. */
   static room(data: CombatData, level: Level, heroes: { hero: Hero; num: number }[], group: number, diff: number, side: number,
               doors: { x: number; y: number }[]): Fight {
-    return Fight.setup(data, level, heroes, group, diff, side, doors, null);
+    const f = Fight.setup(data, level, heroes, group, diff, side, doors, null);
+    f.room = true;
+    return f;
   }
 
   /** P96 setup: heroes at formation `side − 6` of `_setupxy` (member m at 6f + m, _PlacePerson), then the group's
