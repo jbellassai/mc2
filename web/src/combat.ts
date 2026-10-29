@@ -340,6 +340,7 @@ export class Fight {
     this.skilled.add(key);
     r[field] = skill + 1;
     a.wskl = Fight.wpnSkl(h); a.mskl = r.h_magic;
+    this.sound(13);                                       // FAR_SKILLUP: GameSound(0x0D)
     return [text(0x60, { h: a.name, l: ['Sword', 'Axe', 'Archery', 'Magic', 'Fist'][idx] })];
   }
 

@@ -1805,9 +1805,10 @@ async function main() {
       case 10: return target(h, (x, y) => done(format(comtxt[0xdb], h, h.name) + comtxt[vision(x, y)]), fail);   // Vision
       case 15:                                                                              // Walkwater: dungeons only
         if (!level.loc.locdiff) return done(comtxt[0x95]);
+        sfx(10);                                                                            // V02 INT60_01
         walkwater = Math.floor(m / 20) + 2;
         return done(ctext(0xc9, { b: walkwater }));
-      case 25: detect += m >> 4; return done(ctext(0xf6, { u: detect * 5 }));             // Detect
+      case 25: sfx(15); detect += m >> 4;                    // V02 ovl_0533 (three times; each start cuts the last) return done(ctext(0xf6, { u: detect * 5 }));             // Detect
       case 13: case 3: return target(h, (x, y) => {                                         // Pierce 'C', Repel 'B'
         const r = barrierRec(level.tile(x, y), sp === 13 ? 0x43 : 0x42);
         if (!r) return done(comtxt[0x95]);
@@ -1815,7 +1816,7 @@ async function main() {
         fx.play(FX.spef5a({ x, y }));                                   // V02 INT60_06/07: Spef5_a on the square
         done(comtxt[sp === 13 ? 0xe7 : 0xe8]);
       }, fail);
-      case 39: return done(sense(h, m));                                                    // Sense
+      case 39: sfx(15); return done(sense(h, m));                                           // V02 INT60_13                                                    // Sense
       case 40: case 41: {                                                                   // Restsoul, Soulspeak (P08)
         const s = scene?.spell(sp, h);
         return s === null || s === undefined ? fail(ctext(0x56, { h: h.name })) : done(s);
@@ -1894,6 +1895,7 @@ async function main() {
     const r = h.rec as Record<string, number>, [f, l] = SKILLS[idx], v = r[f];
     if (v >= cdata.maxtbl[idx * 6 + r.h_race] || rnd(100) >= (v < 50 ? (50 - v) >> 2 : 1)) return '';
     r[f] = v + 1;
+    sfx(13);                                                            // FAR_SKILLUP0: GameSound(0x0D) with the line
     return ctext(0x60, { h: h.name, l });
   };
   let shipCamp: (() => void) | null = null;   // camping aboard: one camp pass per sailing step (P93 SUB_04d4)
