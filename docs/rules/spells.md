@@ -55,7 +55,7 @@ Evidence: `_Magic` (EXE, FF module, `out/decomp/MC2_all.c`), tables in the data 
 
 1. Spell = the hero's readied spell `h_rdyspl` (HERO+0xCB). 0xFF → "can't" message, fail.
 2. **Energy cost** = `_EneUsg(spell, hero)` = `_enetbl[spell] − (h_magic / 4)`, minimum 1 (`h_magic` = HERO+0x1A is the Magic skill). The hero's `h_energy` (HERO+0xBA) must be ≥ cost or the cast fails.
-3. **Location check** as above. Exception: Disguise (29) is also allowed when `_indisguise != 2`.
+3. **Location check** as above. Exception: Disguise (29) passes when `_indisguise == 2` (EXE `_Magic`: the gate fails only if the place bits are 0 *and* not (spell 0x1D with `_indisguise` 2)); its `_splocs` is 0, so this is the only way to cast it.
 4. Spells 30–35 (Betray, Summon, Destroy, Terrify, Double, Timestop) fail if their bit in `_magbits` is already set (effect already active — the bit is set by `MABITON` after a successful cast).
 5. `_swcast = hero+1`; the caster's tile is redrawn (except in wilderness or for Disguise); then the spell routine `SPLVECS[spell]` runs. In combat (`__curmpg == 0x5E`) there is a 500 ms delay/“no” path if a counter hits 0x1C.
 6. On success: `MABITON` (set active bit); if the spell is in `SKLSPLS` (ids 0,2,4,6,9,11,14,18,19,22,23,24,27,30,31,32,33,36,37,38) the caster's Magic skill gets a `_SkillUp` chance.
@@ -82,7 +82,7 @@ All go through `ovl_3228`: pick a target (`EXE_SpelTarg`), play sound 10 and eff
 - **Heal (8)** and **Zengrl (20)**: target HP set to **maximum** (`h_hpmax`, or the monster's `mshp`); outside combat via `_UpHitptsHook`. Zengrl applies it to every party member (6) or every combatant (24) in combat. A downed hero target is also stood up (dext/agility restored from the race record).
 - **Energy (12)**: `_UpEnergyHook` on the target.
 - **Shield (16)**: shield points = caster's Magic skill (`_GetMagSkl`, which returns 99 once if the one-shot flag `HERO+0xA5 & 8` is set); stored in `c_shield`, absorbs magic damage (see combat.md). **Zishoxe (21)** = Shield on everyone at half strength.
-- **Disguise (29)**: `_indisguise = 1`.
+- **Disguise (29)**: `FAR_DISGUISE` sets `_indisguise = 1` (see *Disguise* below).
 Failure (target dead, `HERO+0xBD & 0x80`) prints message 0x95.
 
 ## Combat spell effects — `V06.MCO` via `INT 61h` (`decomp/overlays/V06.c`)
@@ -176,6 +176,12 @@ Other V02 services are town helpers, not spells: 02/08 door and tile lookups, 09
 
 Port (`main.ts` *raise*, *resurrect*): the screen with Recall, Magic and Done (the acting member asked when several live), the Done prompt, Resurrect on a hero (HP and energy 1, "Done.") or a monster (", giving %d " + "n Item" in the search's format, `_IncObj` to the caster, then off the board). Assumptions: one copy, the energy and the magic skill roll as for any spell. Not built: Use and moving on this screen, the quest-item refusal, text 3 (a record byte +9 not traced) and text 6 (the port searches after this screen).
 
+## Disguise (29) — the orc towns' gate (V02 `INT60_10`, P02 entry)
+P02's start (file 0x2EB) calls V02 service 0x10 on every town or level load; a non-zero return runs service 0x11 (the nearest exit) and leaves at once. The service: when `_curvar` (the location's D-file) is one of V02 file 0xCBA `[52, 58, 51]` (Glusaga, Deadwood, Hugda-Hag) and `_indisguise` is 0, V02 text 0 "Disguises are needed to enter this town." (texts at file 0x07); the acting member's ready spell (`h_rdyspl`, HERO +0xCB) must be 0x1D, else refused; then text 1 " Will %h cast Disguise?" (Yes/No; No refuses); `_indisguise = 2` and `_Magic` (the energy, a copy, the skill roll; a failure refuses), whose vector `FAR_DISGUISE` sets 1. Then `_LoadFolks` redraws the party. Any other location clears `_indisguise` (the service's else branch), and so does a P02 door to a program below 3 (P02 0x1597: the world map or another level).
+While `_indisguise == 1`: `_LoadFolks` gives every hero the E00 tile `0x246 + min(h_race, 4)` (`_SetDisgTiles`, all 14 slots); talking is allowed with a weapon in hand (FFFAR `ovl_2f7e`, else comtxt 0x12 "%h must sheathe %p weapon first!" and sound 0x0E — assigned companions are spoken to before that test); Assign is refused (P88 text 56 "Not while in disguise.").
+
+Port (`main.ts` *enterTown*, *armed*): all of the above. Assumptions: the port has no readied spell outside a fight, so the acting member is the first member with Disguise memorised; a refusal keeps the party where it stood instead of loading the town and leaving by the nearest exit. Draw and Sheathe outside a fight (EXE `_Main5` items 8 and 0x0A) are on the member sheet (I).
+
 ## Glamour (26) — FFFAR `ovl_3440`
 Target charm (`h_charm`) must be ≤ 11; `gain = min(charm, 12 − charm)`; `h_charm += gain`, `h_glamcnt += gain` (then decays one point per tick together with charm, see above). So Glamour doubles charm up to the cap of 12, temporarily.
 
@@ -183,4 +189,4 @@ Target charm (`h_charm`) must be ≤ 11; `gain = min(charm, 12 − charm)`; `h_c
 The combat text numbers (messages 0x59 Fear, 0x5A Freeze, …) come from the combat text file. (The V02 message numbers above are common texts, comtxt.)
 
 ## Port notes (outside combat)
-Built in the web port (`main.ts` *magic outside combat*, key M): the caster, a memorised spell (Recall and Magic in one step), the energy and place gates (`_spellshere` exported as `combat.json` `spells.here`), the cost, the copy and the magic skill roll; Heal, Zengrl, Energy, Shield, Zishoxe, Glamour (and its decay in `_DecSpells`), Confuse, Locate, Teleport (marked with a direction key or a click on the map); in towns and dungeon levels Vision, Walkwater, Detect, Pierce, Repel, Sense, with the barrier bump, the `_snakes` log and the sensed ambush. Assumptions: a Teleport target that is not valid, or cancelling, casts nothing ("The spell fails.", comtxt 0x119; P89's carry is not traced); the valid squares are not highlighted. Not yet: Disguise, Soulspeak, Restsoul. Resurrect is on the aftermath screen (below).
+Built in the web port (`main.ts` *magic outside combat*, key M): the caster, a memorised spell (Recall and Magic in one step), the energy and place gates (`_spellshere` exported as `combat.json` `spells.here`), the cost, the copy and the magic skill roll; Heal, Zengrl, Energy, Shield, Zishoxe, Glamour (and its decay in `_DecSpells`), Confuse, Locate, Teleport (marked with a direction key or a click on the map); in towns and dungeon levels Vision, Walkwater, Detect, Pierce, Repel, Sense, with the barrier bump, the `_snakes` log and the sensed ambush. Assumptions: a Teleport target that is not valid, or cancelling, casts nothing ("The spell fails.", comtxt 0x119; P89's carry is not traced); the valid squares are not highlighted. Disguise is the orc towns' gate (above). Not yet: Soulspeak, Restsoul. Resurrect is on the aftermath screen (below).

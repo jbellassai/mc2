@@ -35,7 +35,7 @@ async function main() {
   const tables = await json<{ hungerhours: number[]; nousetext: number[]; useall: number[]; lootvalues: number[]; weathers: string[]; attribs: string[];
     tod: { words: string[]; hour: number[] }; speltim: number[] }>('exetables.json');
   const p93tables = await json<{ hunt: { terrain: number[]; weather: number[] } }>('p93.json');
-  const v02 = await json<{ vision: { ids: number[]; texts: number[] }; sense: number[] }>('v02.json');
+  const v02 = await json<{ vision: { ids: number[]; texts: number[] }; sense: number[]; disguise: { towns: number[]; texts: string[] } }>('v02.json');
   const p89 = await json<{ tiers: number[]; x0: number[]; y0: number[]; x1: number[]; y1: number[]; rects: number[][] }>('p89.json');
   const world = await World.create();
   const p92 = await json<string[]>('p92text.json');
@@ -78,6 +78,7 @@ async function main() {
   let roomAt = { loc: 0, room: 0xff };                                  // `_locspec`/`_currm` while in a room
   let wildAt = { x: 29, y: 56 };                                        // `_wildxy` while off the world map (new game)
   let been = 0x8000;                                                    // `_beenflg`: strongholds entered, bit 15 = entry 0
+  let disguise = 0;                                                     // `_indisguise` (1 = the party is disguised)
   let figures: Figure[] = level.figures(clock, events, party.away);
   let message = await landed(hero);
   const say = (s: string, other = '') => format(s, hero, other);
@@ -98,7 +99,8 @@ async function main() {
           .concat(world.ships.boats().map(b => ({ ...b, frame: 0x12 })))
       : patch?.icons() ?? (detect && level.loc.kind === 'level'   // V02 INT60_0d: Detect shows the teleportal spots
         ? (level.loc.spots ?? []).filter(p => p.type === 1).map(p => ({ x: p.x, y: p.y, frame: 10 + (phase & 1) })) : []);
-    const people = fight ? fight.recs.filter(r => !r.side && fight!.alive(r)) : wild ? [lead] : party.members;   // world: the leader alone
+    const people = (fight ? fight.recs.filter(r => !r.side && fight!.alive(r)) : wild ? [lead] : party.members)   // world: the leader alone
+      .map(p => disguise ? { ...p, frame: 0x246 + Math.min(4, p.hero!.rec.h_race as number) } : p);   // _SetDisgTiles: E00 0x246 + race
     view.draw(level, room ? 5 : lead.x, room ? 4 : lead.y, figures, people, phase, icons);
     const where = wild || patch || (fight && outside?.level.loc.kind === 'world') ? `${world.rec?.name.replace(/\s*[MX]$/, '') ?? ''}, ${tables.weathers[clock.weather]}` : place();
     status.textContent = `${clock}  —  ${where}${message ? '  —  ' + message : ''}`;
@@ -177,9 +179,16 @@ async function main() {
    *  who pays and is taught). */
   const keeper = (): boolean => {
     if (!service?.talks) return false;
-    if (party.members.length < 2) return service.talk();
+    if (party.members.length < 2) return armed(lead.hero) || service.talk();
     panel.show(); panel.line('Who speaks?');
-    panel.set([...party.members.map(m => ({ label: m.hero.name, act: () => void service!.talk(false, m.hero) })), { label: cmd[0], act: () => close() }]);
+    panel.set([...party.members.map(m => ({ label: m.hero.name, act: () => void (armed(m.hero) || service!.talk(false, m.hero)) })), { label: cmd[0], act: () => close() }]);
+    return true;
+  };
+  /** FFFAR ovl_2f7e: not in disguise, a speaker with a weapon in hand is refused: "%h must sheathe %p weapon first!"
+   *  (comtxt 0x12, sound 0x0E). Companions on assignment are spoken to before the test. */
+  const armed = (h: Hero) => {
+    if (disguise || h.rec.h_inhand === 0xff) return false;
+    close(format(comtxt[0x12], h, h.name));
     return true;
   };
 
@@ -194,6 +203,7 @@ async function main() {
     }
     const by = speaker ?? party.members[0];
     speaker = null;
+    if (!(who.num < 0x20 && assigns.get(who.num)) && armed(by.hero)) return;
     const opening = scene?.greet(who, by);
     if (opening?.leave) { await leave(level.loc.exits[0]); message = opening.text; return render(); }   // the priest sends the party out
     const t = await Talk.open(level.loc, who, by.hero, events);
@@ -436,11 +446,37 @@ async function main() {
   const toWorld = async (exit: Exit) => {
     const pgm = level.loc.pgms[exit.pgm];
     if (pgm?.program === 2) {                                   // another level (stairs): window (tx, ty), formation at +(4,3)
-      go(await Level.load(`D${two(pgm.datafile)}`, pgm.tileset), exit.tx + 4, exit.ty + 3);
-      message = level.loc.name.replace(/\s*[MX]$/, '').trim(); return;
+      await enterTown(pgm.datafile, exit.tx + 4, exit.ty + 3, pgm.tileset);
+      if (level.loc.kind !== 'world') message = level.loc.name.replace(/\s*[MX]$/, '').trim();
+      return;
     }
     if (pgm?.program !== 1) { message = 'This way leads somewhere not built yet.'; return; }
+    disguise = 0;                                               // P02: a door to program < 3 ends the disguise
     await toWorldAt(exit.tx, exit.ty);
+  };
+  /** P02 entry, V02 INT60_10 (spells.md, Disguise): towns 52, 58, 51 (V02 0xCBA) let a disguised party in. Otherwise
+   *  "Disguises are needed to enter this town." (V02 text 0), and the acting member, if Disguise is ready, is asked
+   *  " Will %h cast Disguise?" (text 1); Yes casts it through _Magic (`_indisguise` 2 passes the place gate; the energy,
+   *  a copy, the magic roll) and FAR_DISGUISE sets `_indisguise` 1. Refused or failed, P02 leaves at once by the
+   *  nearest exit (INT60_11) - the port keeps the party where it stood. Any other town or level ends the disguise.
+   *  Assumption: the port has no readied spell outside a fight, so the acting member is the first member (the leader
+   *  first) with Disguise memorised. */
+  const enterTown = async (datafile: number, x: number, y: number, tileset?: number) => {
+    const into = async () => { go(await Level.load(`D${two(datafile)}`, tileset), x, y); message = ''; render(); };
+    if (!v02.disguise.towns.includes(datafile)) { disguise = 0; return into(); }
+    if (disguise) return into();
+    const t = v02.disguise.texts, h = party.members.map(m => m.hero).find(h => h.rec.h_spells[4][1] > 0);
+    panel.show();
+    if (!h) return close(t[0]);
+    panel.line(t[0] + format(t[1], h, h.name));
+    panel.set([{ label: cmd[3], act: () => {
+      const r = h.rec, need = Math.max(1, cdata.spells.energy[29] - (r.h_magic >> 2));
+      if (r.h_energy < need) return close(comtxt[0x41]);                                   // "Not enough energy!"
+      const up = cdata.spells.skill.includes(29) ? magicUp(h) : '';
+      if (--r.h_spells[4][1] <= 0) r.h_spells[4][1] = 0;
+      r.h_energy -= need; h.isHeTr();
+      disguise = 1; close(up); void into();
+    } }, { label: cmd[4], act: () => close() }]);
   };
   /** Onto the world map with the window at (tx, ty) (exits, teleportals). */
   const toWorldAt = async (tx: number, ty: number) => {
@@ -460,14 +496,14 @@ async function main() {
     if ((entrance || rec.doors.some(d => d.x === x && d.y === y)) && ships.sailing) return;   // a ship can't enter either
     if (entrance) {
       const pgm = rec.pgms[entrance.pgm];
-      if (pgm.program === 2) { go(await Level.load(`D${two(pgm.datafile)}`), entrance.tx + 4, entrance.ty + 3); message = ''; return; }
+      if (pgm.program === 2) return enterTown(pgm.datafile, entrance.tx + 4, entrance.ty + 3);
       // Ziyx's (R36 47,38) is both an entrance and a feature of program 8; the feature's record names the room
       // (assumption: P01's entrance path for a room program is not traced)
       if (!rec.doors.some(d => d.x === x && d.y === y)) { message = `${level.tileName(x, y)}: not built yet.`; return; }
     }
     const spot = ships.sailing ? null : world.spot(x, y, events);
     if (spot && rec.pgms[spot.pgm].program === 2) {                   // an event-gated town (Demonspine, Shumaran)
-      go(await Level.load(`D${two(rec.pgms[spot.pgm].datafile)}`), spot.tx + 4, spot.ty + 3); message = ''; return;
+      return enterTown(rec.pgms[spot.pgm].datafile, spot.tx + 4, spot.ty + 3);
     }
     const feature = rec.doors.find(d => d.x === x && d.y === y)
       ?? (spot && [5, 8, 9].includes(rec.pgms[spot.pgm].program) ? { x, y, pgm: spot.pgm, id: spot.id, type: 0 } : undefined);
@@ -793,17 +829,24 @@ async function main() {
   };
   /** Draw (_DrawWeap): a weapon 9-0x1E from the pack; refused for another race (comtxt 0x103), broken (0x39) or too
    *  heavy (0x69). Takes no action. */
-  const drawWeapon = (a: Rec, back: () => void) => {
-    const h = a.hero!, r = h.rec;
+  const drawWeapon = (a: Rec, back: () => void) => weaponSel(a.hero!, line => {
+    panel.line(line); a.weapon = a.hero!.rec.h_inhand === 0xff ? 0xff : a.hero!.rec.h_invitem[a.hero!.rec.h_inhand]; a.wskl = Fight.wpnSkl(a.hero!); back();
+  }, back);
+  /** _DrawWeap (EXE 1957:07F0): a weapon 9-0x1E from the pack (none: "%h has no weapon!", 0x3B); refused for another
+   *  race ("Only a %a can wield that.", 0x103, `_w_kins`), broken (0x39) or too heavy (0x69); else in hand, "%h draws %p
+   *  %l." (0x3A), or "%h draws %a." (0x102) for the named weapons (`unbreakable`). */
+  const weaponSel = (h: Hero, done: (line: string) => void, cancel: () => void) => {
+    const r = h.rec, fmt = (n: number, v: Record<string, string> = {}) => format(comtxt[n], h, h.name, v);
     const slots = r.h_invitem.map((c, i) => i).filter(i => r.h_invitem[i] >= 9 && r.h_invitem[i] <= 0x1e && i !== r.h_inhand);
+    if (!slots.length) return done(fmt(0x3b));
     panel.set([...slots.map(i => ({ label: items[r.h_invitem[i]], act: () => {
-      const w = cdata.weapons[r.h_invitem[i] - 9];
-      if (w.race !== 0xff && w.race !== r.h_race) panel.line(ctext(0x103, { a: items[r.h_invitem[i]] }));
-      else if (r.h_invamt[i] >= 0xe4) panel.line(ctext(0x39));
-      else if (r.h_strngth < w.minst) panel.line(ctext(0x69, { h: a.name }));
-      else { r.h_inhand = i; a.weapon = r.h_invitem[i]; a.wskl = Fight.wpnSkl(h); panel.line(`${a.name}: ${items[a.weapon]}`); }
-      back();
-    } })), { label: cmd[0], act: back }]);
+      const it = r.h_invitem[i], w = cdata.weapons[it - 9];
+      if (w.race !== 0xff && w.race !== r.h_race) return done(fmt(0x103, { a: cdata.parley.kins[w.race] }));
+      if (r.h_invamt[i] >= 0xe4) return done(fmt(0x39));
+      if (r.h_strngth < w.minst) return done(fmt(0x69));
+      r.h_inhand = i;
+      done(fmt(w.unbreakable ? 0x102 : 0x3a, { a: items[it], l: items[it] }));
+    } })), { label: cmd[0], act: cancel }]);
   };
   /** A hero's step (P94 ovl_01ad → _RMove): walking into an enemy attacks it; a step off the arena asks to flee
    *  ("%h is fleeing from combat." "Do you want to leave?", comtxt 0x6C/0x6D — the ids are assumed from their
@@ -1377,8 +1420,18 @@ async function main() {
     const member = party.members.find(m => m.hero === who)!;
     panel.set([...(party.members.length > 1 ? party.members.map(m => ({ label: m.hero.name, act: () => sheet(m.hero) })) : []),
                ...(party.members.length > 1 ? [{ label: cmd[42], act: () => transfer(member) }] : []),   // Transfr
+               { label: cmd[14], act: () => weaponSel(who, line => close(line), () => sheet(who)) },   // Draw
+               { label: cmd[38], act: () => sheatheOut(member) },                                       // Sheathe
                ...(member !== lead ? [{ label: cmd[6], act: () => assign(member) }, { label: cmd[12], act: () => dismiss(member) }] : []),   // Assign, Dismiss
                { label: cmd[0], act: () => close(message) }]);   // End
+  };
+  /** Sheathe outside a fight (_Main5 0x0A → _Sheathe): with 2+ members "Is this order for everyone?" (comtxt 0x3C),
+   *  No = this member; then "Done." (0x37). */
+  const sheatheOut = (m: Member) => {
+    const off = (ms: Member[]) => { for (const x of ms) x.hero.rec.h_inhand = 0xff; close(comtxt[0x37]); };
+    if (party.members.length < 2) return off([m]);
+    panel.line(comtxt[0x3c]);
+    panel.set([{ label: cmd[3], act: () => off(party.members) }, { label: cmd[4], act: () => off([m]) }]);
   };
   /** Talk + direction: the person there, or "%h talks to" the square (comtxt 0x11). In a service room the keeper
    *  answers whatever square is marked (assumption: how the original routes Talk to `_swgreet = −3` is not traced). */
@@ -1678,6 +1731,7 @@ async function main() {
     const r = m.hero.rec as HeroRecord & Record<string, number>, name = m.hero.name, fmt = (s: string) => format(s, hero, name);
     panel.show();
     if (r.h_relatn !== 1) return close(comtxt[0x6f]);                   // "Only companions can be assigned tasks."
+    if (disguise) return close(assigns.text(56));                       // "Not while in disguise." (P88)
     const at = { ...spot(), x: m.x, y: m.y }, w = wildxy(), make = (go: number | null) => assigns.make(m.num, r, clock, at, w, world.region, go);
     const part = () => {                                                // P97 with `_swass` 1: out of the party, kept off the tables
       party.partyEvents(events, p97.events, m.num, false);
@@ -1773,7 +1827,7 @@ async function main() {
     world: world.snapshot(), patches: [...patches.left], dunrms: [...dunrms], duntre: [...duntre], chests: [...chests],
     ambushed: [...ambushed], rent: [...rent], walk: [walkSteps, walkTicks], casino: [...casino], gates: [...gates],
     detect, snakes: snakes.map(r => [...r] as [string, number, number, number]), scroll: scroll.item, disasterday,
-    assigns: assigns.snapshot(), wild: wildAt, been,
+    assigns: assigns.snapshot(), wild: wildAt, been, disguise,
   });
   type Save = ReturnType<typeof snapshot>;
   const canSave = () => !fight && !patch && !chamber && level.loc.kind !== 'room';
@@ -1791,7 +1845,7 @@ async function main() {
     detect = sv.detect ?? 0; snakes.splice(0, snakes.length, ...(sv.snakes ?? []));
     scroll.item = sv.scroll ?? 0; disasterday = sv.disasterday ?? 0;
     if (sv.assigns) assigns.restore(sv.assigns); else assigns.reset();
-    wildAt = sv.wild ?? { x: 29, y: 56 }; been = sv.been ?? 0x8000;
+    wildAt = sv.wild ?? { x: 29, y: 56 }; been = sv.been ?? 0x8000; disguise = sv.disguise ?? 0;
     [walkSteps, walkTicks] = sv.walk;
     outside = null; service = null; special = null; scene = null; patch = null; fight = null; chamber = null; chamberBack = null; shipCamp = null;
     go(await Level.load(sv.level.id, sv.level.id === 'D01' ? undefined : sv.level.ts), sv.at.x, sv.at.y);

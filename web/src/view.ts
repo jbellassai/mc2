@@ -41,7 +41,7 @@ export class View {
 
   /** `phase` counts animation steps: tile cycles advance every step, animated NPCs flip every few (_NPCANIMATE). */
   /** `icons`: E00 frames (mushrooms, guards) or E01 frames (monsters in combat) under the figures. */
-  draw(lv: Level, cx: number, cy: number, figures: Figure[], party: { x: number; y: number; num: number }[], phase = 0,
+  draw(lv: Level, cx: number, cy: number, figures: Figure[], party: { x: number; y: number; num: number; frame?: number }[], phase = 0,
        icons: Icon[] = []) {
     const ox = cx - (COLS >> 1), oy = cy - (ROWS >> 1);
     const ctx = this.ctx;
@@ -64,6 +64,6 @@ export class View {
         this.sheet(this.folk, n.start + (n.frames > 1 ? (phase >> 2) & 1 : 0), cols, f.x - ox, f.y - oy);   // frames 0/1 only
       }
     }
-    for (const p of party) this.hero(p.num, p.x - ox, p.y - oy);
+    for (const p of party) if (p.frame === undefined) this.hero(p.num, p.x - ox, p.y - oy); else this.sheet(this.heroes, p.frame, cols, p.x - ox, p.y - oy);
   }
 }
