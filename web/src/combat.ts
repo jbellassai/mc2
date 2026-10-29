@@ -7,6 +7,7 @@ import { json } from './pack';
 import type { Hero } from './hero';
 import type { Level } from './level';
 import { effect, monsterSpell } from './spells';
+import { FX, type Frame } from './fx';
 
 interface Monster { name: string; hp: number; shield: number; weapon: number; armor: number; bravery: number; str: number;
   dex: number; agi: number; res: number; int: number; wskl: number; mskl: number; spells: number[]; tile: number;
@@ -44,13 +45,15 @@ const DX = [-1, 0, 1, 0, -1, 1, 1, -1], DY = [0, -1, 0, 1, -1, -1, 1, 1];
 /** P06 ovl_0b2b: attacker → target direction from sign and slope bits (table P06 file 0xB0B). */
 const DIRTBL = [1, 255, 5, 2, 3, 255, 6, 2, 1, 255, 4, 0, 3, 255, 7, 0];
 const W = 11, H = 9, ARROWS = 0x51, NONE = 0xff;
-const cheb = (a: Rec, x: number, y: number) => Math.max(Math.abs(a.x - x), Math.abs(a.y - y));
+const cheb = (a: { x: number; y: number }, x: number, y: number) => Math.max(Math.abs(a.x - x), Math.abs(a.y - y));
 
 export class Fight {
   readonly recs: Rec[] = [];
   /** `_GameSound` and `_song` (sound.ts), set by the caller. */
   sound: (n: number) => void = () => {};
   music: (n: number) => void = () => {};
+  /** The visual effects queue (fx.ts), set by the caller. */
+  fx: (frames: Frame[]) => void = () => {};
   private skilled = new Set<string>();   // G_sklbits: one gain per hero and combat skill per fight
   timestop = false;                       // _timestop: monsters cannot act, blows cannot miss; cleared each round
   readonly magbits = new Set<number>();   // _magbits: spells 30-35 cast this encounter
@@ -266,6 +269,17 @@ export class Fight {
    *  true when it reaches the target. (The line is a Bresenham walk as in `clear`.) */
   missile(a: Rec, t: Rec): boolean { return this.clear(a, t); }
 
+  /** The squares the missile from `a` toward `t` passes, up to the target or the square that stops it (`G_TILEXY`). */
+  path(a: { x: number; y: number }, t: { x: number; y: number }): { x: number; y: number }[] {
+    const n = cheb(a, t.x, t.y), out = [];
+    for (let i = 1; i <= n; i++) {
+      const x = Math.round(a.x + (t.x - a.x) * i / n), y = Math.round(a.y + (t.y - a.y) * i / n);
+      out.push({ x, y });
+      if (i < n && (!this.level.walkable(x, y) || this.occupied(x, y))) break;
+    }
+    return out;
+  }
+
   /** `_MDamage` (P06 ovl_0fa9): shield points absorb first, then HP; death, and the knockdown roll with the caster's
    *  weapon skill and dexterity. Returns the blow's lines (the ovl_0bc2 format with " (SH:%b)"). */
   mdamage(c: Rec, t: Rec, n: number, text: (n: number, v?: Record<string, string | number>) => string): string[] {
@@ -352,6 +366,8 @@ export class Fight {
     // P06 ovl_0b2b: the attack direction, for the dodge step.
     const dx = t.x - a.x, dy = a.y - t.y, ax = Math.abs(dx), ay = Math.abs(dy);
     const dir = DIRTBL[(dx < 0 ? 8 : 0) | (dy < 0 ? 4 : 0) | (3 * ax >= ay + 2 ? 2 : 0) | (3 * ay <= ax + 1 ? 1 : 0)];
+    // P06 ovl_143f: an arrow flies E01 tile 18 + keypad direction − 1 (`_weaptiles` row 2, P06 0xA3: CURDIR → keypad).
+    if (w?.type === 3) this.fx(FX.missile(this.path(a, t), 17 + ([4, 8, 6, 2, 7, 9, 3, 1][dir] ?? 5), 'E01'));
     let result: number;
     const inuse = (a.hero?.rec.h_inuse as number | undefined) ?? 0;
     if (inuse & 0x10) a.hero!.rec.h_inuse = inuse & ~0x10;               // Luffin: this blow cannot be dodged
@@ -385,7 +401,10 @@ export class Fight {
         `${text(0x4b)}${dam}${nift ? text(0x58, { b: t.nift }) : text(0x4c, { b: t.armor })}${text(0x4d)}${t.hp}`);
       if (result === 2) { out.push(text(0x48)); if (t.race !== 36) out.push(text(0x49, { a: t.name })); }
     }
-    if (result) { if (a.race === 0x12) this.sound(11); this.sound(1); }   // a blow that lands (a Barg's with a flash)
+    if (result) {                                          // a blow that lands (a Barg's with sound 11 and Spef2 on the target)
+      if (a.race === 0x12) { this.sound(11); this.fx(FX.spef2(t)); }
+      this.sound(1);
+    }
     if (a.hero) out.push(...this.afterHeroBlow(a, w, result, text));
     // ovl_050a: a target that was hit turns on its attacker unless RndCo(100) ≤ its c_intel.
     if (result !== 0 && this.alive(t) && t.int < rnd(100)) t.target = a.recno;

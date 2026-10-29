@@ -3,6 +3,7 @@
 // 0x792 / P01 copy `_locspec`), `_rmdata[0]` the door's room id. The ending and the epilogue are in main.ts. Not
 // built: the room-wide colour flashes.
 import { json } from './pack';
+import { FX, type Frame } from './fx';
 import { format } from './talk';
 import type { Figure } from './level';
 import { incObj } from './shop';
@@ -25,6 +26,8 @@ export interface SceneCtx {
   disaster(): void;
   /** `_GameSound`. */
   sound(n: number): void;
+  /** The visual effects queue (fx.ts). */
+  fx(frames: Frame[]): void;
 }
 
 const KING = 26, ORB = 0x49, WHITE = 0x4c, SCROLLTILE = 0x63, FLOOR = 0x26, CELL = { x: 5, y: 2 };   // `_mapyl`+28 = cell 27
@@ -183,7 +186,7 @@ export class Scene {
     if (item !== ORB || this.locspec !== 1 || this.room !== 5 || this.bird) return null;
     if (![34, 35, 36].every(this.has)) return this.say(this.t[15], user.hero, {}, this.wise().hero.name);
     this.level.set(4, 2, 0x11); this.level.set(5, 2, 0x10); this.level.set(4, 3, 0x14); this.level.set(5, 3, 0x15);
-    this.bird = true; this.ctx.sound(10);
+    this.bird = true; this.ctx.sound(10); this.ctx.fx(FX.spef6(user));   // then Spef6 on the user
     return this.say(this.t[14], user.hero);
   }
 

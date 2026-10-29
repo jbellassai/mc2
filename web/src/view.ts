@@ -1,6 +1,10 @@
 // Tile view centred on the party leader. Original window is 11×9 with the party's 3×3 formation at (4,3)-(6,5); the port shows more.
 import { image, json, type Sprites } from './pack';
 import type { Level, Figure } from './level';
+import type { Overlay } from './fx';
+
+/** The 16 EGA colours, for the effects' colour flashes. */
+const EGA = ['#000', '#00a', '#0a0', '#0aa', '#a00', '#a0a', '#a50', '#aaa', '#555', '#55f', '#5f5', '#5ff', '#f55', '#f5f', '#ff5', '#fff'];
 
 export const COLS = 21, ROWS = 15, TILE = 16;
 export interface Icon { x: number; y: number; frame: number; sheet?: 'E01' }
@@ -23,6 +27,22 @@ export class View {
 
   private sheet(im: HTMLImageElement, k: number, cols: number, cx: number, cy: number) {
     this.ctx.drawImage(im, (k % cols) * 16, Math.floor(k / cols) * 16, 16, 16, cx * TILE, cy * TILE, TILE, TILE);
+    this.drawn.set(`${cx},${cy}`, [im, k, cols]);
+  }
+  private drawn = new Map<string, [HTMLImageElement, number, number]>();   // the sprite last drawn in each cell, for tints
+  private tintBuf = document.createElement('canvas');
+
+  /** _movectileFX's XOR recolouring: the figure in the cell, its own pixels blended with `color` (difference). */
+  private tint(cx: number, cy: number, color: string) {
+    const s = this.drawn.get(`${cx},${cy}`);
+    if (!s) return;
+    const [im, k, cols] = s, b = this.tintBuf, c = b.getContext('2d')!;
+    b.width = b.height = 16;
+    c.drawImage(im, (k % cols) * 16, Math.floor(k / cols) * 16, 16, 16, 0, 0, 16, 16);
+    c.globalCompositeOperation = 'difference'; c.fillStyle = color; c.fillRect(0, 0, 16, 16);
+    c.globalCompositeOperation = 'destination-in';
+    c.drawImage(im, (k % cols) * 16, Math.floor(k / cols) * 16, 16, 16, 0, 0, 16, 16);
+    this.ctx.drawImage(b, cx * TILE, cy * TILE, TILE, TILE);
   }
 
   /** _MCCPTile: hero or companion n stands on E00 frame 0x3B + 18n; companions from 0x18 on use E03 frame 18(n − 0x18).
@@ -107,11 +127,12 @@ export class View {
   }
 
   /** `phase` counts animation steps: tile cycles advance every step, animated NPCs flip every few (_NPCANIMATE). */
-  /** `icons`: E00 frames (mushrooms, guards) or E01 frames (monsters in combat) under the figures. */
+  /** `icons`: E00 frames (mushrooms, guards) or E01 frames (monsters in combat) under the figures; `fx` on top. */
   draw(lv: Level, cx: number, cy: number, figures: Figure[], party: { x: number; y: number; num: number; frame?: number }[], phase = 0,
-       icons: Icon[] = []) {
+       icons: Icon[] = [], fx?: Overlay) {
     const ox = cx - (COLS >> 1), oy = cy - (ROWS >> 1);
     const ctx = this.ctx;
+    this.drawn.clear();
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, COLS * TILE, ROWS * TILE);
     for (let y = 0; y < ROWS; y++)
@@ -132,5 +153,13 @@ export class View {
       }
     }
     for (const p of party) if (p.frame === undefined) this.hero(p.num, p.x - ox, p.y - oy); else this.sheet(this.heroes, p.frame, cols, p.x - ox, p.y - oy);
+    if (!fx) return;
+    for (const i of fx.icons) this.sheet(i.sheet === 'E01' ? this.monsters : this.heroes, i.frame, cols, i.x - ox, i.y - oy);
+    for (const t of fx.tints) this.tint(t.x - ox, t.y - oy, EGA[t.color & 15]);
+    if (fx.invert) {
+      ctx.globalCompositeOperation = 'difference';
+      ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, COLS * TILE, ROWS * TILE);
+      ctx.globalCompositeOperation = 'source-over';
+    }
   }
 }

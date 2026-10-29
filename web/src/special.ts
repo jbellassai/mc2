@@ -4,6 +4,7 @@
 import { format, wmatch } from './talk';
 import { panel } from './panel';
 import { json, hex } from './pack';
+import { FX, type Frame } from './fx';
 import type { Hero } from './hero';
 import type { Clock } from './clock';
 import type { Level } from './level';
@@ -23,6 +24,8 @@ export interface SpecialCtx {
   close(msg?: string): void;
   /** `_GameSound`. */
   sound(n: number): void;
+  /** The visual effects queue (fx.ts). */
+  fx(frames: Frame[]): void;
 }
 
 interface P09 { pieces: number[]; piecetiles: number[]; altars: number[]; icons: number[]; wake: number[]; offer: string[]; texts: string[] }
@@ -165,7 +168,7 @@ export class Special {
     const h = this.ctx.hero, line = (s: string, v: Record<string, string | number> = {}, o = h.name) => panel.line(format(s, h, o, v));
     const slumber = (s = '') => { line(s + T[g] + T[12]); this.done(); };   // "<god> returns to slumber."
     const thunder = () => {                                                  // ovl_123e: every member HP 1, energy 1
-      for (const { hero } of ms) { hero.rec.h_hitpts = 1; hero.rec.h_energy = 1; hero.isHeTr(); }
+      for (const m of ms) { m.hero.rec.h_hitpts = 1; m.hero.rec.h_energy = 1; m.hero.isHeTr(); this.ctx.fx(FX.bang(m)); }   // a Bang on each
       slumber(T[18]);                                                        // "'Begone, mortals!' With a great clap of thunder, "
     };
     panel.show();

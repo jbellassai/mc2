@@ -21,6 +21,7 @@ import { Chamber } from './chamber';
 import { newGame, landed } from './newgame';
 import { aim as spellAim, BUILT, cost as spellCost, effect } from './spells';
 import { sfx, song, audio, saveAudio } from './sound';
+import { Fx, FX } from './fx';
 import type { Icon } from './view';
 
 const status = document.getElementById('status')!;
@@ -95,6 +96,7 @@ async function main() {
   const snakes: [string, number, number, number][] = [];   // `_snakes`/`_snakelocs`: barriers Pierce/Repel removed
   let locate = 0;   // P01 OV_0x1bb: world-map draws left in which a Locate spell shows every patrol and guard post
   const seeAll = () => events.has(105) || locate > 0;
+  const fx = new Fx(() => render(), sfx);
   const render = () => {
     const room = level.loc.kind === 'room', wild = level.loc.kind === 'world';
     const icons: Icon[] = fight ? fight.recs.filter(r => r.side && fight!.alive(r)).map(r => ({ x: r.x, y: r.y, frame: r.tile, sheet: 'E01' }))
@@ -104,7 +106,7 @@ async function main() {
         ? (level.loc.spots ?? []).filter(p => p.type === 1).map(p => ({ x: p.x, y: p.y, frame: 10 + (phase & 1) })) : []);
     const people = (fight ? fight.recs.filter(r => !r.side && fight!.alive(r)) : wild ? [lead] : party.members)   // world: the leader alone
       .map(p => disguise ? { ...p, frame: 0x246 + Math.min(4, p.hero!.rec.h_race as number) } : p);   // _SetDisgTiles: E00 0x246 + race
-    view.draw(level, room ? 5 : lead.x, room ? 4 : lead.y, figures, people, phase, icons);
+    view.draw(level, room ? 5 : lead.x, room ? 4 : lead.y, figures, people, phase, icons, fx.overlay);
     const where = wild || patch || (fight && outside?.level.loc.kind === 'world') ? `${world.rec?.name.replace(/\s*[MX]$/, '') ?? ''}, ${tables.weathers[clock.weather]}` : place();
     status.textContent = `${clock}  —  ${where}${message ? '  —  ' + message : ''}`;
   };
@@ -404,13 +406,13 @@ async function main() {
     go(lv, roomStart.x, roomStart.y);
     message = level.loc.name.trim() ? `${hero.name} enters ${level.loc.name}.` : '';   // which of D08/D09's room names applies is not traced
     scene = ref.pgm.program === 8 ? await Scene.open({ party, events, items, comtxt, figures: () => figures, scroll,
-      disaster: () => { disasterday = clock.juldate; }, sound: sfx }, locspec, ref.room, level) : null;
+      disaster: () => { disasterday = clock.juldate; }, sound: sfx, fx: e => fx.play(e) }, locspec, ref.room, level) : null;
     if (scene && events.has(122)) return void epilogue();
     if (scene) message = scene.enter() || message;
     service = ref.pgm.program === 5 ? await ServiceRoom.open(ctx, ref.room, ref.kind, level.loc.texts, level.loc.words) : null;
     service?.greet();
     special = ref.pgm.program === 9 ? await Special.open({ hero, clock, cmd, comtxt, party, tod: tables.tod, attribs: tables.attribs,
-      kins: cdata.parley.kins, serve, close, sound: sfx }, ref.kind, ref.kind === 13 ? ref.index - 8 : ref.index, level) : null;
+      kins: cdata.parley.kins, serve, close, sound: sfx, fx: e => fx.play(e) }, ref.kind, ref.kind === 13 ? ref.index - 8 : ref.index, level) : null;
   };
 
   /** P08 L_0772 (quest_scenes.md, The ending): leaving a P08 room with event 120 set. Event 121, Zakhad's trap (room
@@ -758,7 +760,7 @@ async function main() {
     level = lv;
     figures = [];
     fight = f;
-    f.sound = sfx; f.music = n => void song(n);
+    f.sound = sfx; f.music = n => void song(n); f.fx = e => fx.play(e);
     afterWin = after;
     autoHeroes.clear(); heading = false;
     panel.show();
@@ -1007,6 +1009,7 @@ async function main() {
         report(fight.monsterAct(m, ctext));
         render();
         await sleep(200);
+        await fx.idle();
       }
     }
     if (finished()) return;
@@ -1138,6 +1141,8 @@ async function main() {
     if (!h.rec.h_magic) return t(5);
     h.dec(h.slot(item));
     sfx(5);                                                             // P07 0x726, the incantation
+    const reader = party.members.find(m => m.hero === h);
+    if (reader) fx.play(FX.bang(reader));
     ch.snuff(); ch.freed = ch.elden(); events.add(0x3c + ch.type);
     figures = people();
     return [t(6), t(7), t(8, ch.freed.name)].join(' ');
@@ -1358,13 +1363,16 @@ async function main() {
    *  10 + RndCo(10) energy, class 'B' (Repel) 1 HP, never below 1 HP. (The port tests the squares ahead after the first
    *  refusal; the original marks the members as it tests them.) */
   const bump = (movers: Member[], dx: number, dy: number) => {
+    const marks = [];
     for (const m of movers) {
       const r = barrierRec(level.tile(m.x + dx, m.y + dy)), h = m.hero.rec;
       if (!r || party.at(m.x + dx, m.y + dy)) continue;
       if (r[2] === 0x43) h.h_energy = Math.max(0, (h.h_energy as number) - 10 - rnd(10));
       else h.h_hitpts = Math.max(1, (h.h_hitpts as number) - 1);
       m.hero.isHeTr();
+      marks.push({ x: m.x, y: m.y, stage: r[2] === 0x43 ? 1 : 2 });   // `_bangstg` 1 / 2 (5, a wall, shows nothing)
     }
+    if (marks.length) fx.play(FX.multiBang(marks, 0x17));             // MultiBang(0x17) on the members who hit one
   };
   /** P02 ovl_0d70, a key door (type bit 0x80): the key is item `type & 0x7F` anywhere in the party (not used up). With
    *  it every `spdoors` record's square gets its `newtile` and the carrier says `loctext[text]`; without it
@@ -1640,13 +1648,15 @@ async function main() {
   const spell = (h: Hero, sp: number, done: (text: string) => void) => {
     const m = h.rec.h_magic, member = (then: (t: Hero) => void) => panel.set([...party.members.map(p => ({ label: p.hero.name,
       act: () => then(p.hero) })), { label: cmd[0], act: () => close() }]);
-    const heal = (t: Hero) => { t.rec.h_hitpts = t.rec.h_hpmax; return ctext(0x5c, { a: t.name }); };
-    const shield = (t: Hero, n: number) => { t.rec.h_shield = n; return ctext(0x5e, { a: t.name, b: n }); };
+    // FFFAR ovl_3228/ovl_3240: Spef4 on each target in the spell's colour (Heal 10, Energy and Zengrl 0xC, Shield and Zishoxe 9).
+    const glow = (t: Hero) => { const p = party.members.find(m => m.hero === t); if (p) fx.play(FX.spef4(p, sp === 8 ? 10 : sp === 12 || sp === 20 ? 0xc : 9)); };
+    const heal = (t: Hero) => { glow(t); t.rec.h_hitpts = t.rec.h_hpmax; return ctext(0x5c, { a: t.name }); };
+    const shield = (t: Hero, n: number) => { glow(t); t.rec.h_shield = n; return ctext(0x5e, { a: t.name, b: n }); };
     const dead = (t: Hero) => (t.rec.h_cond1 as number) & 0x80;
     switch (sp) {
       case 8: return member(t => done(dead(t) ? comtxt[0x95] : heal(t)));                  // Heal: HP to the maximum
       case 20: return done(party.members.filter(p => !dead(p.hero)).map(p => heal(p.hero)).join(' '));   // Zengrl
-      case 12: return member(t => done(dead(t) ? comtxt[0x95] : (t.use(0x33, 0), ctext(0x5d, { a: t.name }))));   // Energy = a Sermin
+      case 12: return member(t => done(dead(t) ? comtxt[0x95] : (glow(t), t.use(0x33, 0), ctext(0x5d, { a: t.name }))));   // Energy = a Sermin
       case 16: return member(t => done(dead(t) ? comtxt[0x95] : shield(t, m)));             // Shield = magic skill
       case 21: return done(party.members.filter(p => !dead(p.hero)).map(p => shield(p.hero, m >> 1)).join(' '));   // Zishoxe
       case 26: return member(t => {                                                         // Glamour (FFFAR ovl_3440)
@@ -1671,6 +1681,7 @@ async function main() {
         const r = barrierRec(level.tile(x, y), sp === 13 ? 0x43 : 0x42);
         if (!r) return done(comtxt[0x95]);
         snakes.push([level.id, x, y, r[1]]); level.set(x, y, r[1]);
+        fx.play(FX.spef5a({ x, y }));                                   // V02 INT60_06/07: Spef5_a on the square
         done(comtxt[sp === 13 ? 0xe7 : 0xe8]);
       });
       case 39: return done(sense(h, m));                                                    // Sense
@@ -1689,6 +1700,7 @@ async function main() {
   const vision = (x: number, y: number) => {
     const d = level.loc.doors.find(e => e.x === x && e.y === y);
     if (!d) return 0xe0;
+    fx.play(FX.spef6({ x, y }));                                        // Spef6 on the door
     if (d.type < 6 || d.type > 9) return v02.vision.texts[v02.vision.ids.findIndex(t => t > d.id)];
     const hr = level.loc.hrooms?.find(r => r.id === d.id);
     const k = !hr || !(hr.reward || hr.amount) ? 0 : hr.reward < 0x80 ? 1 : 2;
@@ -2065,7 +2077,7 @@ async function main() {
     await world.at(x, y, clock);
     message = '';
   }
-  if (import.meta.env.DEV) Object.assign(window, { dbg: { party, world, clock, events, assigns, dunrms, get level() { return level; }, get fight() { return fight; } } });   // for scripts/shot.mjs eval:
+  if (import.meta.env.DEV) Object.assign(window, { dbg: { party, world, clock, events, assigns, dunrms, fx, FX, get level() { return level; }, get fight() { return fight; } } });   // for scripts/shot.mjs eval:
   render();
 }
 

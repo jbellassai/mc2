@@ -1,5 +1,6 @@
 // Spells a hero casts in combat (rules/spells.md: _Magic, P94 ovl_1740, V06 INT 61h handlers, FFFAR HEAL/ENERGY/SHIELD).
 // Not yet: Betray, Summon, Double, Destroy, Jump (side changes, extra records, square targeting).
+import { FX, MISSILE } from './fx';
 import type { Fight, Rec } from './combat';
 
 type Text = (n: number, v?: Record<string, string | number>) => string;
@@ -62,10 +63,34 @@ export function monsterSpell(f: Fight, c: Rec, spells: number[]): { spell: numbe
 const SOUND: Record<number, number> = { 0: 10, 2: 2, 5: 11, 6: 2, 11: 15, 14: 16, 18: 15, 22: 2, 24: 16, 27: 24, 28: 10,
   30: 10, 31: 9, 32: 4, 33: 15, 36: 2, 40: 5 };
 
+/** The spell's pictures (V06 handlers, FFFAR ovl_3228/ovl_3240; rules/effects.md), shown before its effect is resolved. */
+function show(f: Fight, c: Rec, spell: number, t: Rec | null) {
+  const fly = (type: number, to: Rec) => { const p = f.path(c, to); f.fx(FX.missile(p, MISSILE[type], undefined, type < 5)); return p[p.length - 1] ?? to; };
+  const side = () => f.recs.filter(r => r.side === c.side && f.alive(r));
+  switch (spell) {
+    case 6: return f.fx(FX.bang(fly(1, t!)));                                             // Fireball: _Bang where it stops
+    case 2: return void fly(6, t!);                                                         // Shatter
+    case 36: return f.fx(FX.acidBang(fly(2, t!)));                                          // Acidball
+    case 22: return f.fx(FX.bigBang(fly(1, t!)));                                           // Zefoar
+    case 19: return f.fx(FX.multiBang(f.recs.filter(r => r.side !== c.side && f.visible(r) && f.missile(c, r)), 3));   // Zapall
+    case 32: return f.fx(FX.multiBang([t!]));                                               // Destroy
+    case 0: return f.fx(FX.spef3(t!));                                                      // Fear
+    case 11: return f.fx(FX.spef3single(t!, 9));                                            // Freeze
+    case 18: return f.fx(FX.spef3single(t!, 0xc));                                          // Zofir
+    case 38: return f.fx(FX.spef6(t!));                                                     // Courage
+    case 37: return f.fx(FX.spef5(t!));                                                     // Forget
+    case 30: return f.fx(FX.spef7(t!));                                                     // Betray
+    case 35: return f.fx(FX.invert(970, 11));                                               // Timestop: InvertWindow(0, 11)
+    case 8: case 12: case 16: return f.fx(FX.spef4(t!, spell === 8 ? 10 : spell === 12 ? 0xc : 9));   // Heal, Energy, Shield
+    case 20: case 21: for (const r of side()) f.fx(FX.spef4(r, spell === 20 ? 0xc : 9)); return;      // Zengrl, Zishoxe
+  }
+}
+
 /** The effect of `spell` cast by `c` on `t` (null for untargeted spells); returns the lines to print. */
 export function effect(f: Fight, c: Rec, spell: number, t: Rec | null, text: Text): string[] {
   const out: string[] = [];
   if (SOUND[spell]) f.sound(SOUND[spell]);
+  show(f, c, spell, t);
   // INT61_01: a hero who used Turpin casts this spell with magic 99 (the flag is spent).
   const turpin = c.hero && (c.hero.rec.h_inuse as number) & 8;
   if (turpin) c.hero!.rec.h_inuse = (c.hero!.rec.h_inuse as number) & ~8;
