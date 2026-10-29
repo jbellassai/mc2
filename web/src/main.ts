@@ -1157,7 +1157,7 @@ async function main() {
     const value = fight!.rollLoot(fightDiff, events, tables.lootvalues);
     for (const { hero: h } of party.members)
       if (h.rec.h_relatn === 2) h.rec.h_partybucks = Math.min(30000, (h.rec.h_partybucks as number) + value);
-    if (fight!.recs.some(r => r.hero && (r.state & 0x98) === 0x80)) { panel.line(comtxt[0x110]); raise(); }
+    if (fight!.recs.some(r => r.hero && (r.state & 0x98) === 0x80)) { looted = false; panel.line(comtxt[0x110]); raise(); }
     else searchAsk();
     render();
     return true;
@@ -1209,6 +1209,7 @@ async function main() {
     return false;
   };
   let raising = false;                                             // the aftermath menu is up: arrows move a member
+  let looted = false;                                              // _corpsexfer: something left a dead member's pack (FFFAR Give)
   /** A step on the aftermath screen (P95 → `_RMove`, the first living hero standing for `_curpla`): none without
    *  energy; off the board, or a blocked step onto one of the room's doors (`_ChkDoor`, room fights only), asks "Do you
    *  want to leave now?" (0x23, after the quest-item refusal) - Yes searches the bodies and leaves the fight without
@@ -1237,12 +1238,14 @@ async function main() {
    *  the caster (4) and gives its loot (", giving %d " (5) and the treasure, _IncObj to the caster; a full pack keeps
    *  only the thanks), then leaves the board. One copy, the energy and a magic skill roll as elsewhere (assumed). A
    *  record not on the party's side (`c_alignmnt`) is refused: "%h decides not to resurrect the %l." (3), nothing spent.
-   *  The looting refusal (6) is not built: the search comes after this screen in the port. */
+   *  After something was taken from a dead member's pack (`_corpsexfer`, the sheet's Transfr) every cast is refused:
+   *  "While you were looting that corpse…" (6), nothing spent. */
   const resurrect = (a: Rec) => {
     const h = a.hero!, r = h.rec, sp = r.h_rdyspl, need = Math.max(1, cdata.spells.energy[sp] - (r.h_magic >> 2));
     if (sp === 0xff) { panel.line(ctext(0x40, { h: a.name })); return raise(); }        // "%h must recall a spell first."
     if (!(cdata.spells.where[sp] & 0x20)) { panel.line(ctext(0x56, { h: a.name })); return raise(); }
     if (r.h_energy < need) { panel.line(comtxt[0x41]); return raise(); }                 // "Not enough energy!"
+    if (looted) { panel.line(cdata.resurrect[6]); return raise(); }
     const f = fight!, rt = cdata.resurrect, say = (s: string, v: Record<string, string> = {}) =>
       format(s.replace(/%d/g, h.female ? 'her' : 'him').replace(/%[al]/g, m => v[m[1]] ?? ''), h, h.name);
     panel.line(rt[1]);
@@ -1760,6 +1763,8 @@ async function main() {
         .map((rows, i) => table(i ? '' : 'Pack', rows)));
     panel.show(); panel.add(wrap);
     const member = party.members.find(m => m.hero === who)!;
+    if (fight) return panel.set([...party.members.map(m => ({ label: m.hero.name, act: () => sheet(m.hero) })),   // the aftermath (status menu 3)
+                                 { label: cmd[42], act: () => transfer(member) }, { label: cmd[0], act: raise }]);
     panel.set([...(party.members.length > 1 ? party.members.map(m => ({ label: m.hero.name, act: () => sheet(m.hero) })) : []),
                ...(party.members.length > 1 ? [{ label: cmd[42], act: () => transfer(member) }] : []),   // Transfr
                { label: cmd[14], act: () => weaponSel(who, line => close(line), () => sheet(who)) },   // Draw
@@ -2082,6 +2087,7 @@ async function main() {
         if (!incObj(to.hero, item, n)) { panel.line(say(comtxt[0x20])); return; }
         for (let k = 0; k < n; k++) from.hero.dec(slot);
       }
+      if ((r.h_cond1 as number) & 0x80) looted = true;                          // FFFAR INT62_0a / ovl_221d
       if (t.h_relatn === 2) t.h_mybucks = Math.min(30000, (t.h_mybucks as number) + tables.lootvalues[item] * n);
       back();
       panel.line(`${from.hero.name} → ${to.hero.name}: ${n > 1 || item === 0 ? n + ' ' : ''}${item === 0 ? comtxt[0xb1] : items[item]}`);
@@ -2318,6 +2324,7 @@ async function main() {
       if (k && actor && !autoHeroes.has(actor.recno)) { e.preventDefault(); fightStep(...k); }
       else if (k && before) { e.preventDefault(); prestep(...k); }
       else if (k && raising) { e.preventDefault(); poststep(...k); }
+      else if (raising && e.key.toLowerCase() === 'i') { raising = false; sheet(); }   // _Parser: the status screen (_Status0)
       return;
     }
     if (panel.open) return;
