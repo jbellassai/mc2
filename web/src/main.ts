@@ -1225,9 +1225,9 @@ async function main() {
    *  target." (text 1) among the records on the board; alive → "%a does not need resurrection." (2); else it always
    *  works: HP and energy 1, not dead (a hero: `h_hitpts = h_energy = 1`, `cond1 &= ~Dead`, "Done."); a monster thanks
    *  the caster (4) and gives its loot (", giving %d " (5) and the treasure, _IncObj to the caster; a full pack keeps
-   *  only the thanks), then leaves the board. One copy, the energy and a magic skill roll as elsewhere (assumed). The
-   *  "decides not to resurrect" refusal (3, a record byte +9 not traced) and the looting refusal (6, the search comes
-   *  after this screen in the port) are not built. */
+   *  only the thanks), then leaves the board. One copy, the energy and a magic skill roll as elsewhere (assumed). A
+   *  record not on the party's side (`c_alignmnt`) is refused: "%h decides not to resurrect the %l." (3), nothing spent.
+   *  The looting refusal (6) is not built: the search comes after this screen in the port. */
   const resurrect = (a: Rec) => {
     const h = a.hero!, r = h.rec, sp = r.h_rdyspl, need = Math.max(1, cdata.spells.energy[sp] - (r.h_magic >> 2));
     if (sp === 0xff) { panel.line(ctext(0x40, { h: a.name })); return raise(); }        // "%h must recall a spell first."
@@ -1238,6 +1238,7 @@ async function main() {
     panel.line(rt[1]);
     panel.set([...f.recs.filter(t => !(t.state & 0x18)).map(t => ({ label: `${t.name} (${t.x},${t.y})`, act: () => {
       if (!(t.state & 0x80)) { panel.line(say(rt[2], { a: t.name })); return raise(); }
+      if (t.side) { panel.line(say(rt[3], { l: t.name })); return raise(); }   // P95 0xD48: an enemy
       t.state &= 0x7f; t.health &= 0x7f; t.hp = 1; sfx(12);
       if (t.hero) {
         const tr = t.hero.rec;
