@@ -32,6 +32,23 @@ export class View {
     if (n < 0x18) this.sheet(this.heroes, 0x3b + 18 * n, cols, cx, cy); else this.sheet(this.more, 18 * (n - 0x18), cols, cx, cy);
   }
 
+  /** A full screen (P81's VGA screens, `screens/x.png`, 320×200) fitted to the view's width with black above and
+   *  below, faded in from black over 0.4 s as the original fades its palette in. */
+  async screen(name: string) {
+    const im = await image(`screens/${name}.png`), ctx = this.ctx, w = this.canvas.width, h = Math.round(w * 200 / 320);
+    const y = (this.canvas.height - h) >> 1, t0 = performance.now();
+    ctx.imageSmoothingEnabled = false;
+    await new Promise<void>(done => {
+      const frame = (now: number) => {
+        const a = Math.min(1, (now - t0) / 400);
+        ctx.globalAlpha = 1; ctx.fillStyle = '#000'; ctx.fillRect(0, 0, w, this.canvas.height);
+        ctx.globalAlpha = a; ctx.drawImage(im, 0, y, w, h); ctx.globalAlpha = 1;
+        if (a < 1) requestAnimationFrame(frame); else done();
+      };
+      requestAnimationFrame(frame);
+    });
+  }
+
   /** The map square under a mouse event, for a view centred on (cx, cy). */
   cellAt(e: MouseEvent, cx: number, cy: number): { x: number; y: number } {
     const r = this.canvas.getBoundingClientRect();

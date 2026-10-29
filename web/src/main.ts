@@ -55,7 +55,7 @@ async function main() {
     catch { return []; }
   });
   const start = dev ? { hero: await Hero.profile(Math.min(4, Math.max(0, Number(q.get('profile')) || 0))) }
-    : await newGame(savedSlots, await json<string[]>('commands.json'));
+    : await newGame(savedSlots, await json<string[]>('commands.json'), n => { status.textContent = ''; return view.screen(n); });
   const hero = 'hero' in start ? start.hero : await Hero.profile(0);   // a continued game replaces it on restore
   panel.hide();
   const clock = Clock.newGame();

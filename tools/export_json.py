@@ -8,6 +8,8 @@ sys.path.insert(0, os.path.dirname(__file__))
 from loc import PTRS
 from mc2fmt import load_mct
 from render import render_tileset
+from mce import vga
+from PIL import Image
 
 def strings(b):
     return [s.decode('latin1') for s in b.split(b'\0')[:-1]] if b else []
@@ -437,6 +439,12 @@ def main(src, dst):
         # the MT-32 arrangement of the same song (_RolandLoad: 11-byte names after the CMF ones), for the modern music
         mid = exe[ds + p + 14 * 11:exe.index(b'\0', ds + p + 14 * 11)].decode().upper()
         open(f'{dst}/music/{n}.mid', 'wb').write(open(f'{src}/{mid}', 'rb').read())
+    # VGA full screens (P81 ovl_1469, tools/mce.py): 5 the Mindcraft logo, 1 the title, E/I/M the intro's pictures
+    # (A, the original's game frame, is not used by the port)
+    os.makedirs(f'{dst}/screens', exist_ok=True)
+    for x in '51EIM':
+        pal, px = vga(f'{src}/VSCR{x}.MCE')
+        im = Image.frombytes('P', (320, 200), px); im.putpalette(pal); im.save(f'{dst}/screens/{x}.png')
     ct = ds + 0x9F8   # common text, message n = n-th string
     dump(f'{dst}/comtxt.json', [x.decode('latin1') for x in exe[ct:ct + 0x4000].split(b'\0')[:400]])
     print(f'{n} locations, {len(blocks)} blocks, {sum(map(len, rooms.values()))} room chunks')

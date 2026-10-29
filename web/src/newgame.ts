@@ -11,11 +11,16 @@ import { Hero, type HeroRecord } from './hero';
 interface P81 { texts: string[]; scenes: number[][] }
 export type Start = { slot: number } | { hero: Hero };
 
-/** The P81 flow; `saves` = the occupied slots with a label, `cmd` = command words (Yes/No/End…). */
-export async function newGame(saves: { slot: number; label: string }[], cmd: string[]): Promise<Start> {
+/** The P81 flow; `saves` = the occupied slots with a label, `cmd` = command words (Yes/No/End…), `show` draws a full
+ *  screen. P81 shows screen 5 (the Mindcraft logo), plays song 1 to its end (ovl_1343) and shows screen 1 (the title);
+ *  the port moves on after the song, 4 s, or a key or click, since browsers hold audio back until the first gesture. */
+export async function newGame(saves: { slot: number; label: string }[], cmd: string[], show: (name: string) => Promise<void>): Promise<Start> {
   const [p81, heroes, items] = await Promise.all([json<P81>('p81.json'), json<HeroRecord[]>('heroes.json'), json<string[]>('items.json')]);
   const t = (n: number, h: Hero) => format(p81.texts[n], h, h.name);
-  void song(1);                                                         // P81 ovl_1343: the title's fanfare
+  const skip = new Promise(ok => { setTimeout(ok, 4000); addEventListener('keydown', ok, { once: true }); addEventListener('pointerdown', ok, { once: true }); });
+  await show('5');
+  await Promise.race([song(1), skip]);
+  await show('1');
   panel.show();
   return new Promise<Start>(done => {
     const title = () => {
@@ -66,6 +71,7 @@ export async function newGame(saves: { slot: number; label: string }[], cmd: str
     const intro = (h: Hero, k: number) => {
       if (k === 0) void song(2);                                        // P81 0x1A42: the intro's theme
       if (k >= p81.scenes.length) return done({ hero: h });
+      void show('EIMM'[k] ?? 'M');                                      // P81 0x1A4C-0x1A88: a picture per scene
       if (!p81.scenes[k].length) return intro(h, k + 1);
       panel.show();
       for (const n of p81.scenes[k]) panel.line(t(n, h));

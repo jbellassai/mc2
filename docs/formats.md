@@ -142,7 +142,7 @@ Not a region: 6,820 bytes = 31 `HERO` records (220 B, `structs.h`) for companion
 `FFSAVA.MCS` is exactly 10,839 bytes = `DS:4CF6` (`_startsvdta`) … `DS:774D` (`_endsvdta`); file offset = DS offset − 0x4CF6. Everything the overlays reach through `[SI+disp]` (SI = 0x4CF6) is therefore saved: clock (`_startsvdta` minute, `_hour`, `_date`, `_month`, `_daynite`, `_weather`, `_season`), `_party[6]` (hero index or 0xFF), `_member0` (37 × 220-byte `HERO`, player = 0, companions = 6–36), `_capsta`, `_knpcstats`, `_npcsta` (32-byte bitmap of removed NPCs), `_events` (32-byte bitmap), `_curwthrs[16]`, `_assgn0` (31 × 25). `FFSAV.MCI` (128 B) is the slot index. `MC2.INT` (2,183 B) is not a save image (TODO).
 
 ## Other extensions
-`MCE` full screens (not decoded), `CMF`/`MID` music and `VOC` sound effects (standard formats). Conversations and creature tiles: see their sections.
+`MCE` full screens (below), `CMF`/`MID` music and `VOC` sound effects (standard formats). Conversations and creature tiles: see their sections.
 
 ## `Cnn.MCV` — conversation files (24 files, 8 NPCs each)
 Loaded by `_Tobo(npc)` into `_convbufptr` (12 KB): file `C(npc>>3)`, slot `_convix = npc & 7`. Header: 42 words of in-file offsets (`_FixPointers` adds the buffer base to words 0..0x52):
@@ -158,3 +158,7 @@ Loaded by `_Tobo(npc)` into `_convbufptr` (12 KB): file `C(npc>>3)`, slot `_conv
 | 34–41 | per-slot 0xFF-terminated `{greet[, bye]}` text indices (a lone 0xFF = none: use the location defaults `loc+60`/`loc+61`) |
 
 Then at 0x54: 8 bytes **trade skill** per slot, 0x5C: 8 bytes **no-buy** flag, 0x64: 8 bytes = per-slot **text number of the NPC's reply to an unknown keyword** (`P91 ovl_0a08`: 0xFF → the generic common-text line, else that string of the file's text block, e.g. C22 "I got no time for questions!", "Go to hell!", C20 "I have no clue, mighty %h!"), text from 0x6C. `tools/convdump.py original [Cnn …]` dumps skills, shops and gifts with the message texts; `tools/talkdump.py original out/talk` decodes every script. C04 slot 0's gift list is not 0xFF-terminated (runs into the next data).
+
+### Full screens (`CSCRx.MCE`, `ESCRx.MCE`, `VSCRx.MCE`)
+P81 loads `cscrx.mce` / `escrx.mce` / `vscrx.mce` (names at P81 0x793, `x` patched) by video mode (`ovl_1373`: CGA `ovl_13c2`, Tandy `ovl_1428`, EGA `ovl_14ff`, VGA `ovl_1469`) and decodes them with `ovl_1398`: a run-length code where a count byte n (low 7 bits) is followed by one byte repeated n times (bit 7 clear) or n literal bytes (bit 7 set). The VGA files decode to 0xFD00 bytes: a 256-colour palette (768 bytes, 6-bit levels) and 320×200 pixels in plain row order; the routine blanks the palette, copies the picture and fades the palette in. Screens: `5` the Mindcraft logo, `1` the title, `E`/`I`/`M` the intro's pictures (scenes 0, 1, 2–3, P81 0x1A4C–0x1A88), `A` the game's frame. `tools/mce.py FILE OUT.png` renders one; `tools/export_json.py` writes `screens/{5,1,E,I,M}.png`.
+
