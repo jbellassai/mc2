@@ -22,7 +22,7 @@ export interface SceneCtx {
   figures(): Figure[];
   /** `_scrollonfloor` (saved): the scroll item lying on the floor, 0 = none. */
   scroll: { item: number };
-  /** `_disasterday = _juldate`; NPCs 56, 60, 61 appear (`_npcsta`). */
+  /** `_disasterday = _juldate`; Jemil, Shannor and Alex (NPCs 56, 60, 61) leave their homes (`_npcsta` bits set). */
   disaster(): void;
   /** `_GameSound`. */
   sound(n: number): void;

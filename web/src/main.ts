@@ -426,7 +426,8 @@ async function main() {
     go(lv, roomStart.x, roomStart.y);
     message = level.loc.name.trim() ? `${hero.name} enters ${level.loc.name}.` : '';   // which of D08/D09's room names applies is not traced
     scene = ref.pgm.program === 8 ? await Scene.open({ party, events, items, comtxt, figures: () => figures, scroll,
-      disaster: () => { disasterday = clock.juldate; }, sound: sfx, fx: e => fx.play(e) }, locspec, ref.room, level) : null;
+      disaster: () => { disasterday = clock.juldate; for (const n of [56, 60, 61]) party.away.add(n); },   // P08 ovl_16e9: _npcsta
+      sound: sfx, fx: e => fx.play(e) }, locspec, ref.room, level) : null;
     if (scene && events.has(122)) return void epilogue();
     if (scene) message = scene.enter() || message;
     service = ref.pgm.program === 5 ? await ServiceRoom.open(ctx, ref.room, ref.kind, level.loc.texts, level.loc.words) : null;
@@ -538,7 +539,7 @@ async function main() {
     };
     const knock = () => {
       sfx(17);                                                        // P02 0xBDB: the knock Home = resident's hours (_TimCalc), not removed (_npcsta), RESID event conditions.
-      const home = r && r.num !== 0xfe && clock.within(r.appear, r.disappear) &&
+      const home = r && r.num !== 0xfe && !party.away.has(r.num) && clock.within(r.appear, r.disappear) &&
                    (!r.ifevent || events.has(r.ifevent)) && (!r.ifnevent || !events.has(r.ifnevent));
       if (!home) return done(p02[1]);                                 // "There is no response."
       panel.line(say(p02[2]));                                        // "Whom do you seek?"
