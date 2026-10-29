@@ -88,6 +88,7 @@ export class Special {
     if (this.kind === SHRINE && n === this.index) return this.awaken();
     if (this.kind !== GATE || n !== this.index || gates.has(n)) return false;
     gates.add(n);
+    this.ctx.sound(0x16);                                                    // P09 0x153F: the creak
     this.openGate();
     this.ctx.close(this.say(this.texts[8], { a: this.texts[n] }));   // "The gate of the %a slowly creaks open!"
     return true;
@@ -253,13 +254,14 @@ export class Special {
 
   /** P09 0x1108: every member without the god's bit gets D59 `hroomptr` list 8 + g, pairs {HERO offset, amount}
    *  (amount | 0x80 = only if the stat is non-zero); endurance also adds 8 × amount to `h_hpmax`. `_IncSta` refuses a
-   *  total of 100 or more. "%o's %a increases (+%b) to %i." for each gain. */
+   *  total of 100 or more. "%o's %a increases (+%b) to %i." for each gain; a member whose first stat rises gets
+   *  `_Spef1` on their square (P09 0xDB88). */
   private bless(g: number) {
     const lists: number[][] = [[]];
     for (const b of hex(this.level.loc.tables.hroomptr)) if (b === 0xff) lists.push([]); else lists[lists.length - 1].push(b);
     const pairs = lists[8 + g] ?? [];
-    for (const { hero } of this.ctx.party.members) {
-      const r = hero.rec as Record<string, number>;
+    for (const m of this.ctx.party.members) {
+      const hero = m.hero, r = hero.rec as Record<string, number>;
       if (r.h_godseen & (1 << g)) continue;
       for (let k = 0; k + 1 < pairs.length; k += 2) {
         const f = FIELDS[pairs[k] - 13], n = pairs[k + 1] & 0x7f, old = r[f];
@@ -267,6 +269,7 @@ export class Special {
         if (pairs[k] === 0x10 && r.h_hpmax + 8 * n < 100) r.h_hpmax += 8 * n;
         if (old + n >= 100) continue;
         r[f] = old + n;
+        if (k === 0) this.ctx.fx(FX.spef1(m));
         panel.line(format(this.texts[22], hero, hero.name, { a: this.ctx.attribs[pairs[k] - 13], b: n, i: old + n }));
       }
     }

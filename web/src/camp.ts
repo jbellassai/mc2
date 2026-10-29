@@ -1,7 +1,6 @@
 // Camp (P93 ovl_0271, rules/camp.md). The commands set each member's activity (`h_actvty`); Begin runs the loop.
 // Where (`_CAMPSITE`, ovl_1099): 2 open camp on the world map, 4 aboard a ship, 8 a dungeon room (P07), 0x20 a rented
-// inn room, 0x10 a guest room; anywhere else 1, the reduced menu 22 (Use, Recall, Put, Off, End). Not built: the camp
-// formation (ovl_1151: the party drawn on fixed squares).
+// inn room, 0x10 a guest room; anywhere else 1, the reduced menu 22 (Use, Recall, Put, Off, End).
 import { panel } from './panel';
 import { format } from './talk';
 import { incObj } from './shop';

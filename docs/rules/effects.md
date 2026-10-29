@@ -87,7 +87,7 @@ The missile stops on the first unwalkable or occupied square; `G_TILEXY` is wher
 | P08 `ovl_0d8e`, the Orb and the bird | sound 10, `_Spef6` at the user |
 | P08 the ending (L_0772) | `ovl_187e` = `_InvertWindow(0, 3)`; 0x1890 (`ovl_191b`) a person appears: four `_MultiFX` passes with flag 7 (timer 4000), then one with flag 3; 0x18B4 (`ovl_18cd`) a person vanishes: one pass, flag 3, timer 60000. Zakhad appears after the flash, vanishes when Jemil banishes him, then Zidoni appears. The doom (`ovl_0c41`): for each member from slot 5 down, then the room's first NPC, `0x1986`: the blob map around them (`ovl_1a52` clears the stages to 5; `ovl_1a8a` spreads 8-way from the square with `ovl_1b13`, whose wall test `ovl_1b64` is an empty stub, so the blob is the Chebyshev distance), stages blob + 0x14 through `_MultiBang(0)` as in Destroy, the figure flashed (flag 0x1001), thunder (29), the square restored |
 | P09 `ovl_123e`, a god's thunder | `_Bang(x, y, 0)` on each member |
-| P09 `FUN_1000_db88`, a god's blessing | `_Spef1` at a member (the condition is not traced) |
+| P09 `FUN_1000_db88`, a god's blessing | `_Spef1` at a member whose first stat in the god's list rises (`local_4` still at the list's start, `_IncSta` accepted) |
 | P96 `ovl_05fd`, the Doombeasts and their images at set-up | `_MultiThing(9)` |
 
 ## Port
@@ -104,5 +104,3 @@ The doom's and Destroy's flash is Spef3Single in white. `_MultiFX` in combat is 
 assumed alike); while a figure dissolves in, its square's own drawing is held back (`Overlay.hide`).
 Ending timings: the appear passes 300 ms each plus 600 ms, the vanish 2.5 s.
 
-Not built:
-- the gods' blessing `_Spef1`.
