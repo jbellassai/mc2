@@ -13,7 +13,6 @@ const KEY = 'mc2.audio';
 
 let ctx: AudioContext | null = null;
 const effects = new Map<number, Promise<AudioBuffer | null>>();
-const songs = new Map<string, AudioBuffer>();
 
 function load(): { sound: boolean; music: Music } {
   const d = { sound: true, music: 'modern' as Music };
@@ -61,23 +60,31 @@ let queue: Promise<void> = Promise.resolve();
  *  off). */
 export function song(n: number): Promise<void> { return queue = queue.then(() => playSong(n)); }
 async function playSong(n: number): Promise<void> {
-  const style = audio.music;
-  if (style === 'off') return;
-  ctx ??= new AudioContext();
-  let b = songs.get(`${style}${n}`);
-  if (!b) {
-    const r = await fetch(`${BASE}music/${n}.${style === 'modern' ? 'mid' : 'cmf'}`);
-    if (!r.ok) return;
-    const d = new Uint8Array(await r.arrayBuffer());
-    if (style === 'modern') b = await renderModern(parseMidi(d));
-    else {
-      const s = renderCmf(d);
-      b = ctx.createBuffer(1, s.length, RATE);
-      b.copyToChannel(s, 0);
-    }
-    songs.set(`${style}${n}`, b);
-  }
+  const b = await prepare(n);
+  if (!b) return;
   const src = play(b);
   note(100 + n);
   await new Promise(ok => { src.onended = ok; });
 }
+
+const renders = new Map<string, Promise<AudioBuffer | null>>();
+/** Song n in the current style, rendered once (a modern song takes a few seconds): null with music off. */
+export function prepare(n: number): Promise<AudioBuffer | null> {
+  const style = audio.music;
+  if (style === 'off') return Promise.resolve(null);
+  ctx ??= new AudioContext();
+  const key = `${style}${n}`;
+  if (!renders.has(key)) renders.set(key, (async () => {
+    const r = await fetch(`${BASE}music/${n}.${style === 'modern' ? 'mid' : 'cmf'}`);
+    if (!r.ok) return null;
+    const d = new Uint8Array(await r.arrayBuffer());
+    if (style === 'modern') return renderModern(parseMidi(d));
+    const s = renderCmf(d), b = ctx!.createBuffer(1, s.length, RATE);
+    b.copyToChannel(s, 0);
+    return b;
+  })());
+  return renders.get(key)!;
+}
+
+/** Whether a key or click has let audio start. */
+export const audible = () => ctx?.state === 'running';

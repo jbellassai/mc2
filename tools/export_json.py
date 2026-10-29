@@ -442,6 +442,17 @@ def main(src, dst):
     # VGA full screens (P81 ovl_1469, tools/mce.py): 5 the Mindcraft logo, 1 the title, E/I/M the intro's pictures
     # (A, the original's game frame, is not used by the port)
     os.makedirs(f'{dst}/screens', exist_ok=True)
+    # the game font (_LoadAlphabet: I26.MCT, E26.MCT on EGA/VGA): 128 ASCII glyphs of 8x8 4bpp, ink 0 on grey 7;
+    # written as a 16x8 atlas, ink opaque white and the rest clear, so the port can tint it
+    f26 = open(f'{src}/E26.MCT', 'rb').read()
+    font = Image.new('RGBA', (128, 64), (0, 0, 0, 0))
+    for g, o in enumerate(struct.unpack_from('<128H', f26, 0)):
+        o += 256
+        assert (f26[o], f26[o + 1]) == (4, 8)
+        for i, b in enumerate(f26[o + 2:o + 34]):
+            for k, v in enumerate((b >> 4, b & 15)):
+                if v == 0: font.putpixel(((g % 16) * 8 + (i % 4) * 2 + k, (g // 16) * 8 + i // 4), (255, 255, 255, 255))
+    font.save(f'{dst}/font.png')
     for x in '51EIM':
         pal, px = vga(f'{src}/VSCR{x}.MCE')
         im = Image.frombytes('P', (320, 200), px); im.putpalette(pal); im.save(f'{dst}/screens/{x}.png')

@@ -15,6 +15,7 @@ Built by `.venv/bin/python -I tools/export_json.py original out/pack`; never com
 | `items.json` | item names by code (`_w_objects`, 0x00–0x5C) |
 | `companions.json` | the 31 companions' starting `HERO` records from `R90.MCV` (index = `h_orinum` − 1, plain gold) |
 | `p93text.json` | camp texts (P93 file 0x3D): 0 "Is everyone going to sleep?", 1 "%o will sleep.", … 8 "Camp activities are in progress." (`rules/camp.md`) |
+| `font.png` | the game font, 16 × 8 glyphs of 8 × 8 (ASCII order), ink opaque white on clear (`formats.md`) |
 | `screens/x.png` | P81's VGA full screens (`formats.md`, Full screens): 5 logo, 1 title, E/I/M intro pictures |
 | `sounds/n.wav`, `music/n.cmf` | `_GameSound(n)`'s effect (FFFAR name table, VOC → 8-bit WAV with the ADPCM decoded) and `_song(n)`'s CMF file as is (`rules/sound.md`, decision 5); `music/n.mid` the same song's MT-32 arrangement (decision 6) |
 | `v02.json` | `disguise` {towns (file 0xCBA), texts 0–1 (file 0x07)} (INT60_10); `hroomtype` {ids, types} (file 0xE19 / 0xE27, INT60_12: 1 prison cell, 2–5 Dark Candle rooms, 6 Vankruh); town spells (V02): `vision` = door-id band thresholds `ids[16]` (file 0x8C) and their comtxt numbers `texts[16]` (0x9C); `sense[16]` = direction index (comtxt 0x9E + n) by `ovl_082e`'s flags (0x7FE, words) (`rules/spells.md`) |

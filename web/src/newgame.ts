@@ -2,7 +2,7 @@
 // true name and a nickname, then the intro scenes (P81 string 40: FF-separated lists of string numbers).
 // Port additions: the title's saved-game list, and each profile's figures on its button (the original refers the player
 // to the printed Gamebook).
-import { song } from './sound';
+import { song, prepare, audible } from './sound';
 import { json } from './pack';
 import { panel } from './panel';
 import { format } from './talk';
@@ -11,16 +11,29 @@ import { Hero, type HeroRecord } from './hero';
 interface P81 { texts: string[]; scenes: number[][] }
 export type Start = { slot: number } | { hero: Hero };
 
-/** The P81 flow; `saves` = the occupied slots with a label, `cmd` = command words (Yes/No/End…), `show` draws a full
- *  screen. P81 shows screen 5 (the Mindcraft logo), plays song 1 to its end (ovl_1343) and shows screen 1 (the title);
- *  the port moves on after the song, 4 s, or a key or click, since browsers hold audio back until the first gesture. */
-export async function newGame(saves: { slot: number; label: string }[], cmd: string[], show: (name: string) => Promise<void>): Promise<Start> {
-  const [p81, heroes, items] = await Promise.all([json<P81>('p81.json'), json<HeroRecord[]>('heroes.json'), json<string[]>('items.json')]);
+/** `_SetTxtWnd` windows in screen pixels (EXE DS:9A6/9BA/9CE/9E2, x and width in units of 4): the title's box
+ *  (P81 0x12BF), window 8 (the scroll on pictures E and I) and window 9 (on M). */
+type Win = [number, number, number, number];
+const TITLEBOX: Win = [4, 114, 72, 40], SCROLL: Record<string, Win> = { E: [16, 16, 144, 40], I: [16, 16, 144, 40], M: [152, 12, 144, 40] };
+const gesture = () => new Promise<void>(ok => { addEventListener('keydown', () => ok(), { once: true }); addEventListener('pointerdown', () => ok(), { once: true }); });
+const sleep = (ms: number) => new Promise(ok => setTimeout(ok, ms));
+
+/** The P81 flow; `saves` = the occupied slots with a label, `cmd` = command words (Yes/No/End…), `view` draws the
+ *  full screens. P81 shows screen 5 (the Mindcraft logo) while song 1 plays to its end (ovl_1343: at least 1.5 s),
+ *  then screen 1 (the title) with "IBM/Tandy Version 2.00" (text 0) in its box. The port first renders the two songs
+ *  ("Loading...": the fanfare now, the intro's theme while the hero is chosen) and, since browsers start audio only after a key or click, asks for one, so that the logo and its
+ *  fanfare start together; a key or click skips the logo. */
+export async function newGame(saves: { slot: number; label: string }[], cmd: string[],
+                              view: { screen(name: string, texts?: { win: Win; text: string }[], fade?: boolean): Promise<void>; notice(lines: string[]): Promise<void> }): Promise<Start> {
+  await view.notice(['Loading...']);
+  const [p81, heroes, items] = await Promise.all([json<P81>('p81.json'), json<HeroRecord[]>('heroes.json'), json<string[]>('items.json'),
+    prepare(1)]);
+  void prepare(2);                                                      // renders while the hero is chosen
   const t = (n: number, h: Hero) => format(p81.texts[n], h, h.name);
-  const skip = new Promise(ok => { setTimeout(ok, 4000); addEventListener('keydown', ok, { once: true }); addEventListener('pointerdown', ok, { once: true }); });
-  await show('5');
-  await Promise.race([song(1), skip]);
-  await show('1');
+  if (!audible()) { await view.notice(['Press any key to begin']); await gesture(); }
+  await view.screen('5');
+  await Promise.race([Promise.all([song(1), sleep(1500)]), gesture()]);
+  await view.screen('1', [{ win: TITLEBOX, text: p81.texts[0] }]);
   panel.show();
   return new Promise<Start>(done => {
     const title = () => {
@@ -66,16 +79,22 @@ export async function newGame(saves: { slot: number; label: string }[], cmd: str
         }, 'Nickname (5 letters)');
       }, 'Full name (12 letters)');
     };
-    /** The intro: each scene's lines, then "%h has landed in Telermain." (19). Scene 3 is empty for a new hero (assumed
-     *  to hold the imported hero's line, 27). */
-    const intro = (h: Hero, k: number) => {
-      if (k === 0) void song(2);                                        // P81 0x1A42: the intro's theme
+    /** The intro (P81 0x1A42-0x1AB6): song 2, then a picture per scene (E, I, M, M) whose lines are printed one by one
+     *  into its scroll (window 8 or 9), each waiting for a key (ovl_1b03: `_IModTxt` + "%k"); then "%h has landed in
+     *  Telermain." (19). Scene 3 is empty for a new hero (assumed to hold the imported hero's line, 27). The other
+     *  songs render in the background meanwhile. */
+    const intro = async (h: Hero, k: number, j = 0) => {
+      if (k === 0 && j === 0) {
+        await prepare(2);
+        void song(2);
+        void (async () => { for (let n = 3; n <= 14; n++) await prepare(n); })();
+      }
       if (k >= p81.scenes.length) return done({ hero: h });
-      void show('EIMM'[k] ?? 'M');                                      // P81 0x1A4C-0x1A88: a picture per scene
       if (!p81.scenes[k].length) return intro(h, k + 1);
+      const pic = 'EIMM'[k] ?? 'M', last = j + 1 >= p81.scenes[k].length;
+      void view.screen(pic, [{ win: SCROLL[pic], text: t(p81.scenes[k][j], h) }], j === 0);
       panel.show();
-      for (const n of p81.scenes[k]) panel.line(t(n, h));
-      panel.set([{ label: cmd[11], act: () => intro(h, k + 1) }]);      // Cont
+      panel.set([{ label: cmd[11], act: () => void (last ? intro(h, k + 1) : intro(h, k, j + 1)) }]);   // Cont
     };
     if (saves.length) title(); else profiles();
   });

@@ -33,16 +33,66 @@ export class View {
   }
 
   /** A full screen (P81's VGA screens, `screens/x.png`, 320×200) fitted to the view's width with black above and
-   *  below, faded in from black over 0.4 s as the original fades its palette in. */
-  async screen(name: string) {
-    const im = await image(`screens/${name}.png`), ctx = this.ctx, w = this.canvas.width, h = Math.round(w * 200 / 320);
-    const y = (this.canvas.height - h) >> 1, t0 = performance.now();
+   *  below, faded in from black over 0.4 s as the original fades its palette in (`fade` false: drawn at once, as when
+   *  the original prints into a window on a screen already shown). `texts` are printed into text windows
+   *  (`_SetTxtWnd` rectangles in screen pixels) in the game font, black on the scrolls' grey. */
+  async screen(name: string, texts: { win: [number, number, number, number]; text: string }[] = [], fade = true) {
+    const im = await image(`screens/${name}.png`), page = document.createElement('canvas');
+    page.width = 320; page.height = 200;
+    const pc = page.getContext('2d')!;
+    pc.drawImage(im, 0, 0);
+    for (const t of texts) await this.print(pc, t.text, t.win, '#000');
+    await this.present(page, fade ? 400 : 0);
+  }
+
+  /** A message in the game font, centred on black (loading, "press a key"). */
+  async notice(lines: string[]) {
+    const page = document.createElement('canvas');
+    page.width = 320; page.height = 200;
+    const pc = page.getContext('2d')!;
+    pc.fillStyle = '#000'; pc.fillRect(0, 0, 320, 200);
+    for (const [k, l] of lines.entries())
+      await this.print(pc, l, [160 - l.length * 4, 96 - lines.length * 6 + k * 12, l.length * 8, 8], '#aaa');
+    await this.present(page, 0);
+  }
+
+  /** `_PrtScrap`-like: words wrapped to the window's width in 8-pixel characters, lines 8 pixels apart, cut at its
+   *  height. */
+  private async print(pc: CanvasRenderingContext2D, text: string, [x, y, w, h]: [number, number, number, number], ink: string) {
+    const font = await this.font(ink), cols = Math.floor(w / 8), lines: string[] = [];
+    let line = '';
+    for (const word of text.split(/\s+/).filter(Boolean)) {
+      if (line && line.length + 1 + word.length > cols) { lines.push(line); line = ''; }
+      line = line ? `${line} ${word}` : word;
+    }
+    if (line) lines.push(line);
+    lines.slice(0, Math.floor(h / 8)).forEach((l, r) => [...l].forEach((c, i) => {
+      const g = c.charCodeAt(0) & 127;
+      pc.drawImage(font, (g % 16) * 8, (g >> 4) * 8, 8, 8, x + i * 8, y + r * 8, 8, 8);
+    }));
+  }
+
+  private fonts = new Map<string, Promise<HTMLCanvasElement>>();
+  /** The font atlas (pack `font.png`, ink as alpha) in one colour. */
+  private font(ink: string): Promise<HTMLCanvasElement> {
+    if (!this.fonts.has(ink)) this.fonts.set(ink, image('font.png').then(im => {
+      const c = document.createElement('canvas'), x = c.getContext('2d')!;
+      c.width = im.width; c.height = im.height;
+      x.drawImage(im, 0, 0); x.globalCompositeOperation = 'source-in'; x.fillStyle = ink; x.fillRect(0, 0, c.width, c.height);
+      return c;
+    }));
+    return this.fonts.get(ink)!;
+  }
+
+  /** Draws a 320×200 page on the view, fading it in over `ms`. */
+  private present(page: CanvasImageSource, ms: number): Promise<void> {
+    const ctx = this.ctx, w = this.canvas.width, h = Math.round(w * 200 / 320), y = (this.canvas.height - h) >> 1, t0 = performance.now();
     ctx.imageSmoothingEnabled = false;
-    await new Promise<void>(done => {
+    return new Promise<void>(done => {
       const frame = (now: number) => {
-        const a = Math.min(1, (now - t0) / 400);
+        const a = ms ? Math.min(1, (now - t0) / ms) : 1;
         ctx.globalAlpha = 1; ctx.fillStyle = '#000'; ctx.fillRect(0, 0, w, this.canvas.height);
-        ctx.globalAlpha = a; ctx.drawImage(im, 0, y, w, h); ctx.globalAlpha = 1;
+        ctx.globalAlpha = a; ctx.drawImage(page, 0, y, w, h); ctx.globalAlpha = 1;
         if (a < 1) requestAnimationFrame(frame); else done();
       };
       requestAnimationFrame(frame);
