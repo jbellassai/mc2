@@ -56,9 +56,16 @@ export function monsterSpell(f: Fight, c: Rec, spells: number[]): { spell: numbe
   return target ? { spell, target } : null;
 }
 
+/** The sound of a combat spell, from its V06 handler's `_GameSound`: Fear, Betray 10 (mag1), Shatter, Fireball,
+ *  Zefoar, Acidball 2 (fball), Assess 11 (mag2), Freeze, Zofir, Terrify 15 (mag3), Disappear, Jump 16 (invis), Drain
+ *  24 (sick), See 10, Summon 9 (blink), Destroy 4 (explo2), Restsoul 5 (swoosh). */
+const SOUND: Record<number, number> = { 0: 10, 2: 2, 5: 11, 6: 2, 11: 15, 14: 16, 18: 15, 22: 2, 24: 16, 27: 24, 28: 10,
+  30: 10, 31: 9, 32: 4, 33: 15, 36: 2, 40: 5 };
+
 /** The effect of `spell` cast by `c` on `t` (null for untargeted spells); returns the lines to print. */
 export function effect(f: Fight, c: Rec, spell: number, t: Rec | null, text: Text): string[] {
   const out: string[] = [];
+  if (SOUND[spell]) f.sound(SOUND[spell]);
   // INT61_01: a hero who used Turpin casts this spell with magic 99 (the flag is spent).
   const turpin = c.hero && (c.hero.rec.h_inuse as number) & 8;
   if (turpin) c.hero!.rec.h_inuse = (c.hero!.rec.h_inuse as number) & ~8;

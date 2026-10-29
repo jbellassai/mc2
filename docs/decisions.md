@@ -62,3 +62,18 @@ Numbered, never reused. Status: DECIDED (not yet built) or IMPLEMENTED (with com
 **Consequences:** `World`, `Party` have `snapshot()`/`restore()`; `main.ts` gathers clock, events, the location sets (`_dunrms`, `_duntre`, `_chests`, `_ambush`), mushroom counts, inn rent and the walk counters. New persistent state must be added to the snapshot (bump `v` when the shape changes). A DOS-save importer remains a separate later step.
 
 **Status:** IMPLEMENTED (this commit).
+
+## 5. Sound: the VOC effects as WAV, the music as CMF played by the port's own OPL2 model
+
+**Decision:** The data pack carries the 28 sound effects converted to WAV (`sounds/n.wav` for `_GameSound(n)`, ADPCM decoded by the exporter) and the 14 songs as the original CMF files (`music/n.cmf`); the browser renders a song through `web/src/opl.ts`, a small OPL2 (YM3812) model written for the port, driven the way Creative's SBFMDRV drives the chip.
+
+**Context:** The original plays digitised effects on a Sound Blaster (Creative `CT-VOICE.DRV`, VOC files with 8-bit PCM and 4-/2.6-bit ADPCM) and music on either an AdLib/Sound Blaster (CMF through SBFMDRV, `_adlibsong`) or a Roland MT-32 (`MC2nnT.MID`, `_RolandSoundPlay`). Browsers decode WAV but neither ADPCM VOC nor CMF.
+
+**Alternatives rejected:**
+- *Play the `T.MID` files through a General MIDI synth or soundfont* — they are written for the MT-32's own patches, so General MIDI instruments would sound wrong, and a soundfont is a large extra download.
+- *Render the songs to audio files in the exporter* — the pack would grow by megabytes, and a Python OPL model would have to be kept in step with the browser's own anyway once the in-browser converter exists (decision 1).
+- *Use an existing OPL emulator (Nuked-OPL3, DOSBox's DBOPL, opl3.js)* — exact, but their GPL/LGPL licences sit badly with the repo's own code, and the songs use only a small part of the chip (nine melodic voices, no rhythm mode).
+
+**Consequences:** The music is close to, not identical with, a real OPL2 (envelope and level tables are modelled from the data sheet, not cycle-exact). A song renders in well under a second the first time it plays. Sound and music each have an on/off toggle in the Game panel (`localStorage` key `mc2.audio`). Browsers allow audio only after a key or click, so the title fanfare waits for the first one.
+
+**Status:** IMPLEMENTED (this commit).

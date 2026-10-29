@@ -183,6 +183,40 @@ def sprites(src, dst, palette, cols=32):
     for t in nat: npc.append({'start': k, 'frames': atc[t]}); k += atc[t]
     return {'columns': cols, 'counts': counts, 'npc': npc}
 
+ADPCM4 = ([0, 1, 2, 3, 4, 5, 6, 7, 0, -1, -2, -3, -4, -5, -6, -7, 1, 3, 5, 7, 9, 11, 13, 15, -1, -3, -5, -7, -9, -11, -13, -15,
+           2, 6, 10, 14, 18, 22, 26, 30, -2, -6, -10, -14, -18, -22, -26, -30, 4, 12, 20, 28, 36, 44, 52, 60, -4, -12, -20, -28, -36, -44, -52, -60],
+          [0, 0, 0, 0, 0, 16, 16, 16] * 2 + [-16, 0, 0, 0, 0, 16, 16, 16] * 4 + [-16, 0, 0, 0, 0, 0, 0, 0] * 2)
+ADPCM3 = ([0, 1, 2, 3, 0, -1, -2, -3, 1, 3, 5, 7, -1, -3, -5, -7, 2, 6, 10, 14, -2, -6, -10, -14, 4, 12, 20, 28, -4, -12, -20, -28,
+           5, 15, 25, 35, -5, -15, -25, -35],
+          [0, 0, 0, 8] * 2 + [-8, 0, 0, 8] * 6 + [-8, 0, 0, 0] * 2)
+
+def voc_to_wav(v, out):
+    """Creative Voice File: blocks {type, u24 length}; 1 = {time constant, codec, data}, 2 = more data, 3 = silence
+    {u16 samples − 1, time constant}, 6/7 = repeat (played once). Codecs 0 8-bit unsigned PCM, 1 4-bit and 2 2.6-bit
+    Creative ADPCM: the first byte is the reference sample (decoders as DOSBox's sblaster.cpp)."""
+    import wave
+    assert v[:19] == b'Creative Voice File'
+    p, rate, codec, pcm, st = struct.unpack_from('<H', v, 0x14)[0], 11025, 0, bytearray(), [128, 0]
+    def adpcm(data, table, codes):
+        st[0] = data[0]; pcm.append(data[0])
+        for b in data[1:]:
+            for c in codes(b):
+                n = max(0, min(len(table[0]) - 1, c + st[1]))
+                st[0] = max(0, min(255, st[0] + table[0][n])); st[1] += table[1][n]
+                pcm.append(st[0])
+    def data(d):
+        if codec == 0: pcm.extend(d)
+        elif codec == 1: adpcm(d, ADPCM4, lambda b: (b >> 4, b & 15))
+        else: adpcm(d, ADPCM3, lambda b: (b >> 5, (b >> 2) & 7, (b & 3) << 1))
+    while p < len(v) and v[p] != 0:
+        t, ln = v[p], int.from_bytes(v[p + 1:p + 4], 'little')
+        if t == 1: rate, codec, st[1] = round(1e6 / (256 - v[p + 4])), v[p + 5], 0; assert codec <= 2; data(v[p + 6:p + 4 + ln])
+        elif t == 2: data(v[p + 4:p + 4 + ln])
+        elif t == 3: pcm.extend(b'\x80' * (struct.unpack_from('<H', v, p + 4)[0] + 1))
+        p += 4 + ln
+    with wave.open(out, 'wb') as w:
+        w.setnchannels(1); w.setsampwidth(1); w.setframerate(rate); w.writeframes(bytes(pcm))
+
 def main(src, dst):
     for sub in ('locations', 'tiledata', 'tilesets', 'sprites'): os.makedirs(f'{dst}/{sub}', exist_ok=True)
     dump = lambda path, obj: json.dump(obj, open(path, 'w'), indent=1, ensure_ascii=False)
@@ -389,6 +423,17 @@ def main(src, dst):
                 'prey': list(d06[ptr[3]:ptr[3] + 42]), 'gonshi': list(d06[ptr[4]:ptr[5]]), 'sermin': list(d06[ptr[5]:ptr[6]]),
                 'potion': list(d06[ptr[6]:ptr[7]]), 'counts': list(d06[ptr[8]:ptr[8] + 56]), 'armor': list(d06[ptr[9]:ptr[10]]),
                 'dodge': list(d06[ptr[10]:ptr[11]]), 'prefs': list(d06[ptr[12]:ptr[12] + 132])}})
+    # Sound (decision 5): _GameSound(n) plays FFFAR's name table entry n − 1 (file 0x3FB0, 13-byte names), converted to
+    # sounds/n.wav; _song(n) plays `_cmffile[n]` (DS:3070) = MC2nnA.CMF, copied to music/n.cmf for the OPL2 synth.
+    fff = open(f'{src}/FFFAR.MCO', 'rb').read()
+    os.makedirs(f'{dst}/sounds', exist_ok=True); os.makedirs(f'{dst}/music', exist_ok=True)
+    for n in range(1, 30):
+        name = fff[0x3FB0 + 13 * (n - 1):0x3FB0 + 13 * n].split(b'\0')[0].split(b'.voc')[0].decode().upper() + '.VOC'
+        if os.path.exists(f'{src}/{name}'): voc_to_wav(open(f'{src}/{name}', 'rb').read(), f'{dst}/sounds/{n}.wav')
+    for n in range(1, 15):
+        p = struct.unpack_from('<H', exe, ds + 0x3070 + 2 * n)[0]
+        name = exe[ds + p:exe.index(b'\0', ds + p)].decode().upper()
+        open(f'{dst}/music/{n}.cmf', 'wb').write(open(f'{src}/{name}', 'rb').read())
     ct = ds + 0x9F8   # common text, message n = n-th string
     dump(f'{dst}/comtxt.json', [x.decode('latin1') for x in exe[ct:ct + 0x4000].split(b'\0')[:400]])
     print(f'{n} locations, {len(blocks)} blocks, {sum(map(len, rooms.values()))} room chunks')

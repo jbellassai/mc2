@@ -23,6 +23,8 @@ export interface SceneCtx {
   scroll: { item: number };
   /** `_disasterday = _juldate`; NPCs 56, 60, 61 appear (`_npcsta`). */
   disaster(): void;
+  /** `_GameSound`. */
+  sound(n: number): void;
 }
 
 const KING = 26, ORB = 0x49, WHITE = 0x4c, SCROLLTILE = 0x63, FLOOR = 0x26, CELL = { x: 5, y: 2 };   // `_mapyl`+28 = cell 27
@@ -171,7 +173,7 @@ export class Scene {
     if (!this.bird) return this.say(this.loc[0], h);                     // "…does not penetrate the bird's feathers."
     if (speaker.num !== KING) return this.say(this.loc[1], h);           // "Prince Jemil does not recognize %h's voice."
     this.level.set(4, 3, 0x16); this.level.set(5, 3, 0x17);
-    this.ctx.events.add(120);
+    this.ctx.events.add(120); this.ctx.sound(26);                       // the egg cracks
     return this.say(this.loc[2], h);                                      // "The egg cracks open…"
   }
 
@@ -181,7 +183,7 @@ export class Scene {
     if (item !== ORB || this.locspec !== 1 || this.room !== 5 || this.bird) return null;
     if (![34, 35, 36].every(this.has)) return this.say(this.t[15], user.hero, {}, this.wise().hero.name);
     this.level.set(4, 2, 0x11); this.level.set(5, 2, 0x10); this.level.set(4, 3, 0x14); this.level.set(5, 3, 0x15);
-    this.bird = true;
+    this.bird = true; this.ctx.sound(10);
     return this.say(this.t[14], user.hero);
   }
 

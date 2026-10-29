@@ -48,6 +48,9 @@ const cheb = (a: Rec, x: number, y: number) => Math.max(Math.abs(a.x - x), Math.
 
 export class Fight {
   readonly recs: Rec[] = [];
+  /** `_GameSound` and `_song` (sound.ts), set by the caller. */
+  sound: (n: number) => void = () => {};
+  music: (n: number) => void = () => {};
   private skilled = new Set<string>();   // G_sklbits: one gain per hero and combat skill per fight
   timestop = false;                       // _timestop: monsters cannot act, blows cannot miss; cleared each round
   readonly magbits = new Set<number>();   // _magbits: spells 30-35 cast this encounter
@@ -303,9 +306,10 @@ export class Fight {
     const r = a.hero!.rec as Record<string, number> & Hero["rec"], k = this.data.songs.instruments.indexOf(item);
     if (!r.h_music) return [text(0x117, { h: a.name })];
     const known = (r.h_songs as unknown as number[])[k] & 3;
-    if (!known) return [text(0x118, { h: a.name })];
+    if (!known) { this.music(12); return [text(0x118, { h: a.name })]; }
     const out: string[] = [];
     for (const n of [0, 1]) if (known & 1 << n) {
+      this.music(3 + 2 * k + n);                          // V06 0x2904: instrument k's songs are 3 + 2k and 4 + 2k
       out.push(text(0xf3, { h: a.name, a: this.data.songs.names[k][n] }));
       for (const m of this.recs.filter(o => o.side && this.alive(o) && o.race === this.data.songs.races[k][n]))
         if (rnd(200) <= r.h_music + 100) { m.state |= 0x21; m.moves = 0; }
@@ -344,6 +348,7 @@ export class Fight {
       if (s < 0) return [text(0x4f, { h: a.name })];      // "%h has no arrows."
       a.hero.dec(s);
     }
+    this.sound(w?.type === 3 ? 6 : 5);                     // P06: twang for a shot, swoosh for a swing
     // P06 ovl_0b2b: the attack direction, for the dodge step.
     const dx = t.x - a.x, dy = a.y - t.y, ax = Math.abs(dx), ay = Math.abs(dy);
     const dir = DIRTBL[(dx < 0 ? 8 : 0) | (dy < 0 ? 4 : 0) | (3 * ax >= ay + 2 ? 2 : 0) | (3 * ay <= ax + 1 ? 1 : 0)];
@@ -380,6 +385,7 @@ export class Fight {
         `${text(0x4b)}${dam}${nift ? text(0x58, { b: t.nift }) : text(0x4c, { b: t.armor })}${text(0x4d)}${t.hp}`);
       if (result === 2) { out.push(text(0x48)); if (t.race !== 36) out.push(text(0x49, { a: t.name })); }
     }
+    if (result) { if (a.race === 0x12) this.sound(11); this.sound(1); }   // a blow that lands (a Barg's with a flash)
     if (a.hero) out.push(...this.afterHeroBlow(a, w, result, text));
     // ovl_050a: a target that was hit turns on its attacker unless RndCo(100) ≤ its c_intel.
     if (result !== 0 && this.alive(t) && t.int < rnd(100)) t.target = a.recno;

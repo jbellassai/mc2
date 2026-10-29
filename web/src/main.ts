@@ -20,6 +20,7 @@ import { Fight, type Rec } from './combat';
 import { Chamber } from './chamber';
 import { newGame, landed } from './newgame';
 import { aim as spellAim, BUILT, cost as spellCost, effect } from './spells';
+import { sfx, song, audio, saveAudio } from './sound';
 import type { Icon } from './view';
 
 const status = document.getElementById('status')!;
@@ -190,7 +191,7 @@ async function main() {
    *  (comtxt 0x12, sound 0x0E). Companions on assignment are spoken to before the test. */
   const armed = (h: Hero) => {
     if (disguise || h.rec.h_inhand === 0xff) return false;
-    close(format(comtxt[0x12], h, h.name));
+    sfx(14); close(format(comtxt[0x12], h, h.name));
     return true;
   };
 
@@ -403,7 +404,7 @@ async function main() {
     go(lv, roomStart.x, roomStart.y);
     message = level.loc.name.trim() ? `${hero.name} enters ${level.loc.name}.` : '';   // which of D08/D09's room names applies is not traced
     scene = ref.pgm.program === 8 ? await Scene.open({ party, events, items, comtxt, figures: () => figures, scroll,
-      disaster: () => { disasterday = clock.juldate; } }, locspec, ref.room, level) : null;
+      disaster: () => { disasterday = clock.juldate; }, sound: sfx }, locspec, ref.room, level) : null;
     if (scene && events.has(122)) return void epilogue();
     if (scene) message = scene.enter() || message;
     service = ref.pgm.program === 5 ? await ServiceRoom.open(ctx, ref.room, ref.kind, level.loc.texts, level.loc.words) : null;
@@ -424,13 +425,13 @@ async function main() {
     events.add(121); figures = people(); render();
     line(3); line(4, hero, best('h_intellg'));
     if (!events.has(123)) {
-      line(5, party.members.find(m => m.hero.slot(ORB) >= 0)?.hero ?? hero); line(6);
+      line(5, party.members.find(m => m.hero.slot(ORB) >= 0)?.hero ?? hero); sfx(27); line(6);   // the Orb shatters
       panel.line(comtxt[0x50]);                                         // "Alas, your quest has failed."
       return panel.set([{ label: cmd[1], act: () => location.reload() }]);
     }
     const mage = best('h_magic');
-    line(7); line(8, hero, mage);
-    events.add(122); figures = people(); render();
+    line(7); sfx(28); line(8, hero, mage);                              // Zakhad shrieks
+    events.add(122); figures = people(); render();                     // (sound 15 comes after Zakhad's fade, not built)
     for (const n of [9, 10, 11, 12]) line(n, hero, mage);
     panel.set([{ label: cmd[0], act: async () => {
       scene = null; outside = null;
@@ -447,6 +448,7 @@ async function main() {
    *  music is not built. */
   const epilogue = async () => {
     const banquet = (await json<{ banquet: number[] }>('p08.json')).banquet, t = level.loc.texts;
+    void song(11);
     if (clock.hour >= 20) clock.date++;
     clock.hour = 20;
     const line = (n: number, o = '') => panel.line(format(t[n], hero, o));
@@ -657,6 +659,7 @@ async function main() {
       if (shipCamp) shipCamp();                                          // camping aboard: one camp pass, not the step's time
       else for (let n = 4 + ships.d.weather[clock.weather]; n > 0; n--) tick();
     } else {
+      sfx(7);                                                            // P01 ovl_10f7: a step on foot
       for (let n = world.stepTicks(ter, clock, party); n > 0; n--) tick();
       world.fatigue(ter, clock, party);
     }
@@ -752,6 +755,7 @@ async function main() {
     level = lv;
     figures = [];
     fight = f;
+    f.sound = sfx; f.music = n => void song(n);
     afterWin = after;
     autoHeroes.clear(); heading = false;
     panel.show();
@@ -985,7 +989,7 @@ async function main() {
     }
     const t = fight!.at(a.x + dx, a.y + dy);
     if (t && t.side) return strike(t);
-    if (fight!.move(a, dx, dy)) return partyTurn();
+    if (fight!.move(a, dx, dy)) { sfx(7); return partyTurn(); }      // _RMove's step
     message = `Blocked by ${t?.name ?? level.tileName(a.x + dx, a.y + dy)}.`;
     render();
   };
@@ -1061,7 +1065,7 @@ async function main() {
     panel.line(rt[1]);
     panel.set([...f.recs.filter(t => !(t.state & 0x10)).map(t => ({ label: `${t.name} (${t.x},${t.y})`, act: () => {
       if (!(t.state & 0x80)) { panel.line(say(rt[2], { a: t.name })); return raise(); }
-      t.state &= 0x7f; t.health &= 0x7f; t.hp = 1;
+      t.state &= 0x7f; t.health &= 0x7f; t.hp = 1; sfx(12);
       if (t.hero) {
         const tr = t.hero.rec;
         tr.h_hitpts = tr.h_energy = 1; tr.h_cond1 = (tr.h_cond1 as number) & 0x7f;
@@ -1130,6 +1134,7 @@ async function main() {
     if (!(h.rec.h_invamt[h.slot(item)] & 0x80)) return t(4);
     if (!h.rec.h_magic) return t(5);
     h.dec(h.slot(item));
+    sfx(5);                                                             // P07 0x726, the incantation
     ch.snuff(); ch.freed = ch.elden(); events.add(0x3c + ch.type);
     figures = people();
     return [t(6), t(7), t(8, ch.freed.name)].join(' ');
@@ -1194,6 +1199,7 @@ async function main() {
     if (charges) panel.line(level.tileName(9, 1) + ptext(10, h, { a: cdata.spells.names[spell] }));
     panel.line(ptext(11, h));
     panel.set([{ label: cmd[3], act: () => {
+      sfx(25);                                                          // P07 0xE36/0xEC7: drinking
       if (charges) {
         const row = Math.floor(spell / 7), col = spell % 7, before = r.h_spells[row][col];
         r.h_spells[row][col] = Math.min(99, before + ch.hr.amount);
@@ -1325,10 +1331,11 @@ async function main() {
       if (room && service?.kind === INN && x === 8 && y === 4) { innArch(); return render(); }
       if (exit && !mate) { await toWorld(exit); return render(); }
       message = `Blocked by ${mate ? mate.hero.name : level.tileName(x, y)}.`;
-      if (!room) bump(movers, dx, dy);
+      if (!room) { sfx(14); bump(movers, dx, dy); }                    // P02 0x4FC: the error sound, then INT60_09
       return render();
     }
     for (const m of movers) { m.x += dx; m.y += dy; }
+    sfx(7);                                                             // P02 ovl_02ab / _RMove: a step
     if (walkwater && !room) walkwater--;
     message = '';
     if (patch) pickAt(lead.x, lead.y);
@@ -1643,9 +1650,10 @@ async function main() {
         done(`${t.name}: ${STATS[6][1]} ${c + g}`);
       });
       case 1:                                                                               // Confuse (P01 ovl_1ae3)
+        sfx(15);
         for (let n = 8 * world.region; n < 8 * world.region + 8; n++) world.engaged.delete(n);
         return done(comtxt[0x43]);
-      case 4: locate = m >> 2; return done('');                                             // Locate (P01 ovl_1ac2)
+      case 4: sfx(15); locate = m >> 2; return done('');                                             // Locate (P01 ovl_1ac2)
       case 7: return teleport(m, done);
       case 10: return target(h, (x, y) => done(format(comtxt[0xdb], h, h.name) + comtxt[vision(x, y)]));   // Vision
       case 15:                                                                              // Walkwater: dungeons only
@@ -1723,7 +1731,8 @@ async function main() {
         && !world.guards().some(g => g.x === x && g.y === y) && world.patrolAt(x, y) < 0
         && !rec.exits.some(e => e.x === x && e.y === y) && !rec.doors.some(d => d.x === x && d.y === y)
         && !p89.rects.some(([x0, y0, x1, y1]) => x >= x0 && x <= x1 && y >= y0 && y <= y1) && level.walkable(x, y);
-      if (!ok) { message = comtxt[0x119]; return; }
+      if (!ok) { sfx(14); message = comtxt[0x119]; return; }       // P89 0x23E / 0x2AD
+      sfx(20);
       party.shift(x - lead.x, y - lead.y);
       void world.at(x, y, clock).then(() => { world.engage(x, y); done(''); render(); });
     });
@@ -1785,10 +1794,15 @@ async function main() {
       return fmt(comtxt[0x38], who, item);
     }).join(' ');
     const pick = (who: Hero, item: number) => {
+      if (cdata.songs.instruments.includes(item)) {                     // FAR_e249: 'The Happy Traveller' (song 12)
+        if (!who.rec.h_music) return done(format(comtxt[0x117], who, who.name));
+        void song(12); return done(format(comtxt[0x118], who, who.name));
+      }
       panel.line(`> ${items[item]}`, 'you');
       // The Conch (ovl_1349, the original's K command): aboard on row 100 it calms the rough sea (event 102)
       const sc = scene?.use(item, party.members.find(m => m.hero === who)!);
       if (sc) return done(sc);
+      if (item === 0x4b) void song(14);                                 // ovl_1349 plays the Conch's call first
       if (item === 0x4b) return done(world.ships.sailing && lead.y === 100
         ? (events.add(102), format(world.rec!.texts[0x2a], who, who.name)) : comtxt[0x83]);
       if (special?.piece(item)) {                                      // a teleportal piece on a pedestal (P09)
@@ -1986,6 +2000,8 @@ async function main() {
       ...Array.from({ length: SLOTS }, (_, i) => i + 1).filter(n => saved(n)).map(n => ({ label: `Load ${label(n)}`, act: () => {
         void restore(saved(n)!).then(() => { close(); render(); });
       } })),
+      { label: `Sound: ${audio.sound ? 'on' : 'off'}`, act: () => { audio.sound = !audio.sound; saveAudio(); menu(); } },
+      { label: `Music: ${audio.music ? 'on' : 'off'}`, act: () => { audio.music = !audio.music; saveAudio(); menu(); } },
       { label: 'New game', act: () => location.assign(location.pathname) },
       { label: cmd[0], act: () => close() }]);
     if (!canSave()) panel.line('Saving is possible on a town or dungeon level or on the world map.');

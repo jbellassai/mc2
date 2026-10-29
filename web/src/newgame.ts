@@ -2,6 +2,7 @@
 // true name and a nickname, then the intro scenes (P81 string 40: FF-separated lists of string numbers).
 // Port additions: the title's saved-game list, and each profile's figures on its button (the original refers the player
 // to the printed Gamebook).
+import { song } from './sound';
 import { json } from './pack';
 import { panel } from './panel';
 import { format } from './talk';
@@ -14,6 +15,7 @@ export type Start = { slot: number } | { hero: Hero };
 export async function newGame(saves: { slot: number; label: string }[], cmd: string[]): Promise<Start> {
   const [p81, heroes, items] = await Promise.all([json<P81>('p81.json'), json<HeroRecord[]>('heroes.json'), json<string[]>('items.json')]);
   const t = (n: number, h: Hero) => format(p81.texts[n], h, h.name);
+  void song(1);                                                         // P81 ovl_1343: the title's fanfare
   panel.show();
   return new Promise<Start>(done => {
     const title = () => {
@@ -62,6 +64,7 @@ export async function newGame(saves: { slot: number; label: string }[], cmd: str
     /** The intro: each scene's lines, then "%h has landed in Telermain." (19). Scene 3 is empty for a new hero (assumed
      *  to hold the imported hero's line, 27). */
     const intro = (h: Hero, k: number) => {
+      if (k === 0) void song(2);                                        // P81 0x1A42: the intro's theme
       if (k >= p81.scenes.length) return done({ hero: h });
       if (!p81.scenes[k].length) return intro(h, k + 1);
       panel.show();
