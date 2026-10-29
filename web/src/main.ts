@@ -1159,7 +1159,9 @@ async function main() {
    *  fight, and the Pick on the room's chest (P95 ovl_129c, P07's chest code). */
   const raise = () => {
     const f = fight!, dead = () => f.recs.some(r => r.hero && (r.state & 0x98) === 0x80);
+    raising = false;
     if (!dead()) return searchAsk();
+    raising = true;
     const living = f.recs.filter(r => r.hero && f.alive(r));
     const who = (then: (a: Rec) => void) => living.length === 1 ? then(living[0])
       : panel.set([...living.map(r => ({ label: r.name, act: () => then(r) })), { label: cmd[0], act: raise }]);
@@ -1179,17 +1181,45 @@ async function main() {
         openChest(a.hero!, { ch, near, done: (m = '') => { if (m) panel.line(m); render(); raise(); }, flag: 'picked' });
       }, raise);
     };
-    panel.set([{ label: cmd[43], act: () => who(use) }, { label: cmd[35], act: () => who(a => recall(a.hero!, raise)) }, { label: cmd[27], act: () => who(resurrect) },
-      { label: cmd[0], act: () => {
-        // P95 ovl_0c87: a dead companion (slots 1-5) carrying a quest item (V06 INT61_4a, the list at 0x31BA, the same
-        // eight as Give's) is not left behind: "%h refuses to part with the %a." (0x114, %h the player) and back here
-        for (const m of party.members.slice(1)) {
-          const it = (m.hero.rec.h_cond1 as number) & 0x80 ? m.hero.rec.h_invitem.find(c => p90.keep.includes(c)) : undefined;
-          if (it !== undefined) { panel.line(format(comtxt[0x114].replace('%a', items[it]), hero, hero.name)); return raise(); }
-        }
+    const menu = (act: () => void) => () => { raising = false; act(); };   // arrows move only while the menu is up
+    panel.set([{ label: cmd[43], act: menu(() => who(use)) }, { label: cmd[35], act: menu(() => who(a => recall(a.hero!, raise))) },
+      { label: cmd[27], act: menu(() => who(resurrect)) }, { label: cmd[0], act: menu(() => {
+        if (refuses()) return raise();
         panel.line(cdata.resurrect[0]);
         panel.set([{ label: cmd[3], act: searchAsk }, { label: cmd[4], act: raise }]);
-      } }]);
+      }) }]);
+  };
+  /** P95 ovl_0c87: a dead companion (slots 1-5) carrying a quest item (V06 INT61_4a, the list at 0x31BA, the same
+   *  eight as Give's) is not left behind: "%h refuses to part with the %a." (0x114, %h the player). */
+  const refuses = () => {
+    for (const m of party.members.slice(1)) {
+      const it = (m.hero.rec.h_cond1 as number) & 0x80 ? m.hero.rec.h_invitem.find(c => p90.keep.includes(c)) : undefined;
+      if (it !== undefined) { panel.line(format(comtxt[0x114].replace('%a', items[it]), hero, hero.name)); return true; }
+    }
+    return false;
+  };
+  let raising = false;                                             // the aftermath menu is up: arrows move a member
+  /** A step on the aftermath screen (P95 → `_RMove`, the first living hero standing for `_curpla`): none without
+   *  energy; off the board, or a blocked step onto one of the room's doors (`_ChkDoor`, room fights only), asks "Do you
+   *  want to leave now?" (0x23, after the quest-item refusal) - Yes searches the bodies and leaves the fight without
+   *  entering the room (P95 returns before `_p07flg`; the `_exitdir` it sets is read only by P07), so the party is back
+   *  outside the door. A dead body on the square swaps places with the mover; any other blocked step sounds 0x0E. */
+  const poststep = (dx: number, dy: number) => {
+    const f = fight!, a = f.recs.find(r => r.hero && f.alive(r));
+    if (!a) return;
+    const x = a.x + dx, y = a.y + dy, door = fightRoom?.doors().some(d => d.x === x && d.y === y);
+    const tired = !a.hero!.rec.h_energy, off = x < 0 || y < 0 || x >= 11 || y >= 9, blocked = tired || !f.free(x, y);
+    if (!tired && off || blocked && door) {
+      raising = false;
+      if (refuses()) return raise();
+      panel.line(comtxt[0x23]);
+      return void panel.set([{ label: cmd[3], act: () => { afterWin = null; searchAsk(); } }, { label: cmd[4], act: raise }]);
+    }
+    if (blocked) return sfx(14);
+    const body = f.recs.find(r => r.x === x && r.y === y && (r.state & 0x98) === 0x80);
+    if (body) { body.x = a.x; body.y = a.y; }
+    a.x = x; a.y = y; sfx(7);
+    render();
   };
   /** Magic on the aftermath screen (_Magic with `_spellshere` 0x20). Resurrect (P95 slot 3, spells.md): "Mark the
    *  target." (text 1) among the records on the board; alive → "%a does not need resurrection." (2); else it always
@@ -2264,6 +2294,7 @@ async function main() {
       const k = e.key.startsWith('Arrow') && KEYS[e.key];                 // letters are the fight's command keys
       if (k && actor && !autoHeroes.has(actor.recno)) { e.preventDefault(); fightStep(...k); }
       else if (k && before) { e.preventDefault(); prestep(...k); }
+      else if (k && raising) { e.preventDefault(); poststep(...k); }
       return;
     }
     if (panel.open) return;
