@@ -315,7 +315,7 @@ const CSS = `
 .sc-table { border-collapse: collapse; margin-bottom: 6px; } .sc-table td, .sc-table th { padding: 2px 6px; text-align: left; font-size: 13px; }
 .sc-table input[type=number] { width: 52px; } .sc-table td:first-child { white-space: nowrap; }
 .sc-scroll { overflow: auto; max-height: 560px; border: 1px solid #3a3226; }
-.sc-map { image-rendering: pixelated; cursor: crosshair; display: block; max-width: none; max-height: none; }
+.sc-map { image-rendering: pixelated; cursor: crosshair; display: block; width: auto; max-width: none; max-height: none; }
 .sc-note { color: #999; font-size: 12px; }
 .sc-events { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 2px 12px; }
 .sc-event { display: flex; gap: 6px; align-items: baseline; font-size: 12px; white-space: nowrap; overflow: hidden; }

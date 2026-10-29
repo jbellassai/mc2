@@ -29,7 +29,8 @@ try {
 
   await send('Page.enable');
   await send('Page.navigate', { url });
-  for (let i = 0; i < 100 && (await evaluate('document.getElementById("status")?.textContent')) === 'Loading…'; i++) await sleep(100);
+  // the game sets body[data-ready] when main() has finished (other pages: until the status line stops saying Loading…)
+  for (let i = 0; i < 150 && !(await evaluate('document.body?.dataset.ready === "1" || !document.getElementById("view") && document.getElementById("status")?.textContent !== "Loading…"')); i++) await sleep(100);
   const keys = [];
   for (const k of script) {
     const rep = /^x(\d+)$/.exec(k);
@@ -45,7 +46,7 @@ try {
     if (key.startsWith('eval:')) { console.log(JSON.stringify(await evaluate(key.slice(5)))); continue; }
     if (key.startsWith('click:')) {
       await sleep(300);
-      await evaluate(`[...document.querySelectorAll('button')].find(b => b.offsetParent && b.textContent === ${JSON.stringify(key.slice(6))})?.click()`);
+      await evaluate(`[...document.querySelectorAll('button')].find(b => b.offsetParent && (b.firstChild?.textContent ?? b.textContent) === ${JSON.stringify(key.slice(6))})?.click()`);
       continue;
     }
     const extra = key === 'Enter' ? { windowsVirtualKeyCode: 13, text: '\r' } : {};
@@ -53,7 +54,7 @@ try {
     await send('Input.dispatchKeyEvent', { type: 'keyUp', key, code: key });
   }
   await sleep(500);
-  console.log(await evaluate(`document.getElementById("status").textContent + "\\n" + (document.getElementById("panel").hidden ? "" : document.getElementById("log").innerText + "\\n[" + [...document.querySelectorAll("#buttons button")].map(b => b.textContent).join("] [") + "]")`));
+  console.log(await evaluate(`document.getElementById("status").textContent + "\\n" + (document.getElementById("panel").hidden ? "" : document.getElementById("log").innerText + "\\n[" + [...document.querySelectorAll("#buttons button")].map(b => b.firstChild?.textContent ?? "").join("] [") + "]")`));
   writeFileSync(out, Buffer.from((await send('Page.captureScreenshot', { format: 'png' })).result.data, 'base64'));
   ws.close();
 } finally {

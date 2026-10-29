@@ -92,3 +92,32 @@ Numbered, never reused. Status: DECIDED (not yet built) or IMPLEMENTED (with com
 **Consequences:** A long song renders for a few seconds the first time it plays (cached afterwards). `web/preview.html` (dev only) plays each song both ways for tuning. Drums use the MT-32 rhythm keys the songs need (kick, snare, rim, toms, hats, crash, ride, tambourine, cabasa).
 
 **Status:** IMPLEMENTED (this commit).
+
+## 7. The scenario editor edits save snapshots and is dev-only
+
+**Decision:** The scenario editor (`web/src/scenario.ts`, F2 or Scenario in the Game panel) works on a snapshot of the game in the save format (decision 4) and applies it through the game's own `restore`. It sets the place (any location and square, picked on a map of it), the time, the party (companions, vitals, conditions, attributes, skills, pack, spells) and the event bits (labelled from `docs/events.md`). A scenario is therefore just a save file, downloaded, uploaded or stored in a slot. It exists only in dev builds.
+
+**Context:** The user wanted a way to jump to any place, party, equipment and game state to try scenarios, first for a friend's testing.
+
+**Alternatives rejected:**
+- *Editing the live game objects directly* — every field would need its own update path (level loading, people, region state); the restore path already does all of it and stays the single way state enters the game.
+- *A separate editor page* — it would need its own baseline state; starting from the running game's snapshot needs none.
+- *Shipping it publicly as a "Sandbox" mode* — the user chose dev-only for now.
+
+**Consequences:** Anything a save does not hold (a fight in progress, a room's state) cannot be set; the editor opens only where saving is allowed. Event labels are only as good as the cross-reference in `docs/events.md`, with the quest milestones named by hand. Dev builds serve `docs/` at `/docs/`.
+
+**Status:** IMPLEMENTED (42d7b7d).
+
+## 8. A command sidebar with hotkeys, after the original frame
+
+**Decision:** Beside the map, a sidebar styled after the original frame (`VSCRA.MCE`: grey stone with bevels, gold lettering) shows the party numbered 1–6 with health and energy bars and every command as a button with its key (Look L, Talk T, Use U, Magic M, Whisper H, Camp C, Party I, Game G). Every button in the bottom panel shows a key too: the first letter of a word of its label that is still free, else another letter or a digit (`panel.ts`). In a fight the letters are the commands, so moving in combat uses the arrows only.
+
+**Context:** The user wanted the original's command panel recreated in a modern way, attractive and in keeping with the theme, with the hotkeys visible for keyboard players.
+
+**Alternatives rejected:**
+- *Fixed digits for panel buttons* — conflict-free but unmemorable; the original's menus were letter-driven.
+- *Reserving W/A/S/D in fights* — gave poor keys (Attack → T, Draw → 1).
+
+**Consequences:** W/A/S/D no longer move in a fight. The layout is sized from the window height so map and sidebar sit side by side, and stacks below 760 px. The title font (Cinzel) loads from Google Fonts, falling back to Georgia.
+
+**Status:** IMPLEMENTED (this commit).

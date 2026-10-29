@@ -14,7 +14,6 @@ export class View {
   private constructor(readonly canvas: HTMLCanvasElement, private heroes: HTMLImageElement, private folk: HTMLImageElement,
                       private more: HTMLImageElement, private monsters: HTMLImageElement, private sprites: Sprites) {
     canvas.width = COLS * TILE; canvas.height = ROWS * TILE;
-    canvas.style.width = `${COLS * TILE * 3}px`;
     canvas.style.aspectRatio = `${COLS} / ${ROWS}`;   // keeps square tiles when max-height shrinks it
     this.ctx = canvas.getContext('2d')!;
     this.ctx.imageSmoothingEnabled = false;

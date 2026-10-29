@@ -23,6 +23,7 @@ import { aim as spellAim, BUILT, cost as spellCost, effect } from './spells';
 import { sfx, song, audio, saveAudio } from './sound';
 import { Fx, FX } from './fx';
 import { openScenario, editing, saveFile, type Snapshot } from './scenario';
+import { sidebar, type Command } from './sidebar';
 import type { Icon } from './view';
 
 const status = document.getElementById('status')!;
@@ -60,6 +61,7 @@ async function main() {
     : await newGame(savedSlots, await json<string[]>('commands.json'), (status.textContent = '', view));
   const hero = 'hero' in start ? start.hero : await Hero.profile(0);   // a continued game replaces it on restore
   panel.hide();
+  sidebar.show();
   const clock = Clock.newGame();
   if (import.meta.env.DEV && q.has('hour')) clock.hour = Math.min(23, Math.max(0, Number(q.get('hour')) || 0));
   if (import.meta.env.DEV && q.has('at')) [START.x, START.y] = q.get('at')!.split(',').map(Number);
@@ -111,6 +113,10 @@ async function main() {
     view.draw(level, room ? 5 : lead.x, room ? 4 : lead.y, figures.filter(f => !hidden.has(f)), people, phase, icons, fx.overlay);
     const where = wild || patch || (fight && outside?.level.loc.kind === 'world') ? `${world.rec?.name.replace(/\s*[MX]$/, '') ?? ''}, ${tables.weathers[clock.weather]}` : place();
     status.textContent = `${clock}  —  ${where}${message ? '  —  ' + message : ''}`;
+    sidebar.update(party.members.map(m => {
+      const r = m.hero.rec, state = m.hero.condition(conds);
+      return { name: m.hero.name, hp: r.h_hitpts, hpmax: r.h_hpmax, energy: r.h_energy, state, ok: state === conds[0] };
+    }), !fight && !panel.open);
   };
   /** School and job D-files have no location name: show the town's (the region's, from the world map). */
   const place = () => (level.loc.name.trim() || (outside?.level.loc.kind === 'world' ? world.rec?.name : outside?.level.loc.name)
@@ -2099,25 +2105,33 @@ async function main() {
     w: [0, -1], s: [0, 1], a: [-1, 0], d: [1, 0],
   };
   let queue = Promise.resolve();   // steps run in order; keys pressed while a room loads are not lost
+  /** The sidebar's commands and their keys (the same keys work without the sidebar). */
+  const free = (f: () => void) => () => { if (!fight && !panel.open) f(); };
+  const commands: Command[] = [
+    { label: 'Look', key: 'L', act: () => { looking = true; message = say(comtxt[0x0d]); render(); } },   // "Mark the target."
+    { label: 'Talk', key: 'T', act: () => { talking = true; message = say(comtxt[0x0d]); render(); } },
+    { label: 'Use', key: 'U', act: () => useCmd() },
+    { label: 'Magic', key: 'M', act: () => magicCmd() },
+    { label: 'Whisper', key: 'H', act: () => whisper() },
+    { label: 'Camp', key: 'C', act: () => campCmd() },
+    { label: 'Party', key: 'I', act: () => sheet() },
+    { label: 'Game', key: 'G', act: () => gameMenu() },
+    ...(import.meta.env.DEV ? [{ label: 'Scenario', key: 'F2', act: () => scenarioCmd() }] : []),
+  ];
+  sidebar.commands(commands.map(c => ({ ...c, act: free(c.act) })), i => free(() => sheet(party.members[i].hero))());
   addEventListener('keydown', e => {
     if (import.meta.env.DEV && editing()) return;
     if (import.meta.env.DEV && e.key === 'F2' && !fight && !panel.open) { e.preventDefault(); scenarioCmd(); return; }
     if (fight) {
       if (heading) { heading = false; return; }                   // any key ends Head (after the current action)
-      const k = KEYS[e.key];
+      const k = e.key.startsWith('Arrow') && KEYS[e.key];                 // letters are the fight's command keys
       if (k && actor && !autoHeroes.has(actor.recno)) { e.preventDefault(); fightStep(...k); }
       return;
     }
     if (panel.open) return;
-    if (e.key === 'i' || e.key === 'I') { sheet(); return; }
-    if (e.key === 'g' || e.key === 'G') { gameMenu(); return; }
-    if (e.key === 'l' || e.key === 'L') { looking = true; message = say(comtxt[0x0d]); render(); return; }   // "Mark the target."
-    if (e.key === 'c' || e.key === 'C') { campCmd(); return; }
-    if (e.key === 'u' || e.key === 'U') { useCmd(); return; }
-    if (e.key === 'h' || e.key === 'H') { whisper(); return; }
-    if (e.key === 'm' || e.key === 'M') { magicCmd(); return; }
+    const c = commands.find(c => c.key.length === 1 && c.key.toLowerCase() === e.key.toLowerCase());
+    if (c) { c.act(); return; }
     if (e.key === 'Escape' && marking) { marking = null; message = ''; render(); return; }
-    if (e.key === 't' || e.key === 'T') { talking = true; message = say(comtxt[0x0d]); render(); return; }
     const k = KEYS[e.key];
     if (!k) return;
     e.preventDefault();
@@ -2138,6 +2152,7 @@ async function main() {
   }
   if (import.meta.env.DEV) Object.assign(window, { dbg: { party, world, clock, events, assigns, dunrms, fx, FX, get level() { return level; }, get fight() { return fight; } } });   // for scripts/shot.mjs eval:
   render();
+  document.body.dataset.ready = '1';                         // scripts/shot.mjs waits for it
 }
 
 main().catch(e => { status.textContent = String(e); console.error(e); });
