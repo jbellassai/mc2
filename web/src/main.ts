@@ -1112,8 +1112,8 @@ async function main() {
   };
   /** A hero's step (P94 ovl_01ad → _RMove): walking into an enemy attacks it; a step off the arena asks to flee
    *  ("%h is fleeing from combat." "Do you want to leave?", comtxt 0x6C/0x6D — the ids are assumed from their
-   *  wording) and Yes takes the hero off the board. (The leader's flight is refused while a companion holds a quest
-   *  item, ovl_09a8 → comtxt 0x114 — not modelled.) */
+   *  wording) and Yes takes the hero off the board, unless the player is leaving a companion who holds a quest item
+   *  (ovl_09a8 → comtxt 0x114). */
   const fightStep = (dx: number, dy: number) => {
     const a = actor;
     if (!a) return;
@@ -1121,7 +1121,13 @@ async function main() {
     if (x < 0 || y < 0 || x >= fight!.level.w || y >= fight!.level.h) {
       panel.line(ctext(0x6c, { h: a.name }));
       panel.line(comtxt[0x6d]);
-      return void panel.set([{ label: cmd[3], act: () => { fight!.remove(a); partyTurn(); } }, { label: cmd[4], act: partyTurn }]);
+      return void panel.set([{ label: cmd[3], act: () => {
+        // P94 ovl_09a8: the player may not leave a companion still on the board (c_state & 0x18 clear, dead or alive)
+        // who carries a quest item (V06 INT61_4a, the list at 0x31BA): comtxt 0x114, and the flight is off
+        const c = a.hero === hero ? fight!.recs.find(r => r.hero && r.hero !== hero && !(r.state & 0x18) && r.hero.rec.h_invitem.some(i => p90.keep.includes(i))) : undefined;
+        if (c) { panel.line(format(comtxt[0x114].replace('%a', items[c.hero!.rec.h_invitem.find(i => p90.keep.includes(i))!]), hero, hero.name)); return partyTurn(); }
+        fight!.remove(a); partyTurn();
+      } }, { label: cmd[4], act: partyTurn }]);
     }
     const t = fight!.at(a.x + dx, a.y + dy);
     if (t && t.side) return strike(t);
