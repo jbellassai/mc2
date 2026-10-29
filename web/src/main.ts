@@ -596,7 +596,6 @@ async function main() {
     fight = f;
     afterWin = after;
     autoHeroes.clear(); heading = false;
-    if (import.meta.env.DEV) Object.assign(window, { dbg: { party, fight, world } });   // for scripts/shot.mjs eval:
     panel.show();
     panel.line(comtxt[ambush ? 0x7c : 0x44]);                         // "AMBUSH!" / "COMBAT!"
     fight.newRound();
@@ -620,11 +619,31 @@ async function main() {
     const l = cdata.parley.attitudes[fight!.mood].toLowerCase();
     panel.line(best === lead ? vtext(30, { l }) : vtext(29, { o: best.hero.name, l }));
   };
-  /** Menu 10: Draw, Recall, Talk, Look, Begin, Sheathe, and moving. Built: Talk and Begin. */
+  /** Menu 10: Draw, Recall, Talk, Look, Begin, Sheathe, and moving. Built: Draw, Recall, Talk, Begin, Sheathe; Draw and
+   *  Recall ask which member acts. */
   const prefight = () => {
-    panel.set([{ label: cmd[41], act: () => panel.set([{ label: cmd[34], act: rally }, { label: cmd[18], act: greet },
-      { label: cmd[0], act: prefight }]) }, { label: cmd[5], act: () => begin(false) }]);
+    const who = (then: (a: Rec) => void) => {
+      const heroes = fight!.recs.filter(r => !r.side && fight!.alive(r));
+      if (heroes.length === 1) return then(heroes[0]);
+      panel.set([...heroes.map(r => ({ label: r.name, act: () => then(r) })), { label: cmd[0], act: prefight }]);
+    };
+    panel.set([{ label: cmd[14], act: () => who(a => drawWeapon(a, prefight)) }, { label: cmd[35], act: () => who(a => recall(a, prefight)) },
+      { label: cmd[41], act: () => panel.set([{ label: cmd[34], act: rally }, { label: cmd[18], act: greet },
+      { label: cmd[0], act: prefight }]) }, { label: cmd[5], act: () => begin(false) }, { label: cmd[38], act: sheathe }]);
     render();
+  };
+  /** Sheathe (_Sheathe): with 2+ members "Is this order for everyone?" (_AllDoit, comtxt 0x3C) - Yes every member, No
+   *  the acting member (asked); fists in hand (`h_inhand` 0xFF, `c_rdywpn` 0xFF), then "Done." (0x37). */
+  const sheathe = () => {
+    const heroes = fight!.recs.filter(r => !r.side && r.hero && fight!.alive(r));
+    const off = (rs: Rec[]) => {
+      for (const a of rs) { a.hero!.rec.h_inhand = 0xff; a.weapon = 0xff; a.wskl = Fight.wpnSkl(a.hero!); }
+      panel.line(comtxt[0x37]); prefight();
+    };
+    if (heroes.length < 2) return off(heroes);
+    panel.line(comtxt[0x3c]);
+    panel.set([{ label: cmd[3], act: () => off(heroes) }, { label: cmd[4], act: () =>
+      panel.set([...heroes.map(r => ({ label: r.name, act: () => off([r]) })), { label: cmd[0], act: prefight }]) }]);
   };
   const begin = (ambush: boolean) => { if (ambush) void monsterPhase(); else partyTurn(); };
   /** Rally (ovl_06e7 menu 14 item 0): alone → "There is no one to rally!" (0) and back; a coin flip → "The enemy
@@ -649,9 +668,15 @@ async function main() {
    *  1 surrender (33, a won fight with loot); 2 ransom of 3 coins per monster to the acting member (34); 3 truce (35);
    *  4 bribe of 100 coins per party member, at most the party's coins, paid member by member (36); 5 attack (32, they
    *  move first). 2-4 ask Yes/No: Yes → "The monsters leave." (37) and the fight ends, No → the fight begins.
-   *  (Vankruh, race 28, wants every weapon sheathed instead - not built: no Sheathe yet.) */
+   *  Vankruh (the first monster's race 28) instead: no hero holds a weapon → its rhyme (comtxt 0x108), events 66 and 150,
+   *  and it leaves; else "Vankruh's eyes widen in affront and it attacks!" (0x107) and it moves first. */
   const greet = () => {
     const f = fight!, mood = f.mood, kin = cdata.parley.kins[f.speaker], v = { h: lead.hero.name, a: kin, l: kin };
+    if (f.recs.find(r => r.side)?.race === 28) {
+      if (f.recs.some(r => !r.side && r.weapon !== 0xff)) { panel.line(comtxt[0x107]); return begin(true); }
+      panel.line(comtxt[0x108]); events.add(66); events.add(150);
+      f.leave(); return void finished();
+    }
     if (mood >= 6) { panel.line(vtext(mood - 1, v)); panel.line(vtext(4)); return begin(true); }
     panel.line(vtext(7, v)); panel.line(vtext(8, v));
     if (mood === 0) { panel.line(vtext(31, v)); for (const r of f.recs.filter(r => r.side)) r.state |= 0x40; return begin(true); }
@@ -676,9 +701,9 @@ async function main() {
     if (!actor) return void monsterPhase();
     message = `${actor.name}: ${actor.moves}`;
     if (heading || autoHeroes.has(actor.recno)) return void autoTurn(actor);
-    panel.set([{ label: cmd[7], act: aim }, { label: cmd[27], act: magic }, { label: cmd[35], act: recall }, { label: cmd[43], act: fightUse },
+    panel.set([{ label: cmd[7], act: aim }, { label: cmd[27], act: magic }, { label: cmd[35], act: () => recall(actor!, partyTurn) }, { label: cmd[43], act: fightUse },
       { label: cmd[19], act: () => { heading = true; partyTurn(); } }, { label: cmd[46], act: () => { autoHeroes.add(actor!.recno); partyTurn(); } },
-      { label: cmd[14], act: drawWeapon }, { label: cmd[30], act: () => { actor!.moves = 0; partyTurn(); } }]);
+      { label: cmd[14], act: () => drawWeapon(actor!, partyTurn) }, { label: cmd[30], act: () => { actor!.moves = 0; partyTurn(); } }]);
     render();
   };
   const report = (lines: string[]) => { for (const l of lines) panel.line(l); };
@@ -733,11 +758,11 @@ async function main() {
     partyTurn();
   };
   /** Recall (_RecSpl): ready one of the spells the hero has memorised (`h_spells`, `h_rdyspl`). Takes no action. */
-  const recall = () => {
-    const r = actor!.hero!.rec, known = r.h_spells.flat().map((n, i) => [n, i]).filter(([n]) => n > 0);
+  const recall = (a: Rec, back: () => void) => {
+    const r = a.hero!.rec, known = r.h_spells.flat().map((n, i) => [n, i]).filter(([n]) => n > 0);
     panel.set([...known.map(([n, i]) => ({ label: `${cdata.spells.names[i]} (${n})`, act: () => {
-      r.h_rdyspl = i; partyTurn();
-    } })), { label: cmd[0], act: partyTurn }]);
+      r.h_rdyspl = i; back();
+    } })), { label: cmd[0], act: back }]);
   };
   /** Magic (_Magic in combat, spells.md): the readied spell, if it may be cast in combat (`_splocs` & 16), was not
    *  already cast this encounter (30-35, `_magbits`) and the hero has the energy (`_EneUsg`); then its target, the
@@ -768,8 +793,8 @@ async function main() {
   };
   /** Draw (_DrawWeap): a weapon 9-0x1E from the pack; refused for another race (comtxt 0x103), broken (0x39) or too
    *  heavy (0x69). Takes no action. */
-  const drawWeapon = () => {
-    const a = actor!, h = a.hero!, r = h.rec;
+  const drawWeapon = (a: Rec, back: () => void) => {
+    const h = a.hero!, r = h.rec;
     const slots = r.h_invitem.map((c, i) => i).filter(i => r.h_invitem[i] >= 9 && r.h_invitem[i] <= 0x1e && i !== r.h_inhand);
     panel.set([...slots.map(i => ({ label: items[r.h_invitem[i]], act: () => {
       const w = cdata.weapons[r.h_invitem[i] - 9];
@@ -777,8 +802,8 @@ async function main() {
       else if (r.h_invamt[i] >= 0xe4) panel.line(ctext(0x39));
       else if (r.h_strngth < w.minst) panel.line(ctext(0x69, { h: a.name }));
       else { r.h_inhand = i; a.weapon = r.h_invitem[i]; a.wskl = Fight.wpnSkl(h); panel.line(`${a.name}: ${items[a.weapon]}`); }
-      partyTurn();
-    } })), { label: cmd[0], act: partyTurn }]);
+      back();
+    } })), { label: cmd[0], act: back }]);
   };
   /** A hero's step (P94 ovl_01ad → _RMove): walking into an enemy attacks it; a step off the arena asks to flee
    *  ("%h is fleeing from combat." "Do you want to leave?", comtxt 0x6C/0x6D — the ids are assumed from their
@@ -832,9 +857,64 @@ async function main() {
     const value = fight!.rollLoot(fightDiff, events, tables.lootvalues);
     for (const { hero: h } of party.members)
       if (h.rec.h_relatn === 2) h.rec.h_partybucks = Math.min(30000, (h.rec.h_partybucks as number) + value);
-    searchAsk();
+    if (fight!.recs.some(r => !r.side && (r.state & 0x98) === 0x80)) { panel.line(comtxt[0x110]); raise(); }
+    else searchAsk();
     render();
     return true;
+  };
+  /** P95 ovl_072d: while a party member lies dead, menu 0x15 - Use, Recall, Magic, Done ("Combat is over: this is your
+   *  only opportunity to resurrect your dead.", comtxt 0x110, once). Magic casts the acting member's readied spell where
+   *  `_spellshere` is 0x20 (Resurrect only). Done while someone is still dead asks "Are you sure you've resurrected
+   *  everyone that you want to?" (P95 text 0); Yes (or nobody dead) goes on to the search. Use, and the dead companion
+   *  who will not be left behind with a quest item (ovl_0c87, comtxt 0x114), are not built. */
+  const raise = () => {
+    const f = fight!, dead = () => f.recs.some(r => !r.side && (r.state & 0x98) === 0x80);
+    if (!dead()) return searchAsk();
+    const living = f.recs.filter(r => !r.side && f.alive(r));
+    const who = (then: (a: Rec) => void) => living.length === 1 ? then(living[0])
+      : panel.set([...living.map(r => ({ label: r.name, act: () => then(r) })), { label: cmd[0], act: raise }]);
+    panel.set([{ label: cmd[35], act: () => who(a => recall(a, raise)) }, { label: cmd[27], act: () => who(resurrect) },
+      { label: cmd[0], act: () => {
+        panel.line(cdata.resurrect[0]);
+        panel.set([{ label: cmd[3], act: searchAsk }, { label: cmd[4], act: raise }]);
+      } }]);
+  };
+  /** Magic on the aftermath screen (_Magic with `_spellshere` 0x20). Resurrect (P95 slot 3, spells.md): "Mark the
+   *  target." (text 1) among the records on the board; alive → "%a does not need resurrection." (2); else it always
+   *  works: HP and energy 1, not dead (a hero: `h_hitpts = h_energy = 1`, `cond1 &= ~Dead`, "Done."); a monster thanks
+   *  the caster (4) and gives its loot (", giving %d " (5) and the treasure, _IncObj to the caster; a full pack keeps
+   *  only the thanks), then leaves the board. One copy, the energy and a magic skill roll as elsewhere (assumed). The
+   *  "decides not to resurrect" refusal (3, a record byte +9 not traced) and the looting refusal (6, the search comes
+   *  after this screen in the port) are not built. */
+  const resurrect = (a: Rec) => {
+    const h = a.hero!, r = h.rec, sp = r.h_rdyspl, need = Math.max(1, cdata.spells.energy[sp] - (r.h_magic >> 2));
+    if (sp === 0xff) { panel.line(ctext(0x40, { h: a.name })); return raise(); }        // "%h must recall a spell first."
+    if (!(cdata.spells.where[sp] & 0x20)) { panel.line(ctext(0x56, { h: a.name })); return raise(); }
+    if (r.h_energy < need) { panel.line(comtxt[0x41]); return raise(); }                 // "Not enough energy!"
+    const f = fight!, rt = cdata.resurrect, say = (s: string, v: Record<string, string> = {}) =>
+      format(s.replace(/%d/g, h.female ? 'her' : 'him').replace(/%[al]/g, m => v[m[1]] ?? ''), h, h.name);
+    panel.line(rt[1]);
+    panel.set([...f.recs.filter(t => !(t.state & 0x10)).map(t => ({ label: `${t.name} (${t.x},${t.y})`, act: () => {
+      if (!(t.state & 0x80)) { panel.line(say(rt[2], { a: t.name })); return raise(); }
+      t.state &= 0x7f; t.health &= 0x7f; t.hp = 1;
+      if (t.hero) {
+        const tr = t.hero.rec;
+        tr.h_hitpts = tr.h_energy = 1; tr.h_cond1 = (tr.h_cond1 as number) & 0x7f;
+        panel.line(comtxt[0x37]);
+      } else {
+        const l = t.loot, gift = l && l.amount && (l.item === 0 ? r.h_gold + l.amount <= 9999 : incObj(h, l.item, l.amount & 0x80 ? 1 : l.amount));
+        if (gift && l.item === 0) r.h_gold += l.amount;
+        if (gift && l.amount & 0x80) r.h_invamt[r.h_invitem.lastIndexOf(l.item)] = l.amount;
+        const n = l ? (l.amount & 0x80 ? 1 : l.amount) : 0;
+        panel.line(say(rt[4], { l: t.name }).replace(/\.$/, gift ? say(rt[5]) + `${n} ${items[l!.item]}${n > 1 ? comtxt[0x51] : ''}.` : '.'));
+        t.loot = undefined; f.remove(t);
+      }
+      const row = Math.floor(sp / 7), col = sp % 7;
+      if (--r.h_spells[row][col] <= 0) { r.h_spells[row][col] = 0; r.h_rdyspl = 0xff; }
+      r.h_energy -= need; h.isHeTr();
+      if (cdata.spells.skill.includes(sp)) report(f.skillUp(a, 3, ctext));
+      render(); raise();
+    } })), { label: cmd[0], act: raise }]);
   };
   /** After the fight: a won room fight goes on into the room (P95 → P07, `_p07flg`), anything else back to where the
    *  fight started. */
@@ -1784,7 +1864,7 @@ async function main() {
     await world.at(x, y, clock);
     message = '';
   }
-  if (import.meta.env.DEV) Object.assign(window, { dbg: { party, world, clock, events, assigns, dunrms, get level() { return level; } } });   // for scripts/shot.mjs eval:
+  if (import.meta.env.DEV) Object.assign(window, { dbg: { party, world, clock, events, assigns, dunrms, get level() { return level; }, get fight() { return fight; } } });   // for scripts/shot.mjs eval:
   render();
 }
 

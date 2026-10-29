@@ -15,7 +15,7 @@ interface Weapon { minst: number; basedam: number; type: number; unbreakable: nu
   race: number; hitlist: number[] }
 export interface CombatData { monsters: Monster[]; groups: number[][]; weapons: Weapon[]; setupxy: number[]; maxtbl: number[];
   ranges: { x: number[][]; y: number[][] }; guarddiff: number[];
-  loot: { thresholds: number[]; items: number[]; amounts: number[][]; an: number[] };
+  loot: { thresholds: number[]; items: number[]; amounts: number[][]; an: number[] }; resurrect: string[];
   d06: { cast: number[]; crit: number[]; crit2: number[]; prey: number[]; counts: number[]; armor: number[]; dodge: number[];
     gonshi: number[]; sermin: number[]; potion: number[] };
   spells: { names: string[]; energy: number[]; where: number[]; side: number[]; skill: number[]; here: number[] };

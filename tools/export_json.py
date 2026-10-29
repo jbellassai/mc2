@@ -360,6 +360,7 @@ def main(src, dst):
         'loot': {'thresholds': list(p95[0x21E:0x21E + 168]), 'items': list(p95[0x17A:0x17A + 168]),   # race·4: d100 bands, items
                  'amounts': [list(p95[k:k + 3]) for k in range(0x13A, p95.index(b'\xff', 0x13A), 3)],  # {item, lo, hi}
                  'an': list(p95[0xCDB:0xCE0])},   # races named with "an" (comtxt 0xA9)
+        'resurrect': [x.decode('latin1') for x in p95[0x27:0x13A].split(b'\0')[:7]],   # P95 texts 0-6 (spells.md, Resurrect)
         'spells': {'names': [x.decode('latin1') for x in exe[ds + 0x3EDC:ds + 0x4100].split(b'\0')[:42]],
                    'energy': list(exe[ds + 0x2BC6:ds + 0x2BC6 + 42]),   # _enetbl
                    'where': list(exe[ds + 0x2BF0:ds + 0x2BF0 + 42]),    # _splocs (16 = combat)
