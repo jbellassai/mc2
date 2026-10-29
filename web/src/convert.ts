@@ -433,6 +433,7 @@ export async function convert(files: Files, step: (done: number, of: number) => 
     clothing: Array.from({ length: 7 }, (_, k) => list(p01.subarray(0x2a2 + 12 * k, 0x2ae + 12 * k))),
     regions: Array.from({ length: 16 }, (_, k) => list(p01.subarray(0x236 + 4 * k, 0x23a + 4 * k))),
     patchtiles: list(p01.subarray(0x36a, 0x374)),
+    noticetiles: list(p01.subarray(0x302, 0x316)), noticetexts: list(p01.subarray(0x316, 0x32a)),
     patrols: Array.from({ length: 128 }, (_, k) => list(p01.subarray(0x136 + 2 * k, 0x138 + 2 * k))),
     respawn: list(p01.subarray(0x32a, 0x33a)),
     steps: { ...Object.fromEntries([['dirs', 0x1790], ['side1', 0x17a0], ['side2', 0x17b0]].map(([k, o]) =>

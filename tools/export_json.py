@@ -312,6 +312,8 @@ def main(src, dst):
                              'clothing': [list(p01[0x2A2 + 12 * k:0x2AE + 12 * k]) for k in range(7)],   # rows 0x2B-0x30, then none
                              'regions': [list(p01[0x236 + 4 * k:0x23A + 4 * k]) for k in range(16)],    # {x0,y0,x1,y1}, first match
                              'patchtiles': list(p01[0x36A:0x374]),   # mushroom-patch tileset by terrain class (ovl_09bf)
+                             # ovl_0a94: a feature of type t < 0x14 next to the party shows E00 icon [t] and region text [t]
+                             'noticetiles': list(p01[0x302:0x316]), 'noticetexts': list(p01[0x316:0x32A]),
                              # patrols (encounters.md): 8 start squares per region, respawn interval in months per region,
                              # the step tables (ovl_17c0 / ovl_18c1): 8 directions, the two side steps per direction, wander order
                              'patrols': [list(p01[0x136 + 2 * k:0x138 + 2 * k]) for k in range(128)],

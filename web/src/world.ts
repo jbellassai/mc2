@@ -8,7 +8,7 @@ import type { Level } from './level';
 import { Ships, type ShipData } from './ships';
 
 interface P01 {
-  terraintime: number[]; weathertime: number[]; swimweather: number[]; terrainenergy: number[]; clothing: number[][]; regions: number[][]; patchtiles: number[];
+  terraintime: number[]; weathertime: number[]; swimweather: number[]; terrainenergy: number[]; clothing: number[][]; regions: number[][]; patchtiles: number[]; noticetiles: number[]; noticetexts: number[];
   patrols: number[][]; respawn: number[]; steps: { dirs: number[][]; side1: number[][]; side2: number[][]; order: number[] };
   ships: ShipData;
 }
@@ -48,18 +48,19 @@ export class World {
     this.ssn = [...hex(this.rec.tables.weathr).slice(12 * SEASON[clock.month], 12 * SEASON[clock.month] + 12)];
   }
 
-  /** P01 ovl_0c28 / ovl_0c64: the region's spot at (x, y), `LOCSPOT{x, y, pgmidx, rmid, a, b, c, ev, tx, ty}` until 0xFF.
-   *  `ev` 0xFE: always there; else list `ev` of `locevptr` ({event, tx} pairs, each list ending 0xFF): the first set
-   *  event enables the spot and gives the arrival x. A disabled spot lets a later one on the same square match. */
-  spot(x: number, y: number, events: Set<number>): { pgm: number; id: number; tx: number; ty: number } | null {
+  /** P01 ovl_0c28 / ovl_0c64: the region's spot at (x, y), `LOCSPOT{x, y, pgmidx, rmid, type, wx, wy, ev, text, icon}`
+   *  until 0xFF. `ev` 0xFE: always there; else list `ev` of `locevptr` ({event, text} pairs, each list ending 0xFF): the
+   *  first set event enables the spot and gives its text. A disabled spot lets a later one on the same square match.
+   *  Entering it puts the window at (wx, wy) (P01 0xD60: `_pwinxy` = +5); type, text and icon are for `notice`. */
+  spot(x: number, y: number, events: Set<number>): { pgm: number; id: number; type: number; wx: number; wy: number; text: number; icon: number } | null {
     const t = hex(this.rec?.tables.locptr ?? ''), ev = hex(this.rec?.tables.locevptr ?? '');
     for (let o = 0; o + 10 <= t.length && t[o] !== 0xff; o += 10) {
       if (t[o] !== x || t[o + 1] !== y) continue;
-      const s = { pgm: t[o + 2], id: t[o + 3], tx: t[o + 8], ty: t[o + 9] };
+      const s = { pgm: t[o + 2], id: t[o + 3], type: t[o + 4], wx: t[o + 5], wy: t[o + 6], text: t[o + 8], icon: t[o + 9] };
       if (t[o + 7] === 0xfe) return s;
       let p = 0;
       for (let n = t[o + 7]; n > 0; n--) p = ev.indexOf(0xff, p) + 1;
-      for (; p + 1 < ev.length && ev[p] !== 0xff; p += 2) if (events.has(ev[p])) return { ...s, tx: ev[p + 1] };
+      for (; p + 1 < ev.length && ev[p] !== 0xff; p += 2) if (events.has(ev[p])) return { ...s, text: ev[p + 1] };
     }
     return null;
   }
@@ -180,12 +181,28 @@ export class World {
     return this.ptrl.findIndex(([a, b], n) => a === x && b === y && a && !this.dead.has(n));
   }
 
-  /** P01 ovl_0a94: a live patrol on one of the 8 squares around the party is seen and starts chasing it. */
-  engage(px: number, py: number) {
-    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-      const n = (dx || dy) ? this.patrolAt(px + dx, py + dy) : -1;
+  /** P01 ovl_0a94, the 8 squares around the party (the scan order is not traced): first a guard spot (any in `gwrds`
+   *  up to an x of 0, cleared or not) or a live patrol, which then chases the party, shows the skull (E00 0x0F); then a
+   *  feature (`roomptr`) or enabled spot (`locptr`) of type below 0x14 shows its icon (P01 file 0x302 by type, or the
+   *  spot's own) and prints its region text (file 0x316 by type, or the spot's; 0xFE none): "A stronghold!". Each icon
+   *  is drawn with sound 9 (`ovl_09d1`: drawn, background, sound, `_Wait(5)` ≈ 1 ms, drawn again). */
+  notice(px: number, py: number, events: Set<number>, doors: { x: number; y: number; type: number }[]): { x: number; y: number; frame: number; text?: number }[] {
+    const out: { x: number; y: number; frame: number; text?: number }[] = [], g = hex(this.rec?.tables.gwrds ?? '');
+    const guard = (x: number, y: number) => { for (let k = 0; k + 2 < g.length && g[k]; k += 3) if (g[k] === x && g[k + 1] === y) return true; return false; };
+    const around = [-1, 0, 1].flatMap(dy => [-1, 0, 1].map(dx => ({ x: px + dx, y: py + dy }))).filter(q => q.x !== px || q.y !== py);
+    for (const { x, y } of around) {
+      const n = guard(x, y) ? -1 : this.patrolAt(x, y);
       if (n >= 0) this.engaged.add(n);
+      if (n >= 0 || guard(x, y)) out.push({ x, y, frame: 0x0f });
     }
+    for (const { x, y } of around) {
+      const d = doors.find(e => e.x === x && e.y === y), s = d ? null : this.spot(x, y, events);
+      const type = d ? d.type : s?.type ?? 0xff;
+      if (type >= 0x14) continue;
+      const text = d ? this.p01.noticetexts[type] : s!.text;
+      out.push({ x, y, frame: d ? this.p01.noticetiles[type] : s!.icon, ...text !== 0xfe ? { text } : {} });
+    }
+    return out;
   }
 
   /** The patrols drawn (E00 icon 0x0F, like a guard): those next to the party (ovl_0a94), or every live one while event

@@ -109,13 +109,14 @@ async function main() {
   const seeAll = () => events.has(105) || locate > 0;
   const fx = new Fx(() => render(), sfx);
   const hidden = new Set<object>();   // people the ending is fading in or has blasted away
+  let noticed: { x: number; y: number; frame: number; text?: number }[] = [];   // P01 ovl_0a94's icons, until the next step
   const render = () => {
     const room = level.loc.kind === 'room', wild = level.loc.kind === 'world';
     // in a fight: monsters by their E01 tile, heroes and a double as people; the invisible are not drawn, but for the party's own (faint)
     const shown = (r: Rec) => fight!.alive(r) && (!r.invis || !r.side);
     const icons: Icon[] = fight ? [...[...fight.globes].map(q => ({ x: q % 11, y: Math.floor(q / 11), frame: 0x1b })),   // P06 → INT61_22: the globes
       ...fight.recs.filter(r => r.num === 0xff && shown(r)).map(r => ({ x: r.x, y: r.y, frame: r.tile, sheet: 'E01' as const }))]
-      : wild ? [...(seeAll() ? world.guards() : []), ...world.patrols(lead.x, lead.y, seeAll())].map(g => ({ x: g.x, y: g.y, frame: 0x0f }))
+      : wild ? [...(seeAll() ? world.guards() : []), ...world.patrols(lead.x, lead.y, seeAll())].map(g => ({ x: g.x, y: g.y, frame: 0x0f })).concat(noticed)
           .concat(world.ships.boats().map(b => ({ ...b, frame: 0x12 })))
       : patch?.icons() ?? (detect && level.loc.kind === 'level'   // V02 INT60_0d: Detect shows the teleportal spots
         ? (level.loc.spots ?? []).filter(p => p.type === 1).map(p => ({ x: p.x, y: p.y, frame: 10 + (phase & 1) })) : []);
@@ -610,6 +611,7 @@ async function main() {
     else if (outside) go(outside.level, outside.x, outside.y);
     outside = null; service = null;
     message = '';
+    if (level.loc.kind === 'world') notice(lead.x, lead.y);           // entering the map runs ovl_0a94
   };
 
   /** P05 ovl_16a5, bumping the inn's archway at (8,4): from the guest side back to the keeper's base, with rent paid
@@ -664,8 +666,16 @@ async function main() {
     go(await Level.load('D01'), tx + 5, ty + 4);
     await world.at(lead.x, lead.y, clock);
     world.movePatrols(level, lead.x, lead.y, clock.month);              // P01 start: ovl_169e, then ovl_0a94
-    world.engage(lead.x, lead.y);
     outside = null; service = null; special = null; scene = null; message = '';
+    notice(lead.x, lead.y);
+  };
+  /** P01 ovl_0a94 (World *notice*): what stands next to the party is drawn until the next step, with sound 9, and the
+   *  last feature's name is printed. */
+  const notice = (x: number, y: number) => {
+    noticed = world.notice(x, y, events, world.rec!.doors);
+    if (noticed.length) sfx(9);
+    const named = noticed.filter(n => n.text !== undefined).pop();
+    if (named) message = world.rec!.texts[named.text!];
   };
   /** A world-map step (P01): a town entrance of the current region (`exitptr`) loads that town with the window at
    *  (tx, ty); a mushroom patch opens; a boat is boarded or, aboard, water is sailed and land disembarks (ships.md);
@@ -684,7 +694,7 @@ async function main() {
     }
     const spot = ships.sailing ? null : world.spot(x, y, events);
     if (spot && rec.pgms[spot.pgm].program === 2) {                   // an event-gated town (Demonspine, Shumaran)
-      return enterTown(rec.pgms[spot.pgm].datafile, spot.tx + 4, spot.ty + 3);
+      return enterTown(rec.pgms[spot.pgm].datafile, spot.wx + 4, spot.wy + 3);
     }
     const feature = rec.doors.find(d => d.x === x && d.y === y)
       ?? (spot && [5, 8, 9].includes(rec.pgms[spot.pgm].program) ? { x, y, pgm: spot.pgm, id: spot.id, type: 0 } : undefined);
@@ -727,7 +737,7 @@ async function main() {
     // ovl_0846: a live guard spot under the party, else a live patrol (which may just have walked onto it)
     const guard = world.guards().find(g => g.x === x && g.y === y), n = guard ? -1 : world.patrolAt(x, y);
     if (guard || n >= 0) return wildFight(guard, n);
-    world.engage(x, y);
+    notice(x, y);
   };
   /** A world-map fight with a guard spot or patrol n on the party's square (ovl_0846). */
   const wildFight = async (guard: ReturnType<World['guards']>[number] | undefined, n: number, ambush = false) => {
@@ -1948,7 +1958,7 @@ async function main() {
       if (!ok) { sfx(14); message = comtxt[0x119]; return; }       // P89 0x23E / 0x2AD
       sfx(20);
       party.shift(x - lead.x, y - lead.y);
-      void world.at(x, y, clock).then(() => { world.engage(x, y); done(''); render(); });
+      void world.at(x, y, clock).then(() => { done(''); notice(x, y); render(); });
     });
   };
   /** _SkillUp0 (combat.md): skill `idx` (SKILLS order) +1 with chance (50 − skill)/4 % below 50, else 1 %, up to
@@ -1986,7 +1996,7 @@ async function main() {
       wild: watch => {                                                   // P01 ovl_169e and the fight check (ovl_0846)
         world.movePatrols(level, lead.x, lead.y, clock.month);
         const n = world.patrolAt(lead.x, lead.y);
-        if (n < 0) { world.engage(lead.x, lead.y); return false; }
+        if (n < 0) { world.notice(lead.x, lead.y, events, world.rec!.doors); return false; }   // the camp loop: no sound or text (assumed)
         camping = false;
         void wildFight(undefined, n, !watch);
         return true;
