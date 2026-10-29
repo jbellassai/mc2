@@ -58,6 +58,10 @@ export class Fight {
   music: (n: number) => void = () => {};
   /** The visual effects queue (fx.ts), set by the caller. */
   fx: (frames: Frame[]) => void = () => {};
+  /** `_globemap`: the squares (y·W + x) where a Fireglobe lies (V06 INT61_1f). */
+  readonly globes = new Set<number>();
+  /** A globe a step just set off (INT61_42): its lines, and the record for the Bang; the caller shows them. */
+  sprung: { at: Rec; lines: string[] } | null = null;
   private skilled = new Set<string>();   // G_sklbits: one gain per hero and combat skill per fight
   timestop = false;                       // _timestop: monsters cannot act, blows cannot miss; cleared each round
   readonly magbits = new Set<number>();   // _magbits: spells 30-35 cast this encounter
@@ -353,11 +357,35 @@ export class Fight {
     return out;
   }
 
-  /** A step of one square (`_RMove` in combat); the arena edge is not an exit here yet. */
-  move(r: Rec, dx: number, dy: number): boolean {
+  /** A step of one square (`_RMove` in combat); the arena edge is not an exit here yet. A Fireglobe on the square
+   *  goes off (V06 INT61_42, after P94's move and the AI's): `40 + RndCo(30)`, 100 when the roll is above 24, through
+   *  `_MDamage` as a spell, and a Bang; the globe is gone. */
+  move(r: Rec, dx: number, dy: number, text?: (n: number, v?: Record<string, string | number>) => string): boolean {
     if (!this.free(r.x + dx, r.y + dy)) return false;
     r.x += dx; r.y += dy; r.moves--;
+    if (text) this.spring(r, text);
     return true;
+  }
+
+  /** INT61_42: `r` has arrived on its square (a step or a Jump). */
+  spring(r: Rec, text: (n: number, v?: Record<string, string | number>) => string) {
+    if (!this.globes.delete(r.y * W + r.x)) return;
+    const n = rnd(30);
+    // P06 ovl_0bc2 with G_GLOBEHIT: "%a steps on a fireglobe." (0xFD) in place of the blow's first line
+    this.sprung = { at: r, lines: [text(0xfd, { a: r.name }), ...this.mdamage(r, r, (n > 24 ? 60 : n) + 40, text).slice(1)] };
+  }
+
+  /** V06 INT61_1f, a Fireglobe placed by `a` on (x, y), one square away (else "Out of range.", 0x0B, no action):
+   *  a square with someone on it, a globe already, or not walkable → "That spot is blocked!" (0xCE); else the globe
+   *  lies there, "%h places a fireglobe." (0xF7), one is used up and sound 0. Either way the action is spent.
+   *  Returns the comtxt, 0 for the record's own square. */
+  placeGlobe(a: Rec, x: number, y: number): number {
+    const d = cheb(a, x, y);
+    if (d !== 1) return d && 0x0b;                                      // its own square: nothing at all
+    const sq = y * W + x;
+    if (this.recs.some(r => !(r.state & 8) && r.x === x && r.y === y) || this.globes.has(sq) || !this.level.walkable(x, y)) return 0xce;
+    this.globes.add(sq);
+    return 0xf7;
   }
 
   /** In weapon range: Chebyshev 1, or anywhere with a bow (`_ChkRng`, `G_wrkamt` 1 or 100) and a clear line. */
@@ -464,7 +492,7 @@ export class Fight {
   }
 
   /** `_blobmap` (V06 0x25): steps from (x, y) to every square over free squares (8-way); the goal may be occupied. */
-  distances(x: number, y: number, background = false): number[] {
+  distances(x: number, y: number, background = false, globes = false): number[] {
     const d = new Array(W * H).fill(0x7e);
     d[y * W + x] = 0;
     const q = [[x, y]];
@@ -474,6 +502,7 @@ export class Fight {
         const nx = cx + DX[k], ny = cy + DY[k];
         if (nx < 0 || ny < 0 || nx >= W || ny >= H || d[ny * W + nx] !== 0x7e) continue;
         d[ny * W + nx] = d[cy * W + cx] + 1;
+        if (globes && this.globes.has(ny * W + nx)) { d[ny * W + nx] = 0xff; continue; }   // ovl_2ff9 (G_FIREFLAG)
         if (background ? this.level.walkable(nx, ny) : this.free(nx, ny)) q.push([nx, ny]);
       }
     }
@@ -499,11 +528,11 @@ export class Fight {
    *  fleeing leader passes leadership on and may spread panic — not modelled.) */
   private fleeStep(r: Rec, text: (n: number, v?: Record<string, string | number>) => string): string[] {
     if (this.flee.has(r.y * W + r.x)) { this.remove(r); return [text(0xca, { a: r.name })]; }
-    const d = this.distances(r.x, r.y), goal = [...this.flee].sort((a, b) => d[a] - d[b])[0];
+    const d = this.distances(r.x, r.y, false, r.recno < 6), goal = [...this.flee].sort((a, b) => d[a] - d[b])[0];
     if (goal === undefined || d[goal] >= 0x7e) { r.moves--; return []; }
-    const g = this.distances(goal % W, Math.floor(goal / W)), here = g[r.y * W + r.x];
+    const g = this.distances(goal % W, Math.floor(goal / W), false, r.recno < 6), here = g[r.y * W + r.x];
     const steps = [...Array(8).keys()].filter(k => this.free(r.x + DX[k], r.y + DY[k]) && g[(r.y + DY[k]) * W + r.x + DX[k]] < here);
-    if (steps.length) { const k = steps[rnd(steps.length)]; this.move(r, DX[k], DY[k]); } else r.moves--;
+    if (steps.length) { const k = steps[rnd(steps.length)]; this.move(r, DX[k], DY[k], text); } else r.moves--;
     return [];
   }
 
@@ -553,12 +582,12 @@ export class Fight {
     }
     if (t && this.inRange(r, t)) return this.attack(r, t, text);
     if (t) {
-      const d = this.distances(t.x, t.y), here = d[r.y * W + r.x];
+      const d = this.distances(t.x, t.y, false, r.recno < 6), here = d[r.y * W + r.x];   // heroes on auto: G_FIREFLAG
       const steps = [...Array(8).keys()].filter(k => this.free(r.x + DX[k], r.y + DY[k]) && d[(r.y + DY[k]) * W + r.x + DX[k]] < here);
-      if (here < 0x7e && steps.length) { const k = steps[rnd(steps.length)]; this.move(r, DX[k], DY[k]); return []; }
+      if (here < 0x7e && steps.length) { const k = steps[rnd(steps.length)]; this.move(r, DX[k], DY[k], text); return []; }
     }
     const k = rnd(8);                                                   // "Random move"
-    if (!this.move(r, DX[k], DY[k])) r.moves--;
+    if (!this.move(r, DX[k], DY[k], text)) r.moves--;
     return [];
   }
 }

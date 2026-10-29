@@ -112,7 +112,8 @@ async function main() {
     const room = level.loc.kind === 'room', wild = level.loc.kind === 'world';
     // in a fight: monsters by their E01 tile, heroes and a double as people; the invisible are not drawn, but for the party's own (faint)
     const shown = (r: Rec) => fight!.alive(r) && (!r.invis || !r.side);
-    const icons: Icon[] = fight ? fight.recs.filter(r => r.num === 0xff && shown(r)).map(r => ({ x: r.x, y: r.y, frame: r.tile, sheet: 'E01' }))
+    const icons: Icon[] = fight ? [...[...fight.globes].map(q => ({ x: q % 11, y: Math.floor(q / 11), frame: 0x1b })),   // P06 → INT61_22: the globes
+      ...fight.recs.filter(r => r.num === 0xff && shown(r)).map(r => ({ x: r.x, y: r.y, frame: r.tile, sheet: 'E01' as const }))]
       : wild ? [...(seeAll() ? world.guards() : []), ...world.patrols(lead.x, lead.y, seeAll())].map(g => ({ x: g.x, y: g.y, frame: 0x0f }))
           .concat(world.ships.boats().map(b => ({ ...b, frame: 0x12 })))
       : patch?.icons() ?? (detect && level.loc.kind === 'level'   // V02 INT60_0d: Detect shows the teleportal spots
@@ -915,6 +916,7 @@ async function main() {
   };
   /** The next hero with actions left acts; when none is left, the monsters' phase. */
   const partyTurn = () => {
+    sprung();
     if (finished()) return;
     actor = fight!.recs.find(r => r.hero && !r.side && fight!.alive(r) && r.moves > 0) ?? null;
     if (!actor) return void monsterPhase();
@@ -925,7 +927,15 @@ async function main() {
       { label: cmd[14], act: () => drawWeapon(actor!, partyTurn) }, { label: cmd[30], act: () => { actor!.moves = 0; partyTurn(); } }]);
     render();
   };
-  const report = (lines: string[]) => { for (const l of lines) panel.line(l); };
+  const report = (lines: string[]) => { for (const l of lines) panel.line(l); sprung(); };
+  /** A Fireglobe a step or a Jump set off (Fight.spring): its lines and a Bang on the square (V06 INT61_42). */
+  const sprung = () => {
+    const s = fight?.sprung;
+    if (!s) return;
+    fight!.sprung = null;
+    for (const l of s.lines) panel.line(l);
+    fx.play(FX.bang(s.at));
+  };
   /** Attack: the enemies in range (adjacent, or in a bow's clear line); choosing one strikes it. */
   const aim = () => {
     const a = actor!, foes = fight!.enemies(a).filter(t => fight!.inRange(a, t));
@@ -935,18 +945,32 @@ async function main() {
   const strike = (t: Rec) => { report(fight!.attack(actor!, t, ctext)); partyTurn(); };
   /** Use in combat (P94 `_mnusel` 0x2B → _UseItem for the acting member): the consumables' handlers, synced onto the
    *  combat record (Potion also stands a downed member up; Gonshi gives 4 actions now; Nift 3 charges now); the
-   *  instruments play their songs (INT61_1d) and are never used up. One action (assumed). The Horn and Fireglobe
-   *  (globe traps, INT61_1f) are not built. */
+   *  instruments play their songs (INT61_1d) and are never used up. One action (assumed). A Fireglobe is placed on a
+   *  marked square next to the user (INT61_1f, Fight.placeGlobe). The Horn (INT61_1e) is not built. */
   const fightUse = () => {
     const a = actor!, r = a.hero!.rec;
     const codes = [...new Set(r.h_invitem.filter(c => c > 0x30 && c < 0x51 || c === 0x5b))];
     panel.line(comtxt[0x2b]);                                                     // "Select."
     panel.set([...codes.map(item => ({ label: items[item], act: () => {
+      if (item === 0x39) return globe(a);
       const lines = useInFight(a, item);
       report(lines.map(l => l.replace(/^!/, '')));
       if (lines.length && a.moves > 0 && !lines[0].startsWith('!')) a.moves--;
       partyTurn();
     } })), { label: cmd[0], act: partyTurn }]);
+  };
+  /** INT61_1f: "Mark the target." (comtxt 0x0D) on the map; Escape, or the user's own square, gives up at no cost. */
+  const globe = (a: Rec) => {
+    panel.set([]);
+    mark(comtxt[0x0d], (x, y) => {
+      const n = fight!.placeGlobe(a, x, y);
+      if (!n) return partyTurn();
+      panel.line(ctext(n, { h: a.name }));
+      if (n === 0x0b) return partyTurn();                                       // "Out of range.": no action
+      if (n === 0xf7) { a.hero!.dec(a.hero!.slot(0x39)); sfx(0); }
+      a.moves--;
+      partyTurn();
+    }, partyTurn);
   };
   /** One item used by `a` in a fight; a refused item's _NoUse text comes back marked '!' (no action spent). */
   const useInFight = (a: Rec, item: number): string[] => {
@@ -1047,7 +1071,7 @@ async function main() {
     }
     const t = fight!.at(a.x + dx, a.y + dy);
     if (t && t.side) return strike(t);
-    if (fight!.move(a, dx, dy)) { sfx(7); return partyTurn(); }      // _RMove's step
+    if (fight!.move(a, dx, dy, ctext)) { sfx(7); return partyTurn(); }   // _RMove's step
     message = `Blocked by ${t?.name ?? level.tileName(a.x + dx, a.y + dy)}.`;
     render();
   };
@@ -1070,7 +1094,7 @@ async function main() {
     fight!.newRound();
     partyTurn();
   };
-  /** INT61_08: "VICTORY!" (0x4E), or every hero dead: "Alas, your quest has failed." (0x50). Loot (P95) is not built. */
+  /** INT61_08: "VICTORY!" (0x4E), or every hero dead: "Alas, your quest has failed." (0x50). Loot follows (P95, *rollLoot*). */
   const finished = (): boolean => {
     const o = fight!.outcome();
     if (!o) return false;

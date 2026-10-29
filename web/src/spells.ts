@@ -204,6 +204,7 @@ export function effect(f: Fight, c: Rec, spell: number, t: Rec | null, text: Tex
       if (!f.free(at!.x, at!.y) || d[t!.y * 11 + t!.x] >= 0x7e) return [text(0x119)];
       f.fx(FX.blink(person(t!), person({ ...t!, ...at! })));
       t!.x = at!.x; t!.y = at!.y;
+      f.spring(t!, text);                                                                   // V06 0x2085: INT61_42
       return [];
     }
     case 33: for (const r of foes()) if (rnd(12) < power(c, r, m)) { r.bravery = 0; r.state |= 0x40; }   // Terrify
