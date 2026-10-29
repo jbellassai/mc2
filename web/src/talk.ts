@@ -1,5 +1,6 @@
 // Conversations (docs/rules/dialogue.md): P91 greeting, keyword scripts, News, farewell.
 import { json, type Location } from './pack';
+import { sfx } from './sound';
 import type { Figure } from './level';
 
 interface Cmd { op: 'E' | 'C' | 'S'; arg?: number; alt?: number; song?: number }
@@ -78,7 +79,7 @@ export class Talk {
     return s && s.bye !== 0xff ? this.say(this.conv!.texts[s.bye]) : null;
   }
 
-  /** ovl_05e2: find the typed word's entry, apply E/C/S commands, print the response; no entry → ovl_0a08. */
+  /** ovl_05e2: find the typed word's entry, apply E/C/S commands, print the response; no entry → ovl_0a08 (its reply and sound 14). */
   ask(typed: string): { text: string; end: boolean } {
     const words = this.conv ? this.conv.words : this.loc.words;
     const texts = this.conv ? this.conv.texts : this.loc.texts;
@@ -87,6 +88,7 @@ export class Talk {
     const e = w < 0 ? undefined : script.find(x => x.word === w);
     if (!e) {
       const u = this.slot?.unknown ?? 0xff;
+      sfx(14);   // ovl_0a08 ends with the error sound
       return { text: this.say(u !== 0xff ? texts[u] : this.comtxt[0x1b]), end: false };
     }
     if (e.resp === 0xff) return { text: '', end: true };

@@ -186,6 +186,10 @@ export class View {
     for (const i of fx.icons) this.sheet(i.sheet === 'E01' ? this.monsters : this.heroes, i.frame, cols, i.x - ox, i.y - oy);
     for (const g of fx.ghosts ?? []) this.ghost(g, g.x - ox, g.y - oy);
     for (const t of fx.tints) this.tint(t.x - ox, t.y - oy, EGA[t.color & 15]);
+    if (fx.fill !== undefined) {
+      ctx.fillStyle = EGA[fx.fill];
+      ctx.fillRect(((COLS >> 1) - 5) * TILE, ((ROWS >> 1) - 4) * TILE, 11 * TILE, 9 * TILE);
+    }
     if (fx.invert) {
       ctx.globalCompositeOperation = 'difference';
       ctx.fillStyle = '#fff';                                   // the original's 11×9 map window around the centre

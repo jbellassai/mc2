@@ -289,6 +289,9 @@ async function main() {
       const max = Math.floor(have / n);
       panel.line(`> ${items[s.item]}`, 'you');
       if (!max) { speak(say(comtxt[0xb8], who.name)); return menu(); }
+      if (s.item >= 0x53 && s.item <= 0x59 && hero.rec.h_race === 1 && hero.rec.h_invitem.filter(c => c >= 0x53 && c <= 0x59).length <= 1) {
+        sfx(14); panel.line(comtxt[0x2e]); return menu();                 // P90 0xA73 → 0x1044: "Wizards must keep at least one book."
+      }
       const deal = (count: number) => {
         const total = each * count;
         speak(comtxt[0xc3] + coins(total) + '.' + comtxt[0xc5]);
@@ -307,7 +310,7 @@ async function main() {
       if (who.num >= 0x20) return speak(comtxt[0x1f]);              // ICANT: "I can't do that." (text read from its name, not traced)
       const room = level.loc.kind === 'room';
       const cell = party.members.length < 6 ? party.freeCell((x, y) => room || level.walkable(x, y) && !figureAt(x, y)) : -1;
-      if (cell < 0) return panel.line(comtxt[0x20]);                 // "No room!"
+      if (cell < 0) { sfx(14); return panel.line(comtxt[0x20]); }   // "No room!" (LHITXT), then sound 14
       const rec = await party.record(who.num);
       const join = () => {
         party.add(rec, items, cell, who.x, who.y);
@@ -490,6 +493,7 @@ async function main() {
     for (const n of [9, 10, 11, 12]) line(n, hero, mage);
     panel.set([{ label: cmd[0], act: async () => {
       scene = null; outside = null;
+      fx.play(FX.flash()); await fx.idle();                              // ovl_0fb9
       await enterRoom(level.loc.doors[0], level.loc.pgms, 3);
       render();
     } }]);
@@ -600,6 +604,7 @@ async function main() {
     if (scene?.transport) {                                              // P08 ovl_0f20: the White Scroll's council
       const said = format(level.loc.texts[3] ?? '', hero, hero.name).trim();
       scene = null; outside = null;
+      fx.play(FX.flash()); await fx.idle();                              // ovl_0fb9
       await enterRoom(level.loc.doors[0], level.loc.pgms, 3);
       message = said;
       return;
@@ -706,13 +711,13 @@ async function main() {
     if (feature) { message = `${level.tileName(x, y)}: not built yet.`; return; }
     const ter = level.data.nameindex[level.tile(x, y)];
     if (ships.sailing && level.walkable(x, y)) return disembark(dx, dy);
-    if (ships.sailing && ter !== 13) return;                             // @0xEA1: only water, silently
-    if (ships.sailing && y === 101 && !events.has(102)) { message = shipText(ships.cur, 0x29); return; }   // ovl_0f3b
+    if (ships.sailing && ter !== 13) return sfx(14);                     // @0xEA1: only water (P01 0x56D: a refused step sounds 14)
+    if (ships.sailing && y === 101 && !events.has(102)) { sfx(14); message = shipText(ships.cur, 0x29); return; }   // ovl_0f3b
     if (!ships.sailing && !level.walkable(x, y)) {
       const i = ships.boatAt(x, y);                                      // ovl_1070
       if (i >= 0) return board(i, dx, dy);
       const no = world.swim(ter, clock.weather, party);
-      if (no) { message = no[0] < 0 ? `Blocked by ${level.tileName(x, y)}.` : comtxt[no[0]].replace('%a', no[1]); return; }
+      if (no) { sfx(14); message = no[0] < 0 ? `Blocked by ${level.tileName(x, y)}.` : comtxt[no[0]].replace('%a', no[1]); return; }
     } else world.swimming = false;
     return worldMove(dx, dy);
   };
@@ -872,6 +877,7 @@ async function main() {
   const prestep = (dx: number, dy: number) => {
     const a = fight!.recs.find(r => r.hero && fight!.alive(r));
     if (a && fight!.free(a.x + dx, a.y + dy)) { a.x += dx; a.y += dy; sfx(7); }
+    else if (a && a.x + dx >= 0 && a.y + dy >= 0 && a.x + dx < fight!.level.w && a.y + dy < fight!.level.h) sfx(14);   // P96 0x562: _RMove 1
     render();
   };
   /** Look in a fight (P94 `_mnusel` 0x19, P96 menu 10 → `_Look` with `_swcomb`): "Mark the target."; a record there
@@ -1120,6 +1126,7 @@ async function main() {
     const t = fight!.at(a.x + dx, a.y + dy);
     if (t && t.side) return strike(t);
     if (fight!.move(a, dx, dy, ctext)) { sfx(7); return partyTurn(); }   // _RMove's step
+    sfx(14);                                                             // P94 0x1F4: not a monster
     message = `Blocked by ${t?.name ?? level.tileName(a.x + dx, a.y + dy)}.`;
     render();
   };
@@ -1520,7 +1527,7 @@ async function main() {
         else await leave(exit);
         return render();
       }
-      if (other) { message = `Blocked by ${other.name ?? npctypes[other.type] ?? 'someone'}.`; return render(); }
+      if (other) { if (room) sfx(14); message = `Blocked by ${other.name ?? npctypes[other.type] ?? 'someone'}.`; return render(); }
       const mate = party.at(x, y);                       // in town a mate's square is vacated by the same step
       if (mate ? !room : level.walkable(x, y)) continue;
       if (walkwater && !room && water(x, y)) continue;                  // V02 INT60_02: Walkwater crosses the listed tiles
@@ -1529,7 +1536,8 @@ async function main() {
       if (room && service?.kind === INN && x === 8 && y === 4) { innArch(); return render(); }
       if (exit && !mate) { await toWorld(exit); return render(); }
       message = `Blocked by ${mate ? mate.hero.name : level.tileName(x, y)}.`;
-      if (!room) { sfx(14); bump(movers, dx, dy); }                    // P02 0x4FC: the error sound, then INT60_09
+      sfx(14);                                                           // P02 0x4FC, P04/P05/P07/P08/P09: no door there
+      if (!room) bump(movers, dx, dy);                                   // then INT60_09
       return render();
     }
     for (const m of movers) { m.x += dx; m.y += dy; }
@@ -1986,7 +1994,7 @@ async function main() {
   const campCmd = () => {
     if (world.ships.passage === 1 && world.ships.sailing) { message = shipText(world.ships.cur, 0x27); return render(); }   // working for passage
     const inn = service?.kind === INN && service.room < 0x5c ? service.room - 0x40 : -1;
-    if (inn >= 0 && lead.x >= 4 && lead.y >= 5) { message = say(comtxt[0x24]); return render(); }
+    if (inn >= 0 && lead.x >= 4 && lead.y >= 5) { sfx(14); message = say(comtxt[0x24]); return render(); }   // P05 0x543
     camping = true;
     // P93 ovl_1151: in a dungeon room, inn room or guest room the members move to fixed squares (`_CAMPPXY` keeps
     // theirs; ovl_11b3 puts them back): P93's table, or the room's `spetbl` words {x, y}, 12 bytes per inn room

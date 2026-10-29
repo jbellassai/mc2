@@ -2,6 +2,7 @@
 // Where (`_CAMPSITE`, ovl_1099): 2 open camp on the world map, 4 aboard a ship, 8 a dungeon room (P07), 0x20 a rented
 // inn room, 0x10 a guest room; anywhere else 1, the reduced menu 22 (Use, Recall, Put, Off, End).
 import { panel } from './panel';
+import { sfx } from './sound';
 import { format } from './talk';
 import { incObj } from './shop';
 import type { Party } from './party';
@@ -121,10 +122,10 @@ export function camp(ctx: CampCtx) {
       menu();
     } })), { label: cmd[0], act: menu }]);
   };
-  /** Off: take off a worn item (text 15); nothing worn → "%h has nothing more to take off!". */
+  /** Off: take off a worn item (text 15); nothing worn → "%h has nothing more to take off!" and sound 14. */
   const off = (h: Hero) => {
     const r = h.rec, worn = r.h_wears.map((s, w) => w).filter(w => r.h_wears[w] !== 0xff);
-    if (!worn.length) { line(h, p93[16], {}); return menu(); }
+    if (!worn.length) { sfx(14); line(h, p93[16], {}); return menu(); }   // P93 0xD65
     panel.set([...worn.map(w => ({ label: ctx.items[r.h_invitem[r.h_wears[w]]], act: () => {
       line(h, p93[15], { a: ctx.items[r.h_invitem[r.h_wears[w]]] }); r.h_wears[w] = 0xff; menu();
     } })), { label: cmd[0], act: menu }]);

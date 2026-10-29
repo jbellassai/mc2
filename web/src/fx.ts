@@ -10,7 +10,8 @@ export interface Tint { x: number; y: number; color: number }   // an EGA colour
 export interface Ghost { x: number; y: number; num: number; tile: number; shown: number; out?: boolean; rainbow?: boolean; under?: boolean;
   sheet?: 'E01' }   // E01: a monster's combat tile `tile`
 /** `hide`: squares whose figure is not drawn while it dissolves in. */
-export interface Overlay { icons: Icon[]; tints: Tint[]; invert: boolean; ghosts?: Ghost[]; hide?: At[] }
+/** `fill`: the 11×9 window cleared to an EGA colour. */
+export interface Overlay { icons: Icon[]; tints: Tint[]; invert: boolean; ghosts?: Ghost[]; hide?: At[]; fill?: number }
 export interface Frame extends Partial<Overlay> { ms: number; sound?: number }
 type At = { x: number; y: number };
 
@@ -67,6 +68,8 @@ export const FX = {
     multi(dist.flatMap((d, i) => d < 0x7e && (inward || d) ? [{ x: i % 11, y: Math.floor(i / 11), stage: inward ? d - 11 : 1 - d }] : []), BURST, 1),
   multiThing: (marks: At[], sound: number) => multi(marks.map(m => ({ x: m.x, y: m.y, stage: 0 })), ACID, 5, sound),
   invert: (ms: number, sound?: number): Frame[] => [{ invert: true, ms, sound }],
+  /** P08 ovl_0fb9, the transport: window 0 cleared 80 times to `RndCo(0x100)`, sound 14 each pass (pace assumed). */
+  flash: (): Frame[] => Array.from({ length: 80 }, () => ({ fill: Math.floor(Math.random() * 256) & 15, ms: 25, sound: 14 })),
   /** P08 0x1890 (ovl_191b): a person appears - four rainbow passes (flag 7, timer 4000), then the colours (flag 3). */
   appear: (p: At & { num: number; tile: number }): Frame[] => {
     const f = { x: p.x, y: p.y, num: p.num, tile: p.tile };
@@ -97,7 +100,7 @@ export class Fx {
     this.queue = this.queue.then(async () => {
       for (const f of frames) {
         if (f.sound) this.sound(f.sound);
-        this.overlay = { icons: f.icons ?? [], tints: f.tints ?? [], invert: f.invert ?? false, ghosts: f.ghosts, hide: f.hide };
+        this.overlay = { icons: f.icons ?? [], tints: f.tints ?? [], invert: f.invert ?? false, ghosts: f.ghosts, hide: f.hide, fill: f.fill };
         this.redraw();
         await new Promise(ok => setTimeout(ok, f.ms));
       }
