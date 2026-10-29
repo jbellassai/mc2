@@ -1,4 +1,4 @@
-// Special rooms run by P09 (rules/special_rooms.md): casinos, temples and gates so far. The room kind is P09's `_rmtyp`
+// Special rooms run by P09 (rules/special_rooms.md): casinos, temples, gates and the elven prince. The room kind is P09's `_rmtyp`
 // (7 casino, 10 teleportal, 11 meeting hall, 12 world temple, 13 dungeon temple, 14 gate) and `index` its OV_0x181
 // (`id − base`; for a temple, the god).
 import { format, wmatch } from './talk';
@@ -11,10 +11,10 @@ import type { Level } from './level';
 import type { Exit } from './pack';
 import type { Party, Member } from './party';
 
-export const CASINO = 7, TELEPORTAL = 10, TEMPLE = 12, SHRINE = 13, GATE = 14;
+export const CASINO = 7, TELEPORTAL = 10, HALL = 11, TEMPLE = 12, SHRINE = 13, GATE = 14;
 
 export interface SpecialCtx {
-  hero: Hero; clock: Clock; cmd: string[]; comtxt: string[]; party: Party;
+  hero: Hero; clock: Clock; cmd: string[]; comtxt: string[]; party: Party; events: Set<number>;
   /** `_w_tod` (EXE DS:0x41E0) and TODWORDS (DS:0x38F2, by hour) for `_SetTxtToD`. */
   tod: { words: string[]; hour: number[] };
   /** `_w_attrib` + `_w_skills` by HERO offset − 13, and `_w_kins` (races 0-4). */
@@ -59,6 +59,17 @@ export class Special {
   private say(s: string, v: Record<string, string | number> = {}) { return format(s, this.ctx.hero, this.ctx.hero.name, v); }
   private yesNo(yes: () => void, no: () => void) {
     panel.set([{ label: this.ctx.cmd[3], act: yes }, { label: this.ctx.cmd[4], act: no }]);
+  }
+
+  /** Talk to one of the room's `resids` (`_swgreet` 2 → −2, meeting halls only: FFFAR ovl_31bc), P09 ovl_0611: the
+   *  elven prince (NPC 113, Llendora's hall). Event 4 set → the normal conversation (null); event 8 clear → P09 text 4
+   *  ("Begone…"); else text 5 ("The elf greets %h.") and event 4, the conversation from the next Talk on. */
+  greet(num: number, h: Hero): string | null {
+    const ev = this.ctx.events;
+    if (this.kind !== HALL || num !== 113 || ev.has(4)) return null;
+    if (!ev.has(8)) return format(p09.texts[4], h, h.name);
+    ev.add(4);
+    return format(p09.texts[5], h, h.name);
   }
 
   /** Talk (`_swgreet` −3): only the casino answers. */

@@ -227,6 +227,8 @@ async function main() {
     const by = speaker ?? party.members[0];
     speaker = null;
     if (!(who.num < 0x20 && assigns.get(who.num)) && armed(by.hero)) return;
+    const prince = special?.greet(who.num, by.hero);
+    if (prince) { panel.show(); panel.line(`${who.name}: ${prince}`); return void panel.set([{ label: cmd[0], act: () => close() }]); }
     const opening = scene?.greet(who, by);
     if (opening?.leave) { await leave(level.loc.exits[0]); message = opening.text; return render(); }   // the priest sends the party out
     const t = await Talk.open(level.loc, who, by.hero, events);
@@ -429,7 +431,7 @@ async function main() {
     if (scene) message = scene.enter() || message;
     service = ref.pgm.program === 5 ? await ServiceRoom.open(ctx, ref.room, ref.kind, level.loc.texts, level.loc.words) : null;
     service?.greet();
-    special = ref.pgm.program === 9 ? await Special.open({ hero, clock, cmd, comtxt, party, tod: tables.tod, attribs: tables.attribs,
+    special = ref.pgm.program === 9 ? await Special.open({ hero, clock, cmd, comtxt, party, events, tod: tables.tod, attribs: tables.attribs,
       kins: cdata.parley.kins, serve, close, sound: sfx, fx: e => fx.play(e) }, ref.kind, ref.kind === 13 ? ref.index - 8 : ref.index, level) : null;
   };
 
