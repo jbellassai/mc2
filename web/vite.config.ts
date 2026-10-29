@@ -17,4 +17,9 @@ const serveDir = (route: string, dir: string): Plugin => ({
   },
 });
 
-export default defineConfig({ base: './', plugins: [serveDir('/pack', resolve(__dirname, '../out/pack')), serveDir('/docs', resolve(__dirname, '../docs'))] });
+export default defineConfig({
+  base: './',
+  plugins: [serveDir('/pack', resolve(__dirname, '../out/pack')), serveDir('/docs', resolve(__dirname, '../docs'))],
+  // /sandbox/ forwards to the game with ?sandbox: the scenario editor in the public build (decision 7)
+  build: { rollupOptions: { input: { main: resolve(__dirname, 'index.html'), sandbox: resolve(__dirname, 'sandbox/index.html') } } },
+});

@@ -6,6 +6,7 @@ const row = document.getElementById('buttons')!, form = document.getElementById(
 const input = document.getElementById('word') as HTMLInputElement;
 let submit: ((s: string) => void) | null = null;
 let hotkeys = new Map<string, HTMLButtonElement>();
+const END = 'End';   // commands.json word 0, the button that leaves a menu: Esc presses it too
 
 /** A button's key: the first letter of a word of its label still free, then any letter of it, then a digit. */
 function hotkey(label: string, used: Set<string>, i: number, shared: Set<string>): string {
@@ -19,7 +20,8 @@ function hotkey(label: string, used: Set<string>, i: number, shared: Set<string>
 // The open panel's buttons answer their keys (not while typing in the word box).
 addEventListener('keydown', e => {
   if (box.hidden || e.ctrlKey || e.metaKey || e.altKey || (e.target as HTMLElement).closest?.('input, select, textarea')) return;
-  const b = hotkeys.get(e.key.toLowerCase());
+  const b = e.key === 'Escape' ? Array.from(row.querySelectorAll('button')).find(c => c.firstChild?.textContent === END)
+    : hotkeys.get(e.key.toLowerCase());
   if (!b || !b.isConnected) return;
   e.preventDefault(); e.stopImmediatePropagation();
   b.click();

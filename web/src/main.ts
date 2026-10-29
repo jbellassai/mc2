@@ -52,6 +52,7 @@ async function main() {
   // Dev aids: ?hour=20 starts in the evening, ?at=74,25 starts on another square; any of them skips the new-game
   // screens (?profile=0-4 picks the hero).
   const q = new URLSearchParams(location.search);
+  const SANDBOX = import.meta.env.DEV || q.has('sandbox');   // the scenario editor: dev builds, or /sandbox/ (decision 7)
   const dev = import.meta.env.DEV && ['at', 'world', 'level', 'hour', 'profile'].some(k => q.has(k));
   const savedSlots = Array.from({ length: 3 }, (_, i) => i + 1).flatMap(n => {
     try { const sv = JSON.parse(localStorage.getItem(`mc2.save.${n}`) ?? 'null'); return sv ? [{ slot: n, label: `${sv.place}, ${new Date(sv.when).toLocaleString()}` }] : []; }
@@ -2080,7 +2081,7 @@ async function main() {
       } })),
       ...(canSave() ? [{ label: 'Download save', act: () => saveFile(snapshot(), 'save') }] : []),
       { label: 'Upload save', act: uploadSave },
-      ...(import.meta.env.DEV ? [{ label: 'Scenario', act: () => { close(); scenarioCmd(); } }] : []),
+      ...(SANDBOX ? [{ label: 'Scenario', act: () => { close(); scenarioCmd(); } }] : []),
       { label: `Sound: ${audio.sound ? 'on' : 'off'}`, act: () => { audio.sound = !audio.sound; saveAudio(); menu(); } },
       { label: `Music: ${{ modern: 'modern', original: 'original FM', off: 'off' }[audio.music]}`, act: () => {
         audio.music = audio.music === 'modern' ? 'original' : audio.music === 'original' ? 'off' : 'modern'; saveAudio(); menu();
@@ -2116,12 +2117,12 @@ async function main() {
     { label: 'Camp', key: 'C', act: () => campCmd() },
     { label: 'Party', key: 'I', act: () => sheet() },
     { label: 'Game', key: 'G', act: () => gameMenu() },
-    ...(import.meta.env.DEV ? [{ label: 'Scenario', key: 'F2', act: () => scenarioCmd() }] : []),
+    ...(SANDBOX ? [{ label: 'Scenario', key: 'F2', act: () => scenarioCmd() }] : []),
   ];
   sidebar.commands(commands.map(c => ({ ...c, act: free(c.act) })), i => free(() => sheet(party.members[i].hero))());
   addEventListener('keydown', e => {
-    if (import.meta.env.DEV && editing()) return;
-    if (import.meta.env.DEV && e.key === 'F2' && !fight && !panel.open) { e.preventDefault(); scenarioCmd(); return; }
+    if (SANDBOX && editing()) return;
+    if (SANDBOX && e.key === 'F2' && !fight && !panel.open) { e.preventDefault(); scenarioCmd(); return; }
     if (fight) {
       if (heading) { heading = false; return; }                   // any key ends Head (after the current action)
       const k = e.key.startsWith('Arrow') && KEYS[e.key];                 // letters are the fight's command keys

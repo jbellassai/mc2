@@ -93,24 +93,25 @@ Numbered, never reused. Status: DECIDED (not yet built) or IMPLEMENTED (with com
 
 **Status:** IMPLEMENTED (this commit).
 
-## 7. The scenario editor edits save snapshots and is dev-only
+## 7. The scenario editor edits save snapshots; dev builds and /sandbox/
 
-**Decision:** The scenario editor (`web/src/scenario.ts`, F2 or Scenario in the Game panel) works on a snapshot of the game in the save format (decision 4) and applies it through the game's own `restore`. It sets the place (any location and square, picked on a map of it), the time, the party (companions, vitals, conditions, attributes, skills, pack, spells) and the event bits (labelled from `docs/events.md`). A scenario is therefore just a save file, downloaded, uploaded or stored in a slot. It exists only in dev builds.
+**Decision:** The scenario editor (`web/src/scenario.ts`, F2 or Scenario in the Game panel) works on a snapshot of the game in the save format (decision 4) and applies it through the game's own `restore`. It sets the place (any location and square, picked on a map of it), the time, the party (companions, vitals, conditions, attributes, skills, pack, spells) and the event bits (labelled from `docs/events.md`). A scenario is therefore just a save file, downloaded, uploaded or stored in a slot. It is in dev builds and, in the public build, at `/sandbox/` (a page that forwards to the game with `?sandbox`); the plain game has no F2 and no Scenario button.
 
 **Context:** The user wanted a way to jump to any place, party, equipment and game state to try scenarios, first for a friend's testing.
 
 **Alternatives rejected:**
 - *Editing the live game objects directly* — every field would need its own update path (level loading, people, region state); the restore path already does all of it and stays the single way state enters the game.
 - *A separate editor page* — it would need its own baseline state; starting from the running game's snapshot needs none.
-- *Shipping it publicly as a "Sandbox" mode* — the user chose dev-only for now.
+- *Dev builds only* — the first choice; the user then asked to host it in the main build too, at a subpath.
+- *A copy of the game page at `/sandbox/`* — duplicates the markup; a forwarding page and a query flag do the same.
 
-**Consequences:** Anything a save does not hold (a fight in progress, a room's state) cannot be set; the editor opens only where saving is allowed. Event labels are only as good as the cross-reference in `docs/events.md`, with the quest milestones named by hand. Dev builds serve `docs/` at `/docs/`.
+**Consequences:** Anything a save does not hold (a fight in progress, a room's state) cannot be set; the editor opens only where saving is allowed. Event labels are only as good as the cross-reference in `docs/events.md`, with the quest milestones named by hand. Dev builds serve `docs/` at `/docs/`; the public build does not ship `docs/events.md`, so there the events show their numbers and the named milestones only.
 
-**Status:** IMPLEMENTED (42d7b7d).
+**Status:** IMPLEMENTED (42d7b7d; /sandbox/ in this commit).
 
 ## 8. A command sidebar with hotkeys, after the original frame
 
-**Decision:** Beside the map, a sidebar styled after the original frame (`VSCRA.MCE`: grey stone with bevels, gold lettering) shows the party numbered 1–6 with health and energy bars and every command as a button with its key (Look L, Talk T, Use U, Magic M, Whisper H, Camp C, Party I, Game G). Every button in the bottom panel shows a key too: the first letter of a word of its label that is still free, else another letter or a digit (`panel.ts`). In a fight the letters are the commands, so moving in combat uses the arrows only.
+**Decision:** Beside the map, a sidebar styled after the original frame (`VSCRA.MCE`: grey stone with bevels, gold lettering) shows the party numbered 1–6 with health and energy bars and every command as a button with its key (Look L, Talk T, Use U, Magic M, Whisper H, Camp C, Party I, Game G). Every button in the bottom panel shows a key too: the first letter of a word of its label that is still free, else another letter or a digit (`panel.ts`). In a fight the letters are the commands, so moving in combat uses the arrows only. Esc presses a panel's End button (the menus' way out).
 
 **Context:** The user wanted the original's command panel recreated in a modern way, attractive and in keeping with the theme, with the hotkeys visible for keyboard players.
 
