@@ -9,6 +9,8 @@ Mark a square; the line starts "%h sees " (common text 0x08; in a town with the 
 - otherwise the tile's name from the tileset's `txttbl` (names carry their own article: "a signpost", "cobblestones"), then "." (0x10), then the **look spot** text when `lkdata` has a record for the square (below) and the square is in line of sight.
 *Talk* aimed at a square with nobody on it prints "%h talks to " (0x11) + the same tail.
 
+**Line of sight** (towns and dungeon levels only, `_curmpg` 2: P02 `ovl_1ae7`, jump-table entry 0x1E): with `_losflag` set, V02 `INT60_0B` builds the blob map of the 11×9 window from the marked square. Open squares are those `_ChkWlk` passes, which with `_losflag` also accepts the tileset's second tile list (after the walk list's 0xFF; `tiledata` `walkable_los`), so water and the like do not block. The marked square starts at 0 even if it is a wall, and the flood spreads 8-way (P02 file 0x81E/0x826) one step a pass. The square is in sight (`_losresult` 1) when the looker's blob value equals the Chebyshev distance between them (`ovl_1b3c`): no wall lengthens the way. So a wall face next to open floor is seen, the wall behind it is not, and nothing outside the window is. Port: `main.ts` *inSight*, *look*.
+
 ## Pointer table conventions
 A `Dnn.MCV` starts with 20 u16 pointers in `LOCTYPE` order. An **unused table has the same value as `roomptr`** (the first real table), e.g. D20 `treasptr = spdoors = locptr = 0x47 = roomptr`. `tools/locdump.py` (fixed 2026-10-27) treats those as empty. Real record shapes seen so far:
 

@@ -1738,7 +1738,30 @@ async function main() {
     return true;
   };
 
-  /** _Look (rules/locations.md, Look). Line of sight is not modelled yet: every square counts as visible. */
+  /** P02 ovl_1ae7 (towns and dungeon levels): V02 INT60_0B with `_losflag` floods the 11×9 window from the marked
+   *  square, 8-way, through tiles walkable or in the tileset's second list (`_ChkWlk`); the square is in sight when the
+   *  flood reaches the looker in as many steps as their Chebyshev distance (ovl_1b3c), i.e. no wall lengthens the way. */
+  const inSight = (x: number, y: number) => {
+    const wx = lead.x - 4, wy = lead.y - 3, see = new Set(level.data.walkable_los), d: number[] = [];
+    for (let i = 0; i < 99; i++) {
+      const tx = wx + i % 11, ty = wy + Math.floor(i / 11);
+      d.push(level.walkable(tx, ty) || see.has(level.tile(tx, ty)) ? 0x7e : 0xff);
+    }
+    const at = (x - wx) + 11 * (y - wy);
+    if (x < wx || y < wy || x >= wx + 11 || y >= wy + 9) return false;
+    d[at] = 0;
+    for (let q = [at], n = 1; q.length; n++) {
+      const next: number[] = [];
+      for (const i of q) for (let k = 0; k < 8; k++) {
+        const nx = i % 11 + [-1, 0, 1, 0, -1, 1, 1, -1][k], ny = Math.floor(i / 11) + [0, -1, 0, 1, -1, -1, 1, 1][k], j = nx + 11 * ny;
+        if (nx >= 0 && ny >= 0 && nx < 11 && ny < 9 && d[j] === 0x7e) { d[j] = n; next.push(j); }
+      }
+      q = next;
+    }
+    return d[4 + 11 * 3] === Math.max(Math.abs(x - lead.x), Math.abs(y - lead.y));
+  };
+  /** _Look (rules/locations.md, Look): in a town or dungeon level a square out of sight (*inSight*) reads "It's …"
+   *  (comtxt 0x115) for "%h sees …" and shows no look-spot text. */
   const look = (x: number, y: number) => {
     if (chamber && x === 1 && y === 1 && chamber.opened && !(chamber.hr.reward & 0x80)) return chestLook(lead.hero);
     if (chamber && x === 9 && (y === 0 || y === 1) && chamber.hr.reward & 0x80) return fountain(lead.hero);
@@ -1749,9 +1772,10 @@ async function main() {
       const t = npctypes[who.type] ?? '';
       what = comtxt[/^[aeiou]/i.test(t) ? 0x0f : 0x0e] + t;
     } else what = level.tileName(x, y);
-    let text = say(comtxt[0x08]) + what + comtxt[0x10];
+    const seen = level.loc.kind !== 'level' || inSight(x, y);
+    let text = (seen ? say(comtxt[0x08]) : comtxt[0x115]) + what + comtxt[0x10];
     const spot = (level.loc.look ?? []).find(l => l.x === x && l.y === y);
-    if (spot && (!(spot.text & 0x80) || (who && who.num >= 0x20))) text += say(level.loc.texts[spot.text & 0x7f] ?? '');
+    if (spot && seen && (!(spot.text & 0x80) || (who && who.num >= 0x20))) text += say(level.loc.texts[spot.text & 0x7f] ?? '');
     if (special) text += special.look(x, y, lead);
     if (scene?.scrollAt(x, y)) {                                         // P08 ovl_16e9: the scroll on the floor
       const near = adjacent(x, y);
