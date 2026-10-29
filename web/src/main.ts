@@ -432,7 +432,7 @@ async function main() {
     service = ref.pgm.program === 5 ? await ServiceRoom.open(ctx, ref.room, ref.kind, level.loc.texts, level.loc.words) : null;
     service?.greet();
     special = ref.pgm.program === 9 ? await Special.open({ hero, clock, cmd, comtxt, party, events, tod: tables.tod, attribs: tables.attribs,
-      kins: cdata.parley.kins, serve, close, sound: sfx, fx: e => fx.play(e) }, ref.kind, ref.kind === 13 ? ref.index - 8 : ref.index, level) : null;
+      kins: cdata.parley.kins, serve, close, sound: sfx, redraw: render, fx: e => fx.play(e) }, ref.kind, ref.kind === 13 ? ref.index - 8 : ref.index, level) : null;
   };
 
   /** P08 L_0772 (quest_scenes.md, The ending): leaving a P08 room with event 120 set. Event 121, Zakhad's trap (room

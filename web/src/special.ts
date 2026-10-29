@@ -24,6 +24,8 @@ export interface SpecialCtx {
   close(msg?: string): void;
   /** `_GameSound`. */
   sound(n: number): void;
+  /** Draw the map again after the room's tiles change. */
+  redraw(): void;
   /** The visual effects queue (fx.ts). */
   fx(frames: Frame[]): void;
 }
@@ -177,12 +179,23 @@ export class Special {
     const g = this.index, bit = 1 << g, T = this.texts, ms = this.ctx.party.members;
     if (!ms.slice(0, p09.wake[g]).some(m => !((m.hero.rec.h_godseen as number) & bit))) return false;
     const h = this.ctx.hero, line = (s: string, v: Record<string, string | number> = {}, o = h.name) => panel.line(format(s, h, o, v));
-    const slumber = (s = '') => { line(s + T[g] + T[12]); this.done(); };   // "<god> returns to slumber."
+    const [, top, low, sx, sy] = this.record, was = [this.level.tile(sx, sy), this.level.tile(sx, sy + 1)];
+    const slumber = (s = '') => {                                            // "<god> returns to slumber."
+      line(s + T[g] + T[12]);
+      panel.set([{ label: this.ctx.cmd[0], act: () => {                     // P09 0xF43: the statue as it was (the port
+        this.level.set(sx, sy, was[0]); this.level.set(sx, sy + 1, was[1]);  // waits for End, the original's text pages)
+        this.ctx.close();
+      } }]);
+    };
     const thunder = () => {                                                  // ovl_123e: every member HP 1, energy 1
       for (const m of ms) { m.hero.rec.h_hitpts = 1; m.hero.rec.h_energy = 1; m.hero.isHeTr(); this.ctx.fx(FX.bang(m)); }   // a Bang on each
       slumber(T[18]);                                                        // "'Begone, mortals!' With a great clap of thunder, "
     };
     panel.show();
+    this.ctx.sound(0x16);                                                    // P09 0xCDB
+    this.flash();
+    this.level.set(sx, sy, top); this.level.set(sx, sy + 1, low);            // P09 0xD6A: the statue awake, until slumber
+    this.ctx.redraw();
     line(T[9 + this.record[0]] + T[g] + T[8]);
     const d = this.demand(g);
     if (d === null && g < 4) { line(T[13], { a: this.ctx.kins[[3, 2, 0, 4][g]] }); return slumber(), true; }   // "I see no %a in your assemblage."
@@ -198,6 +211,19 @@ export class Special {
     line(T[19] + T[10 + g] + (g === 7 ? T[20] : '') + T[21], {}, d.name);   // "Welcome, mortals. I demand the sacrifice of …"
     this.yesNo(() => { d.take!(); bless(); }, thunder);
     return true;
+  }
+
+  /** P09 0xCE5/0xD51, `_ChangeMap`: the first three window tiles starting with 52 become 48, 49, 55 while "awakens!"
+   *  prints, then change back (the port holds them for a second, an assumption). */
+  private flash() {
+    const L = this.level, [w, h] = L.loc.mapsize, from = [52, 53, 54], to = [48, 49, 55];
+    for (let i = 0; i < w * h; i++) {
+      const x = i % w, y = Math.floor(i / w);
+      if (L.tile(x, y) !== from[0]) continue;
+      to.forEach((t, k) => L.set(x + k, y, t));
+      setTimeout(() => { from.forEach((t, k) => L.set(x + k, y, t)); this.ctx.redraw(); }, 1000);
+      return;
+    }
   }
 
   /** The god's demand: null = not met; `take` = the offering, taken on Yes; `name` = %o of text 23. */
