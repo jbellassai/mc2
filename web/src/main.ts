@@ -1808,7 +1808,7 @@ async function main() {
         sfx(10);                                                                            // V02 INT60_01
         walkwater = Math.floor(m / 20) + 2;
         return done(ctext(0xc9, { b: walkwater }));
-      case 25: sfx(15); detect += m >> 4;                    // V02 ovl_0533 (three times; each start cuts the last) return done(ctext(0xf6, { u: detect * 5 }));             // Detect
+      case 25: sfx(15); detect += m >> 4; return done(ctext(0xf6, { u: detect * 5 }));    // Detect (V02 ovl_0533: 15 three times, each start cuts the last)
       case 13: case 3: return target(h, (x, y) => {                                         // Pierce 'C', Repel 'B'
         const r = barrierRec(level.tile(x, y), sp === 13 ? 0x43 : 0x42);
         if (!r) return done(comtxt[0x95]);
@@ -1816,7 +1816,7 @@ async function main() {
         fx.play(FX.spef5a({ x, y }));                                   // V02 INT60_06/07: Spef5_a on the square
         done(comtxt[sp === 13 ? 0xe7 : 0xe8]);
       }, fail);
-      case 39: sfx(15); return done(sense(h, m));                                           // V02 INT60_13                                                    // Sense
+      case 39: sfx(15); return done(sense(h, m));                                           // Sense (V02 INT60_13)
       case 40: case 41: {                                                                   // Restsoul, Soulspeak (P08)
         const s = scene?.spell(sp, h);
         return s === null || s === undefined ? fail(ctext(0x56, { h: h.name })) : done(s);
