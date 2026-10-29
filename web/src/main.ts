@@ -1153,14 +1153,18 @@ async function main() {
   /** P95 ovl_072d: while a party member lies dead, menu 0x15 - Use, Recall, Magic, Done ("Combat is over: this is your
    *  only opportunity to resurrect your dead.", comtxt 0x110, once). Magic casts the acting member's readied spell where
    *  `_spellshere` is 0x20 (Resurrect only). Done while someone is still dead asks "Are you sure you've resurrected
-   *  everyone that you want to?" (P95 text 0); Yes (or nobody dead) goes on to the search. Use is not built. */
+   *  everyone that you want to?" (P95 text 0); Yes (or nobody dead) goes on to the search. Use: the consumables as in a
+   *  fight; the Pick on the room's chest (P95 ovl_129c, P07's chest code) is not built. */
   const raise = () => {
     const f = fight!, dead = () => f.recs.some(r => r.hero && (r.state & 0x98) === 0x80);
     if (!dead()) return searchAsk();
     const living = f.recs.filter(r => r.hero && f.alive(r));
     const who = (then: (a: Rec) => void) => living.length === 1 ? then(living[0])
       : panel.set([...living.map(r => ({ label: r.name, act: () => then(r) })), { label: cmd[0], act: raise }]);
-    panel.set([{ label: cmd[35], act: () => who(a => recall(a.hero!, raise)) }, { label: cmd[27], act: () => who(resurrect) },
+    // P95 menu: Use (_UseItem; anything a location program would handle is _NoUse here), Recall, Magic, Done
+    const use = (a: Rec) => panel.set([...[...new Set(a.hero!.rec.h_invitem.filter(c => c > 0x30 && c < 0x51 || c === 0x5b))].map(item => ({
+      label: items[item], act: () => { report(useInFight(a, item).map(l => l.replace(/^!/, ''))); raise(); } })), { label: cmd[0], act: raise }]);
+    panel.set([{ label: cmd[43], act: () => who(use) }, { label: cmd[35], act: () => who(a => recall(a.hero!, raise)) }, { label: cmd[27], act: () => who(resurrect) },
       { label: cmd[0], act: () => {
         // P95 ovl_0c87: a dead companion (slots 1-5) carrying a quest item (V06 INT61_4a, the list at 0x31BA, the same
         // eight as Give's) is not left behind: "%h refuses to part with the %a." (0x114, %h the player) and back here
