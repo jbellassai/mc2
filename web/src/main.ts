@@ -1827,9 +1827,9 @@ async function main() {
   let shipCamp: (() => void) | null = null;   // camping aboard: one camp pass per sailing step (P93 SUB_04d4)
   let camping = false;                          // the camp menu is up (Teleport: "End camp activities first.")
   /** `_CAMPSITE` (P93 ovl_1099): world map 2 (aboard 4), a P07 dungeon room 8, inn rooms 0x40-0x47 0x20, the camp
-   *  rooms 0x5C-0x6B 0x10, else 1. Not built: `_locspec` 0x14 room 9 (also a guest room). */
+   *  rooms 0x5C-0x6B and the house room 9 of `_locspec` 0x14 (Top Level) 0x10, else 1. */
   const campsite = () => level.loc.kind === 'world' && !patch ? world.ships.sailing ? SHIP : OPEN : chamber ? DUNGEON
-    : service && service.room >= 0x40 && service.room < 0x48 ? INNROOM : service && service.room >= 0x5c && service.room < 0x6c ? GUEST : 1;
+    : service && service.room >= 0x40 && service.room < 0x48 ? INNROOM : service && (service.room >= 0x5c && service.room < 0x6c || roomAt.loc === 0x14 && service.room === 9) ? GUEST : 1;
   /** Camp (C). In a P05 inn room P05 first refuses the keeper's side (acting member at x ≥ 4 and y ≥ 5: comtxt 0x24);
    *  when camp ends with the rent used up, the party goes back to the base square and the keeper speaks (ovl_19b0/167f). */
   const campCmd = () => {
