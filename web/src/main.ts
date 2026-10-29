@@ -517,22 +517,25 @@ async function main() {
     menu();
   };
 
-  const door = async (d: Door) => {
+  const door = async (d: Door, dx: number, dy: number) => {
     if (d.type & 0x80) return keyDoor(d);
-    if (d.type === 2 && (d.pgm === 0x78 || d.pgm === 0x79)) return passThrough(d);
+    if (d.type === 2 && (d.pgm === 0x78 || d.pgm === 0x79)) return passThrough(d, dx, dy);
     if (d.type >= 6 && d.type <= 9) return guardedRoom(d);
     if (d.type === 0 || d.type === 3) return enterRoom(d);
     lockedDoor(d);
   };
 
   /** P02 pass-through door (type 2, `pgm` 'x'/'y', `id` '+'/'−'): the whole party jumps its formation's extent along
-   *  that axis + 1 squares (`_PartyWH`) and the step is tested again from there; blocked → it stays. */
-  const passThrough = (d: Door) => {
+   *  that axis + 1 squares (`_PartyWH`) and the step is tested again from there (P02 0x7E9: the window moves, then
+   *  ovl_067d), so it lands jump + step away, past the two-square-thick archways; blocked → it stays. */
+  const passThrough = async (d: Door, sx: number, sy: number) => {
     const horiz = d.pgm === 0x78, sign = d.id === 0x2b ? 1 : -1;
     const cells = party.members.map(m => horiz ? m.cell % 3 : Math.floor(m.cell / 3));
-    const n = (Math.max(...cells) - Math.min(...cells) + 2) * sign, dx = horiz ? n : 0, dy = horiz ? 0 : n;
-    if (party.members.every(m => level.walkable(m.x + dx, m.y + dy) && !figureAt(m.x + dx, m.y + dy))) { party.shift(dx, dy); message = ''; }
-    else message = `Blocked by ${level.tileName(d.x, d.y)}.`;
+    const n = (Math.max(...cells) - Math.min(...cells) + 2) * sign, jx = horiz ? n : 0, jy = horiz ? 0 : n;
+    const ok = (x: number, y: number) => level.walkable(x, y) && !figureAt(x, y);
+    if (!party.members.every(m => ok(m.x + jx + sx, m.y + jy + sy))) { message = `Blocked by ${level.tileName(d.x, d.y)}.`; return; }
+    party.shift(jx, jy);
+    await step(sx, sy);
   };
 
   /** Room exits {x,y,pgm,tx,ty,datafile}: back to town `datafile` with the window at (tx,ty), formation at window + (4,3). */
@@ -1329,7 +1332,7 @@ async function main() {
       if (mate ? !room : level.walkable(x, y)) continue;
       if (walkwater && !room && water(x, y)) continue;                  // V02 INT60_02: Walkwater crosses the listed tiles
       const d = level.loc.doors.find(e => e.x === x && e.y === y);
-      if (d && !mate) { await door(d); return render(); }
+      if (d && !mate) { await door(d, dx, dy); return render(); }
       if (room && service?.kind === INN && x === 8 && y === 4) { innArch(); return render(); }
       if (exit && !mate) { await toWorld(exit); return render(); }
       message = `Blocked by ${mate ? mate.hero.name : level.tileName(x, y)}.`;
