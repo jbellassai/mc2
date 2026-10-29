@@ -1,11 +1,12 @@
 // Drive the dev build in headless Chrome: press keys, then save a screenshot and print the status line and the open panel (log, buttons).
 // usage: node scripts/shot.mjs URL OUT.png [key ...]   keys: any key name (ArrowUp, Enter …); "xN" repeats the previous key;
 // "type:TEXT" types text into the focused field; "click:LABEL" clicks a visible button; "wait:MS" pauses;
-// "snap:FILE" saves a screenshot mid-script; "eval:EXPR" prints a page expression (dev builds expose `window.dbg`)
+// "snap:FILE" saves a screenshot mid-script; "eval:EXPR" prints a page expression (dev builds expose `window.dbg`);
+// "files:DIR" hands the folder DIR to the page's file input (the import screen)
 import { spawn } from 'node:child_process';
 import { writeFileSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 const [url, out, ...script] = process.argv.slice(2);
 const CHROME = process.env.CHROME ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
@@ -41,6 +42,14 @@ try {
     if (key.startsWith('wait:')) { await sleep(+key.slice(5)); continue; }
     if (key.startsWith('snap:')) {
       writeFileSync(key.slice(5), Buffer.from((await send('Page.captureScreenshot', { format: 'png' })).result.data, 'base64'));
+      continue;
+    }
+    if (key.startsWith('files:')) {
+      const dir = resolve(key.slice(6));
+      const { root } = (await send('DOM.getDocument')).result;
+      const { nodeId } = (await send('DOM.querySelector', { nodeId: root.nodeId, selector: 'input[type=file]' })).result;
+      const r = await send('DOM.setFileInputFiles', { nodeId, files: [dir] });   // a webkitdirectory input takes the folder
+      if (r.error) console.log('files:', r.error.message);
       continue;
     }
     if (key.startsWith('eval:')) { console.log(JSON.stringify(await evaluate(key.slice(5)))); continue; }

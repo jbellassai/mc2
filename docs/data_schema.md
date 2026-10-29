@@ -1,6 +1,6 @@
 # Data pack schema (decision 1)
 
-Built by `.venv/bin/python -I tools/export_json.py original out/pack`; never commit or publish the output. The engine reads only this. Byte strings are lowercase hex; lists are in file order; field names follow `docs/structs.h` where one exists. Meanings live in `docs/formats.md` and `docs/rules/*.md`.
+Built by `.venv/bin/python -I tools/export_json.py original out/pack`, or in the browser from the player's files by `web/src/convert.ts`, which must match it (decision 1); never commit or publish the output. The engine reads only this. Byte strings are lowercase hex; lists are in file order; field names follow `docs/structs.h` where one exists. Meanings live in `docs/formats.md` and `docs/rules/*.md`.
 
 | file | content |
 |---|---|

@@ -3,7 +3,8 @@ import { Level, type Figure } from './level';
 import { Clock } from './clock';
 import { View } from './view';
 import { resolveRoom, BASE_X, BASE_Y } from './room';
-import { json, hex, two, type Door, type Exit } from './pack';
+import { json, hex, two, openPack, isLocal, forgetFiles, type Door, type Exit } from './pack';
+import { importGame } from './importer';
 import { Talk, format, wmatch } from './talk';
 import { Hero, PICK, STATS, SKILLS, type HeroRecord } from './hero';
 import { Assignments, JAILED } from './assign';
@@ -32,6 +33,11 @@ const NEW_GAME_EVENTS = [10, 88, 117];
 const rnd = (n: number) => Math.floor(Math.random() * n);   // RndCo(n): 0 … n−1
 
 async function main() {
+  if (!(await openPack())) {                                         // the public site: the player's own files (decision 1)
+    await importGame(status);
+    if (!(await openPack())) throw new Error('The game files could not be read back from this browser.');
+    panel.hide();
+  }
   const view = await View.create(document.getElementById('view') as HTMLCanvasElement);
   const [cmd, p02, comtxt, npctypes, items, p93, conds] = await Promise.all(['commands', 'p02text', 'comtxt', 'npctypes',
     'items', 'p93text', 'conds'].map(n => json<string[]>(`${n}.json`)));
@@ -2115,6 +2121,10 @@ async function main() {
         audio.music = audio.music === 'modern' ? 'original' : audio.music === 'original' ? 'off' : 'modern'; saveAudio(); menu();
       } },
       { label: 'New game', act: () => location.assign(location.pathname) },
+      ...(isLocal() ? [{ label: 'Forget the game files', act: () => {
+        panel.line('This removes your game files from this browser (saved games stay). Remove them?');
+        panel.set([{ label: cmd[3], act: () => void forgetFiles().then(() => location.assign(location.pathname)) }, { label: cmd[4], act: menu }]);
+      } }] : []),
       { label: cmd[0], act: () => close() }]);
     if (!canSave()) panel.line('Saving is possible on a town or dungeon level or on the world map.');
     menu();

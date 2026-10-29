@@ -5,10 +5,10 @@
 import { renderCmf, RATE } from './opl';
 import { parseMidi } from './midi';
 import { renderModern } from './modern';
+import { packFetch } from './pack';
 
 export type Music = 'modern' | 'original' | 'off';
 
-const BASE = './pack/';
 const KEY = 'mc2.audio';
 
 let ctx: AudioContext | null = null;
@@ -50,7 +50,7 @@ let voice: AudioBufferSourceNode | null = null;
  *  missing file (thunder, 29) is silent. */
 export function sfx(n: number) {
   if (!audio.sound || !ctx || ctx.state !== 'running') return;
-  if (!effects.has(n)) effects.set(n, fetch(`${BASE}sounds/${n}.wav`).then(r => r.ok ? r.arrayBuffer() : null)
+  if (!effects.has(n)) effects.set(n, packFetch(`sounds/${n}.wav`).then(r => r.ok ? r.arrayBuffer() : null)
     .then(a => a ? ctx!.decodeAudioData(a) : null).catch(() => null));
   void effects.get(n)!.then(b => { if (!b) return; voice?.stop(); voice = play(b); note(n); });
 }
@@ -75,7 +75,7 @@ export function prepare(n: number): Promise<AudioBuffer | null> {
   ctx ??= new AudioContext();
   const key = `${style}${n}`;
   if (!renders.has(key)) renders.set(key, (async () => {
-    const r = await fetch(`${BASE}music/${n}.${style === 'modern' ? 'mid' : 'cmf'}`);
+    const r = await packFetch(`music/${n}.${style === 'modern' ? 'mid' : 'cmf'}`);
     if (!r.ok) return null;
     const d = new Uint8Array(await r.arrayBuffer());
     if (style === 'modern') return renderModern(parseMidi(d));

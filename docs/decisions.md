@@ -17,7 +17,7 @@ Numbered, never reused. Status: DECIDED (not yet built) or IMPLEMENTED (with com
 
 **Consequences:** The pack schema (`docs/data_schema.md`) is the contract between converter and engine. Until the TS converter exists the game is playable only where the pack was built (local dev, screen share, private sharing among owners). When it is written, the Python exporter's output is its golden test (local only, needs `original/`).
 
-**Status:** DECIDED (amended 2026-10-27: in-browser import moved from prerequisite to pre-launch step).
+**Status:** IMPLEMENTED (this commit; amended 2026-10-27: in-browser import moved from prerequisite to pre-launch step). `web/src/convert.ts` ports the exporter line for line and matches it on every file (`web/scripts/convert.mjs` + `tools/packdiff.py`: JSON by value, PNG by pixels, WAV by frames). With no `./pack/` on the server the game opens an import screen (`importer.ts`): the player picks the installed game folder, only the game's own file kinds are read, an `MC2.EXE` other than version 2.00's 323,931 bytes is refused, and a trial conversion must pass before anything is kept. The browser keeps the **original files** (IndexedDB `mc2`/`files`, a few MB) rather than the pack and converts them at every start (about a quarter second), so the pack always matches the running code and an update never asks for the folder again. The Game panel can forget the files. Rejected: keeping the converted pack (it would go stale when the converter changes, forcing a re-import) and a service worker serving `./pack/` (more moving parts than `packFetch`/`packUrl`).
 
 ## 2. First milestone: walk around Telermain from a fresh start
 
