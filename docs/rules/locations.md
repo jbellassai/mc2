@@ -122,7 +122,7 @@ Remark → event table (V02 file 0xBDB: 27 remark text ids, then 27 events, then
 ### Doors into dungeon rooms (`roomptr` type 6–9, `P02` 0x8F8)
 A door whose type is 6–9 (the type is also the arena formation side, `combat.md`) is a **dungeon room**. Its PGM record is always `{6, tileset, 6, …}` — "program 6" here means *room with guards*, not an overlay that runs on its own:
 1. `_rmdata+4` = the PGM's tileset; the `HROOM` record with `hrmid == id` is copied from the level's own `hroomptr` table into `_hroomrec`; `_cmbtyp = 5`.
-2. Group 0xCA (rooms 251 in Dragos 3 and D93) is replaced by group 0xDE, room id 0xFC, map 12 while event 32 (in `_locspec 0x41` = Dragos 3) or event 31 (elsewhere) is clear.
+2. Group 0xCA (rooms 251 in Dragos 3 and D93) is replaced by group 0xDE, room id 0xFC, map 12 while event 32 (in `_locspec 0x41` = Dragos 3) or event 31 (elsewhere) is clear (P02 0x947: the copied `_hroomrec` gets group, map and id, and the id P02 goes on with is 0xFC too, so the `_dunrms` bit and `_hroomtype` are 0xFC's; the doors and reward stay). Port: `main.ts` *guardedRoom*.
 3. `_grpno = hrmgrp`, `_diff = locdiff − 1`, `_hroomtype` from V02 service 0x12 (`Dungeon rooms` above).
 4. If the room's `_dunrms` bit is set (guards already beaten): `_curmpg = 7`, `_curvar = 0x62` (D98) — the party walks straight into the room program **P07**. Otherwise `_docmbt = 1`, `_ambflg = 0`: the fight runs first (`_DoACmbt`: **P06 is the combat room program** at 0CA8:2000, P96/P94/P95 at 0CA8:0000). Winning sets the `_dunrms` bit and P95 switches to P07 the same way (`_p07flg`).
 

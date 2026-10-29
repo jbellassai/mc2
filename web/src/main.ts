@@ -1299,10 +1299,13 @@ async function main() {
   let chamber: Chamber | null = null;
   let fightRoom: Chamber | null = null;                          // the room whose guards are being fought (P95's chest)
   /** A door of type 6-9: the room's HROOM record; its guards fight first (`_cmbtyp` 5, `_diff` = locdiff − 1) unless
-   *  beaten before, then the room (P07). Group 0xCA's swap for 0xDE before event 31/32 is not modelled. */
+   *  beaten before, then the room (P07). P02 0x947: a group-0xCA room (id 251 in Dragos 3 and Dreax 2) is room 0xFC,
+   *  group 0xDE, map 12 while event 32 (`_locspec` 0x41, Dragos 3) or 31 (elsewhere) is clear; its doors stay. */
   const guardedRoom = async (d: Door) => {
-    const hr = level.loc.hrooms?.find(h => h.id === d.id), pgm = level.loc.pgms[d.pgm];
+    let hr = level.loc.hrooms?.find(h => h.id === d.id);
+    const pgm = level.loc.pgms[d.pgm];
     if (!hr || !pgm) return void (message = 'This door leads somewhere not built yet.');
+    if (hr.group === 0xca && !events.has(level.loc.locnum === 0x41 ? 32 : 31)) hr = { ...hr, id: 0xfc, group: 0xde, map: 12 };
     const key = `${level.id}:${hr.id}`, ch = await Chamber.build(hr, pgm.tileset, key, events), diff = Math.max(0, level.loc.locdiff - 1);
     const back = { level, x: lead.x, y: lead.y };
     if (dunrms.has(key)) return enterChamber(ch, d.type, back, false);
