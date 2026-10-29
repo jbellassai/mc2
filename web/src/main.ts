@@ -812,6 +812,7 @@ async function main() {
     level = lv;
     figures = [];
     fight = f;
+    if (world.region === 12) f.barbarians();                            // P96 0x375: the Tundra's Barbarians, for the Horn
     f.sound = sfx; f.music = n => void song(n); f.fx = e => fx.play(e);
     const doom = f.recs.filter(r => r.doom !== undefined);              // P96 ovl_05fd: the Doombeasts and their images shimmer in
     if (doom.length) fx.play(FX.multiThing(doom, 9));
@@ -982,13 +983,14 @@ async function main() {
   /** Use in combat (P94 `_mnusel` 0x2B → _UseItem for the acting member): the consumables' handlers, synced onto the
    *  combat record (Potion also stands a downed member up; Gonshi gives 4 actions now; Nift 3 charges now); the
    *  instruments play their songs (INT61_1d) and are never used up. One action (assumed). A Fireglobe is placed on a
-   *  marked square next to the user (INT61_1f, Fight.placeGlobe). The Horn (INT61_1e) is not built. */
+   *  marked square next to the user (INT61_1f, Fight.placeGlobe); the Horn calls the Tundra's Barbarians (Fight.horn). */
   const fightUse = () => {
     const a = actor!, r = a.hero!.rec;
     const codes = [...new Set(r.h_invitem.filter(c => c > 0x30 && c < 0x51 || c === 0x5b))];
     panel.line(comtxt[0x2b]);                                                     // "Select."
     panel.set([...codes.map(item => ({ label: items[item], act: () => {
       if (item === 0x39) return globe(a);
+      if (item === 0x4a) { report(fight!.horn(a, world.region, ctext)); a.moves--; return partyTurn(); }   // the Horn (INT61_1e)
       const lines = useInFight(a, item);
       report(lines.map(l => l.replace(/^!/, '')));
       if (lines.length && a.moves > 0 && !lines[0].startsWith('!')) a.moves--;

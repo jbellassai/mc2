@@ -343,6 +343,36 @@ export class Fight {
     return [text(0x60, { h: a.name, l: ['Sword', 'Axe', 'Archery', 'Magic', 'Fist'][idx] })];
   }
 
+  /** P96 0x375: when `_curreg` is 12 (the Tundra) the set-up first builds Barbarians (race 41) as records 17-21, on the
+   *  party's side, removed (`c_state` 8) and off the board, for the Horn. The original builds them before the monsters,
+   *  which may take those record numbers over; here a number the monsters use is left to them. */
+  barbarians() {
+    const s = this.data.monsters[41 - 5];
+    for (let recno = 17; recno <= 21; recno++) if (!this.recs.some(r => r.recno === recno))
+      this.recs.push({ recno, side: 0, name: s.name, race: 41, num: NONE, tile: s.tile, x: -1, y: -1, hp: s.hp, shield: s.shield,
+        armor: s.armor, bravery: s.bravery, str: s.str, dex: s.dex, agi: s.agi, int: s.int, wskl: s.wskl, weapon: s.weapon, res: s.res,
+        mskl: s.mskl, maxhp: s.hp, invis: 0, fear: 0, freeze: 0, nift: 0, state: 8, health: 0, target: NONE, moves: 0 });
+  }
+  private horned = false;   // V06 file 0x280D: the Horn answers once per fight
+
+  /** V06 INT61_1e, the Horn: song 13; in region 12 (the list at V06 file 0x280E also holds 33-47, which `_curreg`, 0-15,
+   *  never equals) and once per fight, records 17 on, `music/20 + 1` of them, come back (`c_state` 0) on the square
+   *  `_PlacePerson` finds from `RndCo(45)` = 9x + y (the five left columns) with one move: "The call of the horn is
+   *  answered." (0x62); else "Nothing happens." (0x83). */
+  horn(a: Rec, region: number, text: (n: number, v?: Record<string, string | number>) => string): string[] {
+    this.music(13);
+    if (region !== 12 || this.horned) return [text(0x83)];
+    this.horned = true;
+    const n = Math.floor((a.hero!.rec.h_music as number) / 20) + 1;
+    for (let recno = 17; recno < 17 + n && recno <= 23; recno++) {
+      const r = this.recs.find(o => o.recno === recno);
+      if (!r) continue;
+      const k = rnd(45), at = this.level.place(Math.floor(k / 9), k % 9, (x, y) => this.occupied(x, y));
+      r.state = 0; r.x = at.x; r.y = at.y; r.moves = 1;
+    }
+    return [text(0x62)];
+  }
+
   /** V06 INT61_1d, an instrument used in combat: no music skill → comtxt 0x117; no song known for it (`h_songs`
    *  bits 0/1) → "The Happy Traveller" (0x118); else each known song (0xF3) charms every living monster of its race
    *  (V06 0x4EC) when RndCo(200) ≤ music + 100: `c_state |= 0x21`, feared with no turn count, so for the whole fight. */
