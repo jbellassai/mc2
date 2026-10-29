@@ -122,7 +122,7 @@ async function main() {
     const people = (fight ? fight.recs.filter(r => r.num !== 0xff && shown(r)).map(r => ({ x: r.x, y: r.y, num: r.num, race: r.race, faint: r.invis > 0 }))
       : (wild ? [lead] : party.members.filter(m => !hidden.has(m))).map(m => ({ x: m.x, y: m.y, num: m.num, race: m.hero.rec.h_race as number, faint: false })))   // world: the leader alone
       .map(p => disguise ? { ...p, frame: 0x246 + Math.min(4, p.race) } : p);   // _SetDisgTiles: E00 0x246 + race
-    view.draw(level, room ? 5 : lead.x, room ? 4 : lead.y, figures.filter(f => !hidden.has(f)), people, phase, icons, fx.overlay);
+    view.draw(level, room ? 5 : lead.x, room ? 4 : lead.y, figures.filter(f => !hidden.has(f) && (!room || f.x < 11 && f.y < 9)), people, phase, icons, fx.overlay);   // a room is its 11×9 window (D74 room 3 has a townsman at y 9)
     const where = wild || patch || (fight && outside?.level.loc.kind === 'world') ? `${world.rec?.name.replace(/\s*[MX]$/, '') ?? ''}, ${tables.weathers[clock.weather]}` : place();
     status.textContent = `${clock}  —  ${where}${message ? '  —  ' + message : ''}`;
     sidebar.update(party.members.map(m => {
