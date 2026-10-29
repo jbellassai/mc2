@@ -21,6 +21,8 @@ export interface SpecialCtx {
   /** A member leaves into a god's service (ovl_1290: assignment task 100, the Mindstone left behind, P97 `_swass` 2). */
   serve(m: Member): void;
   close(msg?: string): void;
+  /** `_GameSound`. */
+  sound(n: number): void;
 }
 
 interface P09 { pieces: number[]; piecetiles: number[]; altars: number[]; icons: number[]; wake: number[]; offer: string[]; texts: string[] }
@@ -115,6 +117,7 @@ export class Special {
         if (!Number.isInteger(b) || b < 0 || b > max) return bet();
         if (!b) return bye();
         const dealer = rnd(6) + 1 + rnd(6) + 1, roll = rnd(6) + rnd(6) + 2;
+        this.ctx.sound(18);                                         // P09 0x7F1 / 0x82F: the dice
         t(5, { i: dealer }); t(6, { i: roll });                    // "The gambler rolls %i." "%h rolls %i."
         if (roll === 2 || roll > dealer) { t(7, { i: b }); r.h_gold += b; casino[i] -= b; }   // "%h wins %i coins!"
         else { t(8, { i: b }); r.h_gold -= b; casino[i] += b; }                                 // "%h loses %i coins."
@@ -240,11 +243,15 @@ export class Special {
     if (y !== 3 || x < 4 || x > 6) return this.ctx.close(this.ctx.comtxt[0x83]), null;
     this.pedestals[x - 4] = item;
     from.dec(from.slot(item));
+    this.ctx.sound(19);                                             // P09 0xAA8: the piece slots in
     this.level.set(x, 3, p09.piecetiles[p09.pieces.indexOf(item)]);
     if (this.pedestals.includes(0)) return null;
     const t = hex(this.level.loc.tables.hroomptr);
     for (let k = 0; k + 13 <= t.length && t[k] !== 0xff; k += 13)
-      if (t[k] === this.pedestals[0] && t[k + 1] === this.pedestals[1] && t[k + 2] === this.pedestals[2]) return { x: t[k + 11], y: t[k + 12] };
+      if (t[k] === this.pedestals[0] && t[k + 1] === this.pedestals[1] && t[k + 2] === this.pedestals[2]) {
+        this.ctx.sound(20);                                         // P09 0xC6E: the party is swept away
+        return { x: t[k + 11], y: t[k + 12] };
+      }
     for (let i = 0; i < 3; i++) this.level.set(4 + i, 3, 0x70);
     this.pedestals = [0, 0, 0];
     return this.ctx.close(this.ctx.comtxt[0x83]), null;

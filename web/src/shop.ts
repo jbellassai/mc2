@@ -1,5 +1,6 @@
 // Trading with a merchant (docs/rules/economy.md; P90 Buy ovl_0792, Sell ovl_09b8, haggling ovl_0eb1/ovl_0f5e).
 import { json } from './pack';
+import { sfx } from './sound';
 import type { Hero } from './hero';
 
 export interface ShopItem { item: number; pays: number; charges: number }
@@ -29,16 +30,16 @@ export function prices(s: ShopItem, heroTrade: number, merchantSkill: number): {
 
 /** _IncObj: add `n` of `item`; equipment takes one slot each (byte 0x80 = no wear), stacks stop at 99. */
 export function incObj(h: Hero, item: number, n: number): boolean {
-  const r = h.rec, free = () => r.h_invitem.indexOf(0xff);
+  const r = h.rec, free = () => r.h_invitem.indexOf(0xff), full = () => (sfx(14), false);   // _IncObj's NOROOM: the error sound
   if (single(item) && item <= 0x30) {
-    if (r.h_invitem.filter(c => c === 0xff).length < n) return false;
+    if (r.h_invitem.filter(c => c === 0xff).length < n) return full();
     for (let i = 0; i < n; i++) { const s = free(); r.h_invitem[s] = item; r.h_invamt[s] = 0x80; }
     return true;
   }
   const s = h.slot(item);
-  if (s >= 0) { if (r.h_invamt[s] + n > 99) return false; r.h_invamt[s] += n; return true; }
+  if (s >= 0) { if (r.h_invamt[s] + n > 99) return full(); r.h_invamt[s] += n; return true; }
   const e = free();
-  if (e < 0 || n > 99) return false;
+  if (e < 0 || n > 99) return full();
   r.h_invitem[e] = item; r.h_invamt[e] = n;
   return true;
 }

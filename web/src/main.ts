@@ -410,7 +410,7 @@ async function main() {
     service = ref.pgm.program === 5 ? await ServiceRoom.open(ctx, ref.room, ref.kind, level.loc.texts, level.loc.words) : null;
     service?.greet();
     special = ref.pgm.program === 9 ? await Special.open({ hero, clock, cmd, comtxt, party, tod: tables.tod, attribs: tables.attribs,
-      kins: cdata.parley.kins, serve, close }, ref.kind, ref.kind === 13 ? ref.index - 8 : ref.index, level) : null;
+      kins: cdata.parley.kins, serve, close, sound: sfx }, ref.kind, ref.kind === 13 ? ref.index - 8 : ref.index, level) : null;
   };
 
   /** P08 L_0772 (quest_scenes.md, The ending): leaving a P08 room with event 120 set. Event 121, Zakhad's trap (room
@@ -486,7 +486,7 @@ async function main() {
       panel.set([{ label: cmd[3], act: () => void goIn() }, { label: cmd[4], act: menu }]);   // Yes / No
     };
     const knock = () => {
-      // Sound 0x11. Home = resident's hours (_TimCalc), not removed (_npcsta), RESID event conditions.
+      sfx(17);                                                        // P02 0xBDB: the knock Home = resident's hours (_TimCalc), not removed (_npcsta), RESID event conditions.
       const home = r && r.num !== 0xfe && clock.within(r.appear, r.disappear) &&
                    (!r.ifevent || events.has(r.ifevent)) && (!r.ifnevent || !events.has(r.ifnevent));
       if (!home) return done(p02[1]);                                 // "There is no response."
@@ -502,7 +502,7 @@ async function main() {
       const s = hero.slot(PICK);
       if (s < 0) return done(p02[11]);                                // "%h needs a lockpick to do that."
       if (Math.min(99, (hero.rec.h_dextrty >> 1) + hero.rec.h_lockpck) < rnd(100)) {
-        hero.dec(s); return done(comtxt[0x90]);                       // the pick breaks (text inferred: ovl_100b)
+        hero.dec(s); sfx(21); return done(comtxt[0x90]);              // the pick breaks (text inferred: ovl_100b; P02 0x10D6 snap)
       }
       void goIn(p02[7], p02[9]);                                      // "The lock clicks open!" " The party goes inside."
     };
@@ -896,7 +896,7 @@ async function main() {
     const h = a.hero!, r = h.rec, fmt = (s: string) => format(s.replace(/%l/g, items[item]), h, h.name);
     if (cdata.songs.instruments.includes(item)) return fight!.song(a, item, ctext);
     const down = (r.h_cond1 as number) & 1;
-    if (!h.use(item, tables.hungerhours[r.h_race as number])) return ['!' + fmt(comtxt[tables.nousetext[item]])];
+    if (!h.use(item, tables.hungerhours[r.h_race as number])) { sfx(14); return ['!' + fmt(comtxt[tables.nousetext[item]])]; }   // _NoUse
     h.dec(h.slot(item));
     a.hp = r.h_hitpts;
     if (item === 0x32 && down && !((r.h_cond1 as number) & 8)) {
@@ -1155,10 +1155,12 @@ async function main() {
     if (duntre.has(ch.key)) { panel.line(ptext(0, h) + ch.texts[1]); return void panel.set([{ label: cmd[0], act: () => close() }]); }
     if (!ch.opened) {
       const skill = Math.min(99, (r.h_dextrty >> 1) + r.h_lockpck);
-      if (skill <= rnd(100)) { panel.line(comtxt[0x90]); h.dec(h.slot(0x50)); }
+      if (skill <= rnd(100)) { panel.line(comtxt[0x90]); h.dec(h.slot(0x50)); sfx(21); }   // P07 0xA89: the Pick snaps
       ch.opened = true;
+      sfx(22);                                                          // P07 0xAC2: the lid creaks open
       if (rnd(4) === 0 && rnd(120) > skill) {
         const odd = ch.hr.id & 1;
+        sfx(23 + odd);                                                  // P07 0xB6B: 0x17 + kind (poison, sick)
         r.h_cond1 |= ch.trap[odd]; r.h_energy >>= 1; r.h_hitpts >>= 1; h.isHeTr();
         panel.line(ptext(2, h) + ' ' + ch.texts[3 + odd]);
         panel.line(ptext(5, h));
@@ -1405,6 +1407,7 @@ async function main() {
     const skill = Math.min(99, (r.h_dextrty >> 1) + r.h_lockpck);
     if (skill <= rnd(100)) { panel.line(comtxt[0x90]); h.dec(h.slot(0x50)); }
     if (p.d3 && skill < rnd(120)) {
+      sfx(0x16 + p.d3);                                                 // V02 INT60_15: poison (1) or sick (2)
       r.h_cond1 |= p.d3 === 1 ? 0x08 : 0x02; r.h_energy >>= 1; r.h_hitpts >>= 1; h.isHeTr();
       const t = (n: number) => format(chamberTexts[n], h, h.name);
       panel.line(`${t(2)} ${chamberTexts[2 + p.d3]}`); panel.line(t(5));
@@ -1783,7 +1786,7 @@ async function main() {
     const done = (text: string) => { panel.line(text.trim()); panel.set([{ label: cmd[0], act: () => close() }]); };
     const once = (who: Hero, item: number) => {
       const slot = who.slot(item);
-      if (!who.use(item, tables.hungerhours[who.rec.h_race as number])) return fmt(comtxt[tables.nousetext[item]], who, item);
+      if (!who.use(item, tables.hungerhours[who.rec.h_race as number])) { sfx(14); return fmt(comtxt[tables.nousetext[item]], who, item); }   // _NoUse
       who.dec(slot);
       return fmt(comtxt[0x38], who, item);
     };
