@@ -1117,8 +1117,7 @@ async function main() {
   /** P95 ovl_072d: while a party member lies dead, menu 0x15 - Use, Recall, Magic, Done ("Combat is over: this is your
    *  only opportunity to resurrect your dead.", comtxt 0x110, once). Magic casts the acting member's readied spell where
    *  `_spellshere` is 0x20 (Resurrect only). Done while someone is still dead asks "Are you sure you've resurrected
-   *  everyone that you want to?" (P95 text 0); Yes (or nobody dead) goes on to the search. Use, and the dead companion
-   *  who will not be left behind with a quest item (ovl_0c87, comtxt 0x114), are not built. */
+   *  everyone that you want to?" (P95 text 0); Yes (or nobody dead) goes on to the search. Use is not built. */
   const raise = () => {
     const f = fight!, dead = () => f.recs.some(r => r.hero && (r.state & 0x98) === 0x80);
     if (!dead()) return searchAsk();
@@ -1127,6 +1126,12 @@ async function main() {
       : panel.set([...living.map(r => ({ label: r.name, act: () => then(r) })), { label: cmd[0], act: raise }]);
     panel.set([{ label: cmd[35], act: () => who(a => recall(a.hero!, raise)) }, { label: cmd[27], act: () => who(resurrect) },
       { label: cmd[0], act: () => {
+        // P95 ovl_0c87: a dead companion (slots 1-5) carrying a quest item (V06 INT61_4a, the list at 0x31BA, the same
+        // eight as Give's) is not left behind: "%h refuses to part with the %a." (0x114, %h the player) and back here
+        for (const m of party.members.slice(1)) {
+          const it = (m.hero.rec.h_cond1 as number) & 0x80 ? m.hero.rec.h_invitem.find(c => p90.keep.includes(c)) : undefined;
+          if (it !== undefined) { panel.line(format(comtxt[0x114].replace('%a', items[it]), hero, hero.name)); return raise(); }
+        }
         panel.line(cdata.resurrect[0]);
         panel.set([{ label: cmd[3], act: searchAsk }, { label: cmd[4], act: raise }]);
       } }]);
