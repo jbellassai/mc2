@@ -802,6 +802,8 @@ async function main() {
     figures = [];
     fight = f;
     f.sound = sfx; f.music = n => void song(n); f.fx = e => fx.play(e);
+    const doom = f.recs.filter(r => r.doom !== undefined);              // P96 ovl_05fd: the Doombeasts and their images shimmer in
+    if (doom.length) fx.play(FX.multiThing(doom, 9));
     afterWin = after;
     autoHeroes.clear(); heading = false;
     panel.show();
@@ -1111,7 +1113,7 @@ async function main() {
     const f = fight!, rt = cdata.resurrect, say = (s: string, v: Record<string, string> = {}) =>
       format(s.replace(/%d/g, h.female ? 'her' : 'him').replace(/%[al]/g, m => v[m[1]] ?? ''), h, h.name);
     panel.line(rt[1]);
-    panel.set([...f.recs.filter(t => !(t.state & 0x10)).map(t => ({ label: `${t.name} (${t.x},${t.y})`, act: () => {
+    panel.set([...f.recs.filter(t => !(t.state & 0x18)).map(t => ({ label: `${t.name} (${t.x},${t.y})`, act: () => {
       if (!(t.state & 0x80)) { panel.line(say(rt[2], { a: t.name })); return raise(); }
       t.state &= 0x7f; t.health &= 0x7f; t.hp = 1; sfx(12);
       if (t.hero) {

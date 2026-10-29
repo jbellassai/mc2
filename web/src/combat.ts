@@ -3,7 +3,8 @@
 // attacks with dodge, knockdown, armour, weapon wear and skill gains (P06 ovl_050a/ovl_0cde, FAR_SKILLUP), and the
 // monster AI's targeting and movement (P94 ovl_0b4b), magic damage and missiles for the heroes' spells (spells.ts).
 // Monsters cast their two spells by the leader race's D06 chance (spells.ts). The pre-fight Talk (rally, hailing the leader) is here and in main.ts.
-// Records 6-23 act by the AI whichever side they are on (a betrayed monster, a summoned one, a hero's double). Not yet: Doombeast images.
+// Records 6-23 act by the AI whichever side they are on (a betrayed monster, a summoned one, a hero's double).
+// A Doombeast brings five images that never act; a blow on one makes it vanish (P96 ovl_1405, V06 INT61_24).
 import { json } from './pack';
 import type { Hero } from './hero';
 import type { Level } from './level';
@@ -39,6 +40,7 @@ export interface Rec {
   target: number;   // c_target, 0xFF none
   moves: number;    // c_removes: actions left this round
   loot?: { item: number; amount: number };   // c_itspc1/c_qaspc2 after the fight (P95 ovl_08f6); amount 0 = nothing
+  doom?: number;    // _doombstlst: a Doombeast's group, | 0x80 on the real one (its five images have the bare number)
 }
 
 const rnd = (n: number) => Math.floor(Math.random() * n);   // _RndCo
@@ -109,8 +111,10 @@ export class Fight {
         wskl: Fight.wpnSkl(hero), weapon: item, res: r.h_resist, mskl: r.h_magic, maxhp: r.h_hpmax, invis: 0, fear: 0, freeze: 0,
         nift: r.h_inuse & 0x40 ? 3 : 0, state: r.h_cond1 & 0x80 ? 0x80 : 0, health: 0, target: NONE, moves: 0 });
     });
-    for (const code of f.roster(group, diff)) {
+    let doom = 1;                                          // _curdoombst
+    for (const code of f.roster(group, diff)) for (let image = 0; image < ((code & 0x7f) === 32 ? 6 : 1); image++) {
       const s = data.monsters[(code & 0x7f) - 5], recno = 6 + f.recs.length - heroes.length;
+      if (recno > 23) break;
       const reach = f.distances(f.recs[0].x, f.recs[0].y, true);
       const ok = (x: number, y: number) => x >= 0 && f.free(x, y) && reach[y * W + x] < 0x7e;
       let x = -1, y = -1;
@@ -124,7 +128,9 @@ export class Fight {
       if (!ok(x, y)) continue;                             // no room left: the monster stays out (the original loops)
       f.recs.push({ recno, side: 1, name: s.name, race: code & 0x7f, num: NONE, tile: s.tile, x,
         y, hp: s.hp, shield: s.shield, armor: s.armor, bravery: s.bravery, str: s.str, dex: s.dex,
-        agi: s.agi, int: s.int, wskl: s.wskl, weapon: s.weapon, res: s.res, mskl: s.mskl, maxhp: s.hp, invis: 0, fear: 0, freeze: 0, nift: 0, state: s.undead ? 2 : 0, health: 0, target: NONE, moves: 0 });
+        agi: s.agi, int: s.int, wskl: s.wskl, weapon: s.weapon, res: s.res, mskl: s.mskl, maxhp: s.hp, invis: 0, fear: 0, freeze: 0, nift: 0, state: s.undead ? 2 : 0, health: 0, target: NONE, moves: 0,
+        doom: (code & 0x7f) === 32 ? doom | (image ? 0 : 0x80) : undefined });
+      if (image === 5) doom++;
     }
     const lead = f.recs.filter(r => r.side && data.monsters[r.race - 5].leader !== NONE)
       .sort((a, b) => data.monsters[b.race - 5].leader - data.monsters[a.race - 5].leader)[0];
@@ -160,7 +166,8 @@ export class Fight {
   }
 
   private weapon(r: Rec): Weapon | null { return r.weapon >= 9 && r.weapon <= 0x1e ? this.data.weapons[r.weapon - 9] : null; }
-  alive(r: Rec): boolean { return !(r.state & 0x90); }
+  /** `c_state & 0x98` clear: not dead, fled or removed by a spell (Destroy, Restsoul, a Doombeast's image). */
+  alive(r: Rec): boolean { return !(r.state & 0x98); }
   visible(r: Rec): boolean { return this.alive(r) && !r.invis; }
   at(x: number, y: number): Rec | undefined { return this.recs.find(r => this.alive(r) && r.x === x && r.y === y); }
   private occupied(x: number, y: number) { return !!this.at(x, y); }
@@ -259,7 +266,9 @@ export class Fight {
   newRound() {
     for (const r of this.recs) {
       if (r.state & 0x80 && r.state & 2) { r.state &= 0x7f; r.health &= 0x7f; r.hp = 1; }
-      if (r.state & 0xb0 || r.health & 0x20) { r.moves = 0; continue; }   // removed, dead, feared, frozen
+      if (r.state & 0xb0 || r.health & 0x20 || (r.doom !== undefined && !(r.doom & 0x80))) {
+        r.moves = 0; continue;                                          // removed, dead, feared, frozen, an image
+      }
       let n = r.dex * 8 + 4;
       r.moves = 1;
       if (n >= 50) { r.moves++; n -= 50; }
@@ -422,7 +431,16 @@ export class Fight {
     // ovl_050a: a target that was hit turns on its attacker unless RndCo(100) ≤ its c_intel.
     if (result !== 0 && this.alive(t) && t.int < rnd(100)) t.target = a.recno;
     if (result === 0xff) for (const r of this.recs) if (r.target === t.recno) r.target = NONE;
+    if (result && t.doom) this.unmask(a, t, result === 0xff);
     return out;
+  }
+
+  /** V06 INT61_24, after a blow that lands on a Doombeast: an image vanishes (`ovl_2e08`: `c_state = 8`, off the board);
+   *  the real one slain takes all of its images with it. The attacker forgets its target. */
+  private unmask(a: Rec, t: Rec, slain: boolean) {
+    const gone = !(t.doom! & 0x80) ? [t] : slain ? this.recs.filter(r => r.doom === (t.doom! & 0x7f)) : [];
+    for (const r of gone) { this.remove(r); r.state = 8; }
+    if (gone.length) a.target = NONE;
   }
 
   /** After a hero's blow: a landed one may raise the weapon skill (FAR_SKILLUP) and may break the weapon; any blow but a
