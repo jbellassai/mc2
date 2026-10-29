@@ -1156,7 +1156,7 @@ async function main() {
    *  only opportunity to resurrect your dead.", comtxt 0x110, once). Magic casts the acting member's readied spell where
    *  `_spellshere` is 0x20 (Resurrect only). Done while someone is still dead asks "Are you sure you've resurrected
    *  everyone that you want to?" (P95 text 0); Yes (or nobody dead) goes on to the search. Use: the consumables as in a
-   *  fight; the Pick on the room's chest (P95 ovl_129c, P07's chest code) is not built. */
+   *  fight, and the Pick on the room's chest (P95 ovl_129c, P07's chest code). */
   const raise = () => {
     const f = fight!, dead = () => f.recs.some(r => r.hero && (r.state & 0x98) === 0x80);
     if (!dead()) return searchAsk();
@@ -1165,7 +1165,20 @@ async function main() {
       : panel.set([...living.map(r => ({ label: r.name, act: () => then(r) })), { label: cmd[0], act: raise }]);
     // P95 menu: Use (_UseItem; anything a location program would handle is _NoUse here), Recall, Magic, Done
     const use = (a: Rec) => panel.set([...[...new Set(a.hero!.rec.h_invitem.filter(c => c > 0x30 && c < 0x51 || c === 0x5b))].map(item => ({
-      label: items[item], act: () => { report(useInFight(a, item).map(l => l.replace(/^!/, ''))); raise(); } })), { label: cmd[0], act: raise }]);
+      label: items[item], act: () => item === 0x50 ? pick(a) : (report(useInFight(a, item).map(l => l.replace(/^!/, ''))), raise()) })), { label: cmd[0], act: raise }]);
+    // P95 ovl_129c: a Pick marks a square (0x2A); only the room's chest counts, within reach of the user (`_ChkRng` 1,
+    // "Out of range."), then P07's chest code with P95's own copy of its texts
+    const pick = (a: Rec) => {
+      const ch = fightRoom;
+      panel.set([]);
+      mark(format(comtxt[0x2a].replace('%l', items[0x50]), a.hero!, a.name), (x, y) => {
+        message = '';
+        if (!ch || !ch.hr.reward || ch.hr.reward & 0x80 || x !== 1 || y !== 1) return raise();
+        const near = (cx: number, cy: number) => Math.max(Math.abs(a.x - cx), Math.abs(a.y - cy)) <= 1;
+        if (!near(1, 1)) { panel.line(comtxt[0x0b]); return raise(); }
+        openChest(a.hero!, { ch, near, done: (m = '') => { if (m) panel.line(m); render(); raise(); }, flag: 'picked' });
+      }, raise);
+    };
     panel.set([{ label: cmd[43], act: () => who(use) }, { label: cmd[35], act: () => who(a => recall(a.hero!, raise)) }, { label: cmd[27], act: () => who(resurrect) },
       { label: cmd[0], act: () => {
         // P95 ovl_0c87: a dead companion (slots 1-5) carrying a quest item (V06 INT61_4a, the list at 0x31BA, the same
@@ -1219,7 +1232,7 @@ async function main() {
    *  fight started. */
   const endFight = () => {
     const won = fight!.outcome() === 1, next = afterWin;
-    afterWin = null;
+    afterWin = null; fightRoom = null;
     if (won && next) { next(); fight = null; close(); return; }
     level = outside!.level; party.place(outside!.x, outside!.y); outside = null; fight = null; close();
   };
@@ -1227,6 +1240,7 @@ async function main() {
   // ---- dungeon rooms (rules/locations.md, Doors into dungeon rooms; P07) ----
   const dunrms = new Set<string>(), duntre = new Set<string>();   // _dunrms (guards beaten), _duntre (reward taken)
   let chamber: Chamber | null = null;
+  let fightRoom: Chamber | null = null;                          // the room whose guards are being fought (P95's chest)
   /** A door of type 6-9: the room's HROOM record; its guards fight first (`_cmbtyp` 5, `_diff` = locdiff − 1) unless
    *  beaten before, then the room (P07). Group 0xCA's swap for 0xDE before event 31/32 is not modelled. */
   const guardedRoom = async (d: Door) => {
@@ -1235,6 +1249,7 @@ async function main() {
     const key = `${level.id}:${hr.id}`, ch = await Chamber.build(hr, pgm.tileset, key, events), diff = Math.max(0, level.loc.locdiff - 1);
     const back = { level, x: lead.x, y: lead.y };
     if (dunrms.has(key)) return enterChamber(ch, d.type, back, false);
+    fightRoom = ch;
     startFight(ch.level, Fight.room(cdata, ch.level, party.members, hr.group, diff, d.type, ch.doors()), diff,
       () => dunrms.add(key), () => enterChamber(ch, d.type, back, true));
   };
@@ -1275,53 +1290,57 @@ async function main() {
   /** The chest and fountain need the acting member next to them (`_ChkRng` 1); otherwise " %w considers moving closer
    *  to it." (text 8; text 7 when another member makes the suggestion — `_Advice` chooses). */
   const near = (x: number, y: number) => Math.max(Math.abs(lead.x - x), Math.abs(lead.y - y)) <= 1;
-  const ptext = (n: number, h: Hero, v: Record<string, string | number> = {}) => format(chamber!.texts[n], h, h.name, v).trim();
+  const ptext = (n: number, h: Hero, v: Record<string, string | number> = {}, ch = chamber!) => format(ch.texts[n], h, h.name, v).trim();
+  /** Where a chest is opened: P07 in the room (the leader's range, `opened`), or P95 on the aftermath screen (the acting
+   *  record's range, its own flag OV_0x122F: P07 loads with its flag clear and rolls the lock again). */
+  interface ChestAt { ch: Chamber; near: (x: number, y: number) => boolean; done: (msg?: string) => void; flag: 'opened' | 'picked' }
+  const inRoom = (): ChestAt => ({ ch: chamber!, near, done: close, flag: 'opened' });
   /** P07 ovl_0969, using a Pick on the chest: already emptied → texts 0 + 1; the first opening this visit rolls
    *  min(99, dex/2 + lockpick) against RndCo(100) (a miss breaks the Pick, comtxt 0x90, the chest still opens); then
    *  1 in 4 and RndCo(120) > skill springs the trap ("The chest is trapped! %h is poisoned!/ill!", Poisoned for an even
    *  `hrmid`, Ill for an odd one, energy and HP halved, " But the chest is open."), else a lockpick skill roll and
    *  "%h opens the chest."; then its contents (chestLook). */
-  const openChest = (h: Hero) => {
-    const ch = chamber!, r = h.rec as Record<string, number> & Hero['rec'];
+  const openChest = (h: Hero, at = inRoom()) => {
+    const { ch, done } = at, r = h.rec as Record<string, number> & Hero['rec'];
     panel.show();
-    if (!near(1, 1)) { panel.line(ptext(8, h)); return void panel.set([{ label: cmd[0], act: () => close() }]); }
-    if (duntre.has(ch.key)) { panel.line(ptext(0, h) + ch.texts[1]); return void panel.set([{ label: cmd[0], act: () => close() }]); }
-    if (!ch.opened) {
+    if (!at.near(1, 1)) { panel.line(ptext(8, h, {}, ch)); return void panel.set([{ label: cmd[0], act: () => done() }]); }
+    if (duntre.has(ch.key)) { panel.line(ptext(0, h, {}, ch) + ch.texts[1]); return void panel.set([{ label: cmd[0], act: () => done() }]); }
+    if (!ch[at.flag]) {
       const skill = Math.min(99, (r.h_dextrty >> 1) + r.h_lockpck);
       if (skill <= rnd(100)) { panel.line(comtxt[0x90]); h.dec(h.slot(0x50)); sfx(21); }   // P07 0xA89: the Pick snaps
-      ch.opened = true;
+      ch[at.flag] = true;
       sfx(22);                                                          // P07 0xAC2: the lid creaks open
       if (rnd(4) === 0 && rnd(120) > skill) {
         const odd = ch.hr.id & 1;
         sfx(23 + odd);                                                  // P07 0xB6B: 0x17 + kind (poison, sick)
         r.h_cond1 |= ch.trap[odd]; r.h_energy >>= 1; r.h_hitpts >>= 1; h.isHeTr();
-        panel.line(ptext(2, h) + ' ' + ch.texts[3 + odd]);
-        panel.line(ptext(5, h));
+        panel.line(ptext(2, h, {}, ch) + ' ' + ch.texts[3 + odd]);
+        panel.line(ptext(5, h, {}, ch));
       } else {
         const up = skillUp0(h, 10);                                     // lockpick
         if (up) panel.line(up);
-        panel.line(ptext(9, h));
+        panel.line(ptext(9, h, {}, ch));
       }
     }
-    chestLook(h);
+    chestLook(h, at, false);
   };
   /** The opened chest's contents: " It contains %b %as. Will %h take them?" (6; 14 for one) → _IncObj; taken: the
    *  `_duntre` bit, hirelings' partybucks += value × amount, and Darkfinder (0x1E) sets event 93 (`_events+11 & 0x20`). */
-  const chestLook = (h: Hero) => {
-    const ch = chamber!, item = ch.hr.reward, n = ch.hr.amount;
-    panel.show();
-    if (!near(1, 1)) { panel.line(ptext(8, h)); return void panel.set([{ label: cmd[0], act: () => close() }]); }
-    if (duntre.has(ch.key)) { panel.line(ch.texts[1].trim()); return void panel.set([{ label: cmd[0], act: () => close() }]); }
-    panel.line(ptext(n === 1 ? 14 : 6, h, { a: items[item], b: n }));
+  const chestLook = (h: Hero, at = inRoom(), fresh = true) => {
+    const { ch, done } = at, item = ch.hr.reward, n = ch.hr.amount;
+    if (fresh) panel.show();                                           // after openChest its lines stay
+    if (!at.near(1, 1)) { panel.line(ptext(8, h, {}, ch)); return void panel.set([{ label: cmd[0], act: () => done() }]); }
+    if (duntre.has(ch.key)) { panel.line(ch.texts[1].trim()); return void panel.set([{ label: cmd[0], act: () => done() }]); }
+    panel.line(ptext(n === 1 ? 14 : 6, h, { a: items[item], b: n }, ch));
     panel.set([{ label: cmd[3], act: () => {
       const ok = item === 0 ? h.rec.h_gold + n <= 9999 && (h.rec.h_gold += n, true) : incObj(h, item, n);
-      if (!ok) return close(ctext(h.slot(item) >= 0 ? 0x32 : 0x33, { o: h.name }));
+      if (!ok) return done(ctext(h.slot(item) >= 0 ? 0x32 : 0x33, { o: h.name }));
       duntre.add(ch.key);
       if (item === 0x1e) events.add(93);
       for (const { hero: m } of party.members)
         if (m.rec.h_relatn === 2) m.rec.h_partybucks = Math.min(30000, (m.rec.h_partybucks as number) + tables.lootvalues[item] * n);
-      close();
-    } }, { label: cmd[4], act: () => close() }]);
+      done();
+    } }, { label: cmd[4], act: () => done() }]);
   };
   /** P07 ovl_0d54, Look at the fountain: the first drink of a spell fountain by a member with magic (spell ≠ 0x2A)
    *  adds its charges (" of %a spells.", "Will %h drink from it?", "%h gains %b %a spells.", cap 99); every other drink

@@ -11,6 +11,7 @@ interface Candle { texts: string[]; words: string[]; knpc: Uint8Array }
 
 export class Chamber {
   opened = false;   // OV_0x8FC: the chest was opened this visit
+  picked = false;   // P95's OV_0x122F, the same on the aftermath screen
   /** `_hroomtype` (V02 INT60_12, by room id): 1 prison cell, 2-5 Dark Candle rooms, 6 Vankruh's chamber, else 0. */
   type = 0;
   /** D98 for the candle rooms. */
