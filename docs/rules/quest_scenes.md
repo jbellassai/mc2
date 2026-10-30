@@ -9,7 +9,7 @@ The 18 doors into P08 rooms (`tools/doors.py`): Oshcrun (3) → D16 room 1 (thro
 
 **Party placement** (`ovl_1484`): every exit `{x, y, pgm, winx, winy, var}` of the room contributes a side flag (x 0 → 2 W, y 0 → 4 N, x 10 → 8 E, y 8 → 16 S). With more than one exit, `_lastdir` (the last step key − '1': 0 SW, 1 S, 2 SE, 3 W, 5 E, 6 NW, 7 N, 8 NE, set by P02 0x46B) narrows it: orthogonal steps replace the flags with P08 file 0xA3[dir] (`[12,4,6,8,0,2,24,16,18]`, so a step north enters on the south side), diagonal steps AND them with 0xAC[dir/2] (`[12,6,0,24,18]`). The flags pick the formation origin from the word table at file 0x83 (word = flags/2, x low byte): 0 → (4,3), W (1,3), N (4,1), W+N (1,1), E (7,3), N+E (7,1), S (4,5), W+S (1,5), E+S (7,5), anything else (4,3). Members stand on the usual 3×3 formation from it (`_formatn`, P08 0x71/0x7A).
 
-**Leaving**: stepping on an exit asks "Do you want to leave?" (Yes/No) — unless a scroll lies on the floor and no ghost is left, then the cleverest member (assumed `_HighStat(intellect)`) "%o refuses to leave the %a here." (text 11) and nobody leaves. The exit's `pgm` (an index into the room's own PGM list) and `var` (the location's D-file) say where to.
+**Leaving**: stepping on an exit asks "Do you want to leave?" (Yes/No) — unless a scroll lies on the floor and no ghost is left, then the member with the best magic skill (`_HighStat(0x1A)`, P08 0x70A) "%o refuses to leave the %a here." (text 11) and nobody leaves. The exit's `pgm` (an index into the room's own PGM list) and `var` (the location's D-file) say where to.
 
 ## Scenes
 | scene | where / trigger | effect |

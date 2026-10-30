@@ -74,7 +74,9 @@ export class Scene {
   private player = () => this.ctx.party.members[0];
   private say = (s: string, h: Hero, v: Record<string, string | number> = {}, other = h.name) => format(s, h, other, v).trim();
   /** _HighStat(intellect): the cleverest member, who speaks the asides. */
-  private wise = () => this.ctx.party.members.reduce((a, m) => (m.hero.rec.h_intellg as number) > (a.hero.rec.h_intellg as number) ? m : a);
+  private wise = () => this.best('h_intellg');
+  /** _HighStat(n): the first member with the highest HERO field (0x14 intellect, 0x1A magic). */
+  private best = (f: string) => this.ctx.party.members.reduce((a, m) => (m.hero.rec[f] as number) > (a.hero.rec[f] as number) ? m : a);
 
   /** ovl_13bb/ovl_1541/ovl_1581: the scroll on the floor, which ghost is here, which elden. */
   private setup() {
@@ -238,10 +240,10 @@ export class Scene {
   }
 
   /** L_06fa: a scroll still on the floor once the ghost is gone holds everyone back: "%o refuses to leave the %a
-   *  here." (11; %o assumed the cleverest member). */
+   *  here." (11; %o = the best magic skill, _HighStat(0x1A) at P08 0x70A). */
   refuseLeave(): string | null {
     if (!this.scroll || this.ghost) return null;
-    const w = this.wise().hero;
+    const w = this.best('h_magic').hero;
     return this.say(this.t[11], w, { a: this.ctx.items[this.scroll] }, w.name);
   }
 }
