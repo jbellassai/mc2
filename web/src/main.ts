@@ -1848,8 +1848,11 @@ async function main() {
     if (who) return talkTo(who);
     message = say(comtxt[0x11]) + level.tileName(x, y) + comtxt[0x10];
   };
-  /** Whisper (H; the original's Whisper command): "What magic word will %h whisper?" (comtxt 0xCD), matched against
-   *  the location's `gwrds`. A word nothing answers gets "Nothing happens." (0x83; assumed, P09 prints `_comtxtptr`). */
+  /** Whisper (H; `_Whisper`): "What magic word will %h whisper?" (comtxt 0xCD), matched against the location's `gwrds`
+   *  (`_whspnum`, 0xFE no match). A word nothing answers gets "Nothing happens." (0x83: P01 0x47C, P04, P05, P07, P09),
+   *  except in a town or dungeon level: P02 ovl_0830 only looks the word up in its table (file 0x57 {word, locspec}
+   *  until 0xFF; the one entry is Deadwood's "Yommanis", word 7 at 0x3A, whose tile changes at file 0x5A are
+   *  {entry, newtile, x, y}: 0x5C at (29,11), 0x59 at (30,11)) and prints nothing. */
   const whisper = (by: Member = lead) => {
     panel.show();
     if (scene && party.members.length > 1 && by === lead && !speaker) return pick(h => { speaker = party.members.find(m => m.hero === h)!; whisper(speaker); });
@@ -1858,6 +1861,10 @@ async function main() {
     panel.set([{ label: cmd[0], act: () => close() }], w => {
       panel.line(`> ${w}`, 'you');
       if (special?.whisper(w)) return;
+      if (program() === 2) {
+        if (wmatch(w, level.loc.words) === 7 && level.loc.locnum === 0x3a) { level.set(29, 11, 0x5c); level.set(30, 11, 0x59); }
+        return close();
+      }
       const s = scene?.whisper(wmatch(w, level.loc.words), by);
       figures = people();                                               // the egg cracking shows Jemil (event 120)
       close(s ?? comtxt[0x83]);
