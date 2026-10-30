@@ -1258,7 +1258,8 @@ async function main() {
    *  target." (text 1) among the records on the board; alive → "%a does not need resurrection." (2); else it always
    *  works: HP and energy 1, not dead (a hero: `h_hitpts = h_energy = 1`, `cond1 &= ~Dead`, "Done."); a monster thanks
    *  the caster (4) and gives its loot (", giving %d " (5) and the treasure, _IncObj to the caster; a full pack keeps
-   *  only the thanks), then leaves the board. One copy, the energy and a magic skill roll as elsewhere (assumed). A
+   *  only the thanks), then leaves the board. The costs are _Magic's (P95 0x81D calls it): one copy and the
+   *  energy (no skill roll: 17 is not in SKLSPLS); texts 6, 2 and 3 return carry set (0xD2B/0xD44/0xD5A), nothing spent. A
    *  record not on the party's side (`c_alignmnt`) is refused: "%h decides not to resurrect the %l." (3), nothing spent.
    *  After something was taken from a dead member's pack (`_corpsexfer`, the sheet's Transfr) every cast is refused:
    *  "While you were looting that corpse…" (6), nothing spent. */
