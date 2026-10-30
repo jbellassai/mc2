@@ -434,7 +434,7 @@ async function main() {
     roomAt = { loc: locspec, room: ref.room };
     if (ref.pgm.program === 5 && ref.room >= 0x5c && ref.room < 0x6c) been |= 0x8000 >> ref.room - 0x5c;   // a stronghold
     go(lv, roomStart.x, roomStart.y);
-    message = level.loc.name.trim() ? `${hero.name} enters ${level.loc.name}.` : '';   // which of D08/D09's room names applies is not traced
+    message = level.loc.name.trim() ? `${hero.name} enters ${level.loc.name}.` : '';   // the port's own line: the original prints none (only P08's "%h enters an Altesen shrine.")
     scene = ref.pgm.program === 8 ? await Scene.open({ party, events, items, comtxt, figures: () => figures, scroll,
       disaster: () => { disasterday = clock.juldate; for (const n of [56, 60, 61]) party.away.add(n); },   // P08 ovl_16e9: _npcsta
       sound: sfx, fx: e => fx.play(e) }, locspec, ref.room, level) : null;
