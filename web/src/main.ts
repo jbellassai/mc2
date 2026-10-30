@@ -1128,8 +1128,7 @@ async function main() {
     } })), { label: cmd[0], act: cancel }]);
   };
   /** A hero's step (P94 ovl_01ad → _RMove): walking into an enemy attacks it; a step off the arena asks to flee
-   *  ("%h is fleeing from combat." "Do you want to leave?", comtxt 0x6C/0x6D — the ids are assumed from their
-   *  wording) and Yes takes the hero off the board, unless the player is leaving a companion who holds a quest item
+   *  ("%h is fleeing from combat." "Do you want to leave?", comtxt 0x6C/0x6D, P94 0x23F/0x24A) and Yes takes the hero off the board, unless the player is leaving a companion who holds a quest item
    *  (ovl_09a8 → comtxt 0x114). */
   const fightStep = (dx: number, dy: number) => {
     const a = actor;
