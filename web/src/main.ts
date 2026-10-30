@@ -2122,36 +2122,70 @@ async function main() {
     panel.show();
     panel.set([...party.members.map(m => ({ label: m.hero.name, act: () => list(m.hero) })), { label: cmd[0], act: () => close() }]);
   };
-  /** Transfr: an item or coins to another member. Assumption: like giving (economy.md), not what is in hand or worn.
-   *  Whatever a hireling receives adds lootvalue × count to h_mybucks (FFFAR ovl_2402, cap 30000). */
+  /** Transfr (FFFAR INT62_0a): "To whom?" (0x26; `_HeroSel(1, 0)`: the members, Drop, None; the giver ends it), then
+   *  "Select." (0x2B) an item (Coins = h_gold). Unless the giver is dead: _BookChk (spell books 0x53-0x59: a Wizard
+   *  keeps one, 0x2E; "%o isn't a magic user." 0x2D unless dropped; giving the book being learnt from stops the
+   *  learning) and FAR_OK2GIVE (a hireling or Brennix "refuses to part with it!" 0x2F, in hand 0x31, worn 0x30; its
+   *  quest-item list is only for people outside the party). Drop: the whole stack, "Dropped." (0x2C). Equipment
+   *  (9-0x30, 0x4C-0x4F, 0x53-0x59) moves one at a time; a stack asks "How many (0-%i)?" (0x61, 0 ends). The giver's
+   *  _DecObj, then _IncObj to the other or back on a refusal (0x32/0x33); "%h gives %p %l to %o." (0x28) / "%h gives
+   *  %i %ls to %o." (0x29). Whatever a hireling receives adds lootvalue × count to h_mybucks (FFFAR ovl_2402). */
   const transfer = (from: Member) => {
-    const r = from.hero.rec, back = () => sheet(from.hero);
-    const give = (to: Member, item: number, slot: number, n: number) => {
-      const t = to.hero.rec;
-      if (item === 0) { r.h_gold -= n; t.h_gold += n; }
-      else if (r.h_invamt[slot] & 0x80) {                                         // equipment keeps its wear byte
-        const e = t.h_invitem.indexOf(0xff);
-        if (e < 0) { panel.line(say(comtxt[0x20])); return; }
-        t.h_invitem[e] = item; t.h_invamt[e] = r.h_invamt[slot]; r.h_invitem[slot] = 0xff; r.h_invamt[slot] = 0;
-      } else {
-        if (!incObj(to.hero, item, n)) { panel.line(say(comtxt[0x20])); return; }
-        for (let k = 0; k < n; k++) from.hero.dec(slot);
-      }
-      if ((r.h_cond1 as number) & 0x80) looted = true;                          // FFFAR INT62_0a / ovl_221d
-      if (t.h_relatn === 2) t.h_mybucks = Math.min(30000, (t.h_mybucks as number) + tables.lootvalues[item] * n);
+    const h = from.hero, r = h.rec, back = () => sheet(h), dead = (r.h_cond1 as number) & 0x80;
+    const say = (n: number, other = '', v: Record<string, string | number> = {}) => panel.line(format(comtxt[n], h, other, v));
+    const one = (c: number) => c > 8 && (c < 0x31 || c > 0x4b && c < 0x50 || c > 0x52 && c < 0x5a);
+    const move = (to: Member | null, item: number, slot: number, n: number) => {
+      if (!n) return back();
+      if (dead) looted = true;                                                   // _corpsexfer
+      const wear = item ? r.h_invamt[slot] : 0;
+      if (item === 0) r.h_gold -= n;
+      else if (one(item)) { r.h_invitem[slot] = 0xff; r.h_invamt[slot] = 0; }
+      else for (let k = 0; k < n; k++) h.dec(slot);
       back();
-      panel.line(`${from.hero.name} → ${to.hero.name}: ${n > 1 || item === 0 ? n + ' ' : ''}${item === 0 ? comtxt[0xb1] : items[item]}`);
+      if (!to) return say(0x2c);                                                 // "Dropped."
+      const t = to.hero.rec, ok = item === 0 ? t.h_gold + n <= 9999 : incObj(to.hero, item, n);
+      if (!ok) {                                                                 // back to the giver
+        panel.line(format(comtxt[item === 0 || to.hero.slot(item) >= 0 ? 0x32 : 0x33], h, to.hero.name));
+        if (item === 0) r.h_gold += n;
+        else { incObj(h, item, n); if (one(item)) r.h_invamt[r.h_invitem.lastIndexOf(item)] = wear; }
+        return;
+      }
+      if (item === 0) t.h_gold += n;
+      else if (one(item)) t.h_invamt[t.h_invitem.lastIndexOf(item)] = wear;     // equipment keeps its wear byte
+      if (t.h_relatn === 2) t.h_mybucks = Math.min(30000, (t.h_mybucks as number) + tables.lootvalues[item] * n);
+      say(n === 1 ? 0x28 : 0x29, to.hero.name, { l: items[item], i: n });
     };
-    const amount = (to: Member, item: number, slot: number, max: number) => {
-      if (max <= 1) return give(to, item, slot, 1);
-      panel.set([{ label: cmd[0], act: back }], w => { const n = Number(w); if (Number.isInteger(n) && n > 0 && n <= max) give(to, item, slot, n); }, `1–${max}`);
+    const select = (to: Member | null) => {
+      say(0x2b);                                                                 // "Select."
+      const slots = r.h_invitem.map((c, i) => i).filter(i => r.h_invitem[i] !== 0xff && r.h_invitem[i] !== 0);
+      const pick = (item: number, slot: number) => {
+        if (!dead) {
+          if (item >= 0x53 && item <= 0x59) {                                    // _BookChk
+            if (r.h_race === 1 && r.h_invitem.filter(c => c >= 0x53 && c <= 0x59).length < 2) return say(0x2e);
+            if (to && !to.hero.rec.h_magic) return say(0x2d, to.hero.name);
+            const first = (item - 0x53) * 6, learning = r.h_actmisc as number;
+            if (r.h_actvty === 1 && learning >= first && learning < first + 6) r.h_actvty = 0xff;
+          }
+          if ((r.h_relatn as number) >= 2 || item === 0x11) return say(0x2f);   // FAR_OK2GIVE
+          if (slot === r.h_inhand) return say(0x31);
+          if (r.h_wears.includes(slot)) return say(0x30);
+        }
+        const max = item === 0 ? r.h_gold : one(item) ? 1 : r.h_invamt[slot];
+        if (!to) return move(null, item, slot, max);
+        if (max === 1) return move(to, item, slot, 1);
+        say(0x61, '', { i: max });                                               // "How many (0-%i)?"
+        panel.set([{ label: cmd[0], act: back }], w => {
+          const n = Number(w);
+          if (Number.isInteger(n) && n >= 0 && n <= max) move(to, item, slot, n);
+        }, `0–${max}`);
+      };
+      panel.set([...(r.h_gold > 0 ? [{ label: `${r.h_gold} ${comtxt[0xb1]}`, act: () => pick(0, -1) }] : []),
+                 ...slots.map(i => ({ label: items[r.h_invitem[i]], act: () => pick(r.h_invitem[i], i) })),
+                 { label: cmd[0], act: back }]);
     };
-    const target = (item: number, slot: number, max: number) =>
-      panel.set([...party.members.filter(m => m !== from).map(m => ({ label: m.hero.name, act: () => amount(m, item, slot, max) })), { label: cmd[0], act: back }]);
-    const slots = r.h_invitem.map((c, i) => i).filter(i => r.h_invitem[i] !== 0xff && r.h_invitem[i] !== 0 && i !== r.h_inhand && !r.h_wears.includes(i));
-    panel.set([...(r.h_gold > 0 ? [{ label: `${r.h_gold} ${comtxt[0xb1]}`, act: () => target(0, -1, r.h_gold) }] : []),
-               ...slots.map(i => ({ label: items[r.h_invitem[i]], act: () => target(r.h_invitem[i], i, r.h_invamt[i] & 0x80 ? 1 : r.h_invamt[i]) })),
-               { label: cmd[0], act: back }]);
+    say(0x26);                                                                   // "To whom?"
+    panel.set([...party.members.map(m => ({ label: m.hero.name, act: () => m === from ? back() : select(m) })),
+               { label: 'Drop', act: () => select(null) }, { label: cmd[2], act: back }]);   // EXE 0x1AC00: "Drop", "None"
   };
   /** Assign (P88 entry 0): a volunteer leaves the party to wait here and then go to a stronghold, to go to one now, or
    *  — in a school, library or lodge — to finish the task they started there (a job has no afterwards). The record
