@@ -146,7 +146,7 @@ Yes on 2–4: "The monsters leave." (37), every monster `c_state |= 0x10` off th
 
 **Sheathe** (`_Sheathe`, EXE 0957:0930): `_AllDoit` ("Is this order for everyone?", comtxt 0x3C, with 2+ members): Yes every member, No the acting member; `h_inhand` = 0xFF and in a fight `c_rdywpn` = 0xFF and the fist skill, then "Done." (0x37). Draw and Recall here are the combat menu's, for the acting member.
 
-Port (`main.ts` *prefight*, *sheathe*, *greet*, *prestep*, *fightLook*): Draw, Recall, Talk (Rally, Greet with Vankruh), Look, Begin, Sheathe, and the arrow keys; Draw and Recall ask which member acts. Assumed: the arrows move the first living hero (`_curpla` before the fight is not traced) and do not step off the arena.
+Port (`main.ts` *prefight*, *sheathe*, *greet*, *prestep*, *fightLook*): Draw, Recall, Talk (Rally, Greet with Vankruh), Look, Begin, Sheathe, and the arrow keys; Draw and Recall ask which member acts. The arrows (`_RMove` with `_curmpg` 0x0A, EXE 0xBE7C) keep a hero in the party's half outside street fights — side 6 x < 5, 7 y < 4, 8 x > 5, 9 y > 4, else 1 — and off the board (2); P96 0x55D sounds 14 for either. Assumed: the arrows move the first living hero (`_curpla` before the fight is not traced).
 
 **Look in a fight** (menu 10 and P94 `_mnusel` 0x19 → `_Look` with `_swcomb` set; no action): "Mark the target.", then "%h sees " + what is there + ".": a record not invisible (`c_invis` 0) — a monster or any record past the heroes (`_IsItMon`) is "a "/"an " (`CHECKVOWEL`, 0x0E/0x0F) or "a dead " (0x112, `c_state & 0x80`) + `_w_kins[c_race]`, a hero (`_IsItPla`) by name; anything else the tile's name. The location's look texts are not added in a fight.
 

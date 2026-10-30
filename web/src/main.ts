@@ -877,11 +877,15 @@ async function main() {
   };
   let before = false;                                              // menu 10 is up: arrows move the acting member
   /** Menu 10's direction keys (`_RMove` for the acting member, here the first living hero): a step to a free square,
-   *  no action counted (the fight has not begun). Stepping off the arena is not allowed here (assumed). */
+   *  no action counted (the fight has not begun). `_RMove` with `_curmpg` 0x0A refuses (1) a step out of the party's
+   *  half unless it is a street fight (EXE 0xBE7C: side 6 x < 5, 7 y < 4, 8 x > 5, 9 y > 4) and one off the board (2);
+   *  P96 0x55D sounds 14 for both. */
   const prestep = (dx: number, dy: number) => {
     const a = fight!.recs.find(r => r.hero && fight!.alive(r));
-    if (a && fight!.free(a.x + dx, a.y + dy)) { a.x += dx; a.y += dy; sfx(7); }
-    else if (a && a.x + dx >= 0 && a.y + dy >= 0 && a.x + dx < fight!.level.w && a.y + dy < fight!.level.h) sfx(14);   // P96 0x562: _RMove 1
+    if (!a) return;
+    const x = a.x + dx, y = a.y + dy, k = fight!.arena;
+    const half = fight!.street || [x < 5, y < 4, x > 5, y > 4][k];
+    if (half && fight!.free(x, y)) { a.x = x; a.y = y; sfx(7); } else sfx(14);
     render();
   };
   /** Look in a fight (P94 `_mnusel` 0x19, P96 menu 10 → `_Look` with `_swcomb`): "Mark the target."; a record there
