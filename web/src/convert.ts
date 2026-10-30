@@ -105,8 +105,8 @@ function conversation(d: Bytes): Obj {
 }
 
 // HERO and ASSIGNMENT as tools/export_json.py struct_fields reads them from docs/structs.h: [field, offset, kind, dims].
-type Field = [string, number, 'str' | 'u8' | 'u16', number[]];
-const HERO: Field[] = [['h_name', 0, 'str', [6]], ['h_race', 6, 'u8', []], ['h_sex', 7, 'u8', []], ['h_orinum', 8, 'u8', []],
+export type Field = [string, number, 'str' | 'u8' | 'u16', number[]];
+export const HERO: Field[] = [['h_name', 0, 'str', [6]], ['h_race', 6, 'u8', []], ['h_sex', 7, 'u8', []], ['h_orinum', 8, 'u8', []],
   ['h_songs', 9, 'u8', [4]], ['h_bravery', 13, 'u8', []], ['h_strngth', 14, 'u8', []], ['h_dextrty', 15, 'u8', []],
   ['h_endur', 16, 'u8', []], ['h_agility', 17, 'u8', []], ['h_loyalty', 18, 'u8', []], ['h_charm', 19, 'u8', []],
   ['h_intellg', 20, 'u8', []], ['h_resist', 21, 'u8', []], ['h_helped', 22, 'u8', []], ['h_sword', 23, 'u8', []],
@@ -123,14 +123,14 @@ const HERO: Field[] = [['h_name', 0, 'str', [6]], ['h_race', 6, 'u8', []], ['h_s
   ['h_hitpts', 202, 'u8', []], ['h_rdyspl', 203, 'u8', []], ['h_gold', 204, 'u16', []], ['h_partybucks', 206, 'u16', []],
   ['h_mybucks', 208, 'u16', []], ['h_attitude', 210, 'u8', []], ['h_paydays', 211, 'u8', [4]], ['h_actmisc', 215, 'u8', []],
   ['h_actdate', 216, 'u8', []], ['h_acthour', 217, 'u8', []], ['h_actroom', 218, 'u8', []], ['h_actdays', 219, 'u8', []]];
-const ASSIGNMENT: Field[] = [['as_npc', 0, 'u8', []], ['as_loc', 1, 'u8', []], ['as_room', 2, 'u8', []], ['as_x', 3, 'u8', []],
+export const ASSIGNMENT: Field[] = [['as_npc', 0, 'u8', []], ['as_loc', 1, 'u8', []], ['as_room', 2, 'u8', []], ['as_x', 3, 'u8', []],
   ['as_y', 4, 'u8', []], ['as_task', 5, 'u8', []], ['as_done', 6, 'u8', []], ['as_gowildx', 7, 'u8', []], ['as_misc', 8, 'u8', []],
   ['as_race', 9, 'u8', []], ['as_tile', 10, 'u8', []], ['as_hroom', 11, 'u8', []], ['as_region', 12, 'u8', []],
   ['as_wildx', 13, 'u8', []], ['as_wildy', 14, 'u8', []], ['as_goreg', 15, 'u8', []], ['as_gowildy', 16, 'u8', []],
   ['as_gold', 17, 'u16', []], ['as_date', 19, 'u8', []], ['as_daysleft', 20, 'u8', []], ['as_hour', 21, 'u8', []],
   ['as_goloc', 22, 'u8', []], ['as_goroom', 23, 'u8', []], ['as_godays', 24, 'u8', []]];
 
-function decode(d: Bytes, fields: Field[]): Obj {
+export function decode(d: Bytes, fields: Field[]): Obj {
   const obj: Obj = {};
   for (const [field, off, kind, dims] of fields) {
     if (kind === 'str') { obj[field] = latin1(split(d.subarray(off, off + dims[0]), 0)[0]); continue; }
