@@ -21,7 +21,7 @@ import { Fight, type Rec } from './combat';
 import { Chamber } from './chamber';
 import { newGame, landed } from './newgame';
 import { BUILT, cost as spellCost, effect, targets as spellTargets } from './spells';
-import { sfx, song, audio, saveAudio } from './sound';
+import { sfx, song, audio, saveAudio, audible } from './sound';
 import { Fx, FX } from './fx';
 import { openScenario, editing, saveFile, type Snapshot } from './scenario';
 import { sidebar, type Command } from './sidebar';
@@ -505,11 +505,11 @@ async function main() {
    *  King's thanks (15, 16); with more than two in the party "And to your friends and companions:" (17) and a line per
    *  member (P08 0x97C by companion number, %o the full name; the player and the King have none); "We must not forget
    *  the others…" (18) when a companion who helped (`h_helped` & 0x80) is not in the party, and their lines; Jemil and
-   *  the King (19, 20) - then the Queen sends Jemil to bed (1), event 166, and only Quit is left (`_XQSRGame`). The
-   *  music is not built. */
+   *  the King (19, 20) - then the Queen sends Jemil to bed (1), event 166, and only Quit is left (`_XQSRGame`). Song 11
+   *  plays throughout (P08 0x8A1) and Quit waits for its end (`_finishsong`, 0x901). */
   const epilogue = async () => {
     const banquet = (await json<{ banquet: number[] }>('p08.json')).banquet, t = level.loc.texts;
-    void song(11);
+    const music = song(11);
     if (clock.hour >= 20) clock.date++;
     clock.hour = 20;
     const line = (n: number, o = '') => panel.line(format(t[n], hero, o));
@@ -522,6 +522,8 @@ async function main() {
     if (helped.some(n => !party.members.some(m => m.num === n))) { line(18); helped.forEach(named); }
     line(19); line(20); line(1);
     events.add(166);
+    render();
+    if (audible()) await music;                                     // a suspended context never ends a song
     panel.set([{ label: cmd[1], act: () => location.reload() }]);
     render();
   };
