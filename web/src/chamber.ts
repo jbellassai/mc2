@@ -75,8 +75,9 @@ export class Chamber {
     return out;
   }
 
-  /** The door side a step to (x, y) leaves by: a door square (`_ChkDoor`), or off the map on a side that has a door
-   *  (assumed: `_RMove` returns 2 there and P07 uses the member's `_exitdir`). −1 = neither. */
+  /** The door side a step to (x, y) leaves by: a door square (P07 0x2BB: `_RMove` 1, `_ChkDoor` gives the side in DX,
+   *  stored in `_exitdir`). Off the map (`_RMove` 2) P07 leaves with `_exitdir` as it was; the edges are walls and
+   *  door tiles, so that cannot happen in play, and the port takes the side stepped off. −1 = neither. */
   exitAt(x: number, y: number): number {
     const d = this.doors().find(o => o.x === x && o.y === y);
     if (d) return d.n;
