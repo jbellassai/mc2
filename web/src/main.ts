@@ -310,7 +310,8 @@ async function main() {
     /** _Invite (EXE 2166:01D6) → P97 ovl_03f7 (rules/npcs.md, Companions). */
     const invite = async () => {
       panel.line(`> ${cmd[23]}`, 'you');
-      if (who.num >= 0x20) return speak(comtxt[0x1f]);              // ICANT: "I can't do that." (text read from its name, not traced)
+      if (who.num === 166) return speak(format(comtxt[0x63], by.hero, by.hero.name) + (events.has(123) ? '' : comtxt[0x64]));   // FAR_ICANT: Prince Jemil
+      if (who.num >= 0x20) return speak(comtxt[0x1f]);              // FAR_ICANT (FFFAR 0x311C): "I can't do that." 
       const room = level.loc.kind === 'room';
       const cell = party.members.length < 6 ? party.freeCell((x, y) => room || level.walkable(x, y) && !figureAt(x, y)) : -1;
       if (cell < 0) { sfx(14); return panel.line(comtxt[0x20]); }   // "No room!" (LHITXT), then sound 14
