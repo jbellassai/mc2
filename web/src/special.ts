@@ -278,10 +278,10 @@ export class Special {
   /** Is `item` a teleportal piece that can be set here (Cylinder, Cone, Cube, Sphere, Pyramid; P09 file 0x4B)? */
   piece(item: number): boolean { return this.kind === TELEPORTAL && p09.pieces.includes(item); }
 
-  /** A piece used on the marked square (P09 @0x0390): off the pedestals → "Nothing happens." (`_comtxtptr`, assumed
-   *  0x83); else the piece is used up, drawn (P09 file 0x50) and, once all three are set, the triple is looked up in
+  /** A piece used on the marked square (P09 @0x0390): off the pedestals → "Nothing happens." (comtxt 0x83,
+   *  P09 0xA4C); else the piece is used up, drawn (P09 file 0x50) and, once all three are set, the triple is looked up in
    *  D61 `hroomptr` (13-byte rows {p0, p1, p2, curlev, curseg, locspec, currm, curmpg, curtils, curvar, ?, x, y}).
-   *  A hit returns the world-map window; a miss prints the same text and clears the pedestals (pieces lost). */
+   *  A hit returns the world-map window; a miss prints the same text (0xB21) and clears the pedestals (pieces lost). */
   place(item: number, x: number, y: number, from: Hero): { x: number; y: number } | null {
     if (y !== 3 || x < 4 || x > 6) return this.ctx.close(this.ctx.comtxt[0x83]), null;
     this.pedestals[x - 4] = item;
