@@ -2018,7 +2018,9 @@ async function main() {
   /** Teleport (P01 ovl_1b02 → P89): not aboard (region text 0x1A) or while camping (0x19). The magic skill picks a
    *  tier ([10, 30, 50, 70, 90], below 10 nothing) and the window rectangle the target must lie in; the target is not
    *  the party's square, a live guard post or patrol, a town entrance or feature, or in P89's three no-teleport
-   *  rectangles, and is walkable. A bad target or cancelling casts nothing (assumed: P89's carry is not traced). */
+   *  rectangles, and is walkable. A bad target and cancelling share one path (P89 0x239: sound 14, the map redrawn,
+   *  carry set at 0x2AA, so nothing is spent); a good one returns carry clear (0x390). The text after a carry is
+   *  `_Magic`'s (not traced; the port prints comtxt 0x119). */
   const teleport = (m: number, done: (text: string) => void, fail: (text?: string) => void) => {
     const rec = world.rec!;
     if (world.ships.sailing) return fail(rec.texts[0x1a]);
@@ -2035,7 +2037,7 @@ async function main() {
       sfx(20);
       party.shift(x - lead.x, y - lead.y);
       void world.at(x, y, clock).then(() => { done(''); notice(x, y); render(); });
-    });
+    }, () => { sfx(14); message = comtxt[0x119]; render(); });
   };
   /** _SkillUp0 (combat.md): skill `idx` (SKILLS order) +1 with chance (50 − skill)/4 % below 50, else 1 %, up to
    *  _MaxSkill; returns comtxt 0x60 or ''. */
