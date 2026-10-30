@@ -2068,7 +2068,7 @@ async function main() {
       close();
       if (inn < 0 || rent[inn]) return;
       party.place(roomStart.x, roomStart.y);
-      message = level.loc.texts[9];   // "It's time to check out." (assumption: ovl_167f's text number is not traced)
+      message = level.loc.texts[9];   // "It's time to check out." (P05 0x4FC: rent 0, not a camp → 0x19B0, then text 9)
       render();
     } });
   };
