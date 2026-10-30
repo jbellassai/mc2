@@ -2074,7 +2074,7 @@ async function main() {
       wild: watch => {                                                   // P01 ovl_169e and the fight check (ovl_0846)
         world.movePatrols(level, lead.x, lead.y, clock.month);
         const n = world.patrolAt(lead.x, lead.y);
-        if (n < 0) { world.notice(lead.x, lead.y, events, world.rec!.doors); return false; }   // the camp loop: no sound or text (assumed)
+        if (n < 0) return false;                                         // no ovl_0a94 in camp (only P01's step loop calls it): nothing is noticed or engaged
         camping = false;
         void wildFight(undefined, n, !watch);
         return true;

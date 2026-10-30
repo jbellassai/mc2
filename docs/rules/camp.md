@@ -13,7 +13,7 @@ The commands only **set** each member's activity (`h_actvty`) and print what the
 | 5 town, rooms 0x5C–0x6B, or `_locspec 0x14` room 9 | guest room | 0x10 |
 | anything else | no camping: menu 22 | 1 |
 
-Only an open camp (bit 2) rolls wilderness encounters while camping (P01 cross-overlay calls 6 and 9 every tick); if a fight starts it is an **ambush** unless some member is on *Watch* (`P01 ovl_0790`: `_ambflg = 1` when no `h_actvty == 9`). Watch is only offered when bits 1|2 are set.
+Only an open camp (bit 2) rolls wilderness encounters while camping (P01 cross-overlay calls 6 and 9 every tick: `ovl_169e` moves the patrols, `ovl_0846` starts a fight with one on the party's square; the step loop's `ovl_0a94` is not called, so a patrol that wanders next to the camp is neither shown nor engaged); if a fight starts it is an **ambush** unless some member is on *Watch* (`P01 ovl_0790`: `_ambflg = 1` when no `h_actvty == 9`). Watch is only offered when bits 1|2 are set.
 
 ## Setting activities (acting member `_curpla`)
 | command | refused when | sets | text (P93) |
