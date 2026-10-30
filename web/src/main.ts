@@ -1293,7 +1293,7 @@ async function main() {
         if (gift && l.item === 0) r.h_gold += l.amount;
         if (gift && l.amount & 0x80) r.h_invamt[r.h_invitem.lastIndexOf(l.item)] = l.amount;
         const n = l ? (l.amount & 0x80 ? 1 : l.amount) : 0;
-        panel.line(say(rt[4], { l: t.name }).replace(/\.$/, gift ? say(rt[5]) + `${n} ${items[l!.item]}${n > 1 ? comtxt[0x51] : ''}.` : '.'));
+        panel.line(say(rt[4], { l: t.name }).replace(/\.$/, gift ? say(rt[5]) + prtTreasure(l!.item, n) : '.'));   // P95 0xF22
         t.loot = undefined; f.remove(t);
       }
       const row = Math.floor(sp / 7), col = sp % 7;
@@ -1465,8 +1465,7 @@ async function main() {
     } }, { label: cmd[4], act: endFight }]);
   };
   /** P95 ovl_0a78: corpse by corpse, "%h searches a(n) %l" (0xA7, 0xA8/0xA9 for the races at P95 0xCDB) + " and finds
-   *  nothing." (0xAA) or " and finds: " (0xAB) and the treasure (_PrtTreasure: "n Item" with "s" for more than one is
-   *  assumed); _IncObj gives it (Coins to h_gold, cap 9999). When it refuses (0x32 / 0x33) the search stops there and
+   *  nothing." (0xAA) or " and finds: " (0xAB) and the treasure (_PrtTreasure, P95 0xB60); _IncObj gives it (Coins to h_gold, cap 9999). When it refuses (0x32 / 0x33) the search stops there and
    *  the question comes again. */
   const search = (h: Hero) => {
     for (const r of fight!.recs.filter(m => m.loot)) {
@@ -1474,7 +1473,7 @@ async function main() {
       const who = ctext(0xa7, { h: h.name }) + ctext(cdata.loot.an.includes(r.race) ? 0xa9 : 0xa8, { l: r.name });
       if (!amount) { panel.line(who + comtxt[0xaa]); r.loot = undefined; continue; }
       const n = worn ? 1 : amount;
-      panel.line(who + comtxt[0xab] + `${n} ${items[item]}${n > 1 ? comtxt[0x51] : ''}`);
+      panel.line(who + comtxt[0xab] + prtTreasure(item, n));                     // P95 0xB60
       const rec = h.rec, free = rec.h_invitem.indexOf(0xff);
       let ok: boolean;
       if (item === 0) { ok = rec.h_gold + n <= 9999; if (ok) rec.h_gold += n; }
