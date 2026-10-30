@@ -1721,7 +1721,7 @@ async function main() {
     startFight(lv, f, diff, () => ambushed.add(p.d2), null, !seen);
   };
   /** Types 1 (teleportal: "The party is swept into a teleportal!" first) and 5 (hidden chute: "The party slides through
-   *  a hidden chute!" after): another level, PGM record `pgm`, with the window at (x, y) (assumed, as for exits). A
+   *  a hidden chute!" after): another level, PGM record `pgm`, with the window at (x, y) (P02 sets `_pwinxy` = (d2, d3) for both, then ovl_196b). A
    *  teleportal plays 0x14 and the party dissolves out (P02 ovl_151a), then `_mfxfadein` has the arrival play 0x14
    *  again and dissolve it in (ovl_0e9a, after the new map is drawn); the chute has neither. */
   const jump = async (pgm: number, x: number, y: number, type: number) => {
