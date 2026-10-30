@@ -180,7 +180,7 @@ export function effect(f: Fight, c: Rec, spell: number, t: Rec | null, text: Tex
       for (const r of f.recs) if (r.target === t!.recno) r.target = 0xff;
       return [];
     case 34: case 31: {                                                                     // Double, Summon
-      const sq = f.nextTo(c);
+      const sq = f.copySquare(c);
       if (!sq) return [text(0x119)];
       const copy: Rec = spell === 34
         ? { ...t!, ...sq, recno: 22, hero: undefined, mskl: 0, fear: 0, freeze: 0, invis: 0, moves: 1, target: 0xff }

@@ -69,6 +69,8 @@ export class Fight {
   speaker = 0;
   /** `_cmbtyp` 0: a street fight, which has no pre-fight menu. */
   street = false;
+  /** The party's side − 6 (`_rmdata+6`; 0 in the wilderness). */
+  arena = 0;
   /** `_cmbtyp` 5: a dungeon-room fight. */
   room = false;
   /** `_endcmbt` set before any round: 1 the monsters surrendered (a win, with loot), 4 they left (P95 makes it a win). */
@@ -108,7 +110,7 @@ export class Fight {
   private static setup(data: CombatData, level: Level, heroes: { hero: Hero; num: number }[], group: number, diff: number,
                        side: number, doors: { x: number; y: number }[] | null, street: { x: number; y: number }[] | null): Fight {
     const f = new Fight(data, level), k = side - 6;
-    f.street = !!street;
+    f.street = !!street; f.arena = k;
     const taken = (x: number, y: number) => f.occupied(x, y);
     heroes.forEach(({ hero, num }, m) => {
       const r = hero.rec as Record<string, number> & typeof hero.rec, item = r.h_inhand === NONE ? NONE : r.h_invitem[r.h_inhand];
@@ -203,10 +205,22 @@ export class Fight {
     if (i >= 0) this.recs[i] = r; else this.recs.push(r);
   }
 
-  /** The first free square next to `r` (W N E S NW NE SE SW), where Double and Summon put their copy (assumed). */
-  nextTo(r: Rec): { x: number; y: number } | null {
-    const k = DX.findIndex((dx, k) => this.free(r.x + dx, r.y + DY[k]));
-    return k < 0 ? null : { x: r.x + DX[k], y: r.y + DY[k] };
+  /** V06 0x16D6, where Double and Summon put their copy: a random cell of the party's side's rectangle (x cs:0x17C6,
+   *  y 0x17CE: side 6 x 0-4, 7 y 0-3, 8 x 6-10, 9 y 5-8), moved by `_PlacePerson`, re-rolled until no one stands
+   *  there and the caster reaches it (`_blobmap` < 100 over the background and the globes, `[9AA2]` 1); a street
+   *  fight takes the cell RndCo(99), then every 17th. The original rolls forever; null after 200 tries here. */
+  copySquare(c: Rec): { x: number; y: number } | null {
+    const reach = this.distances(c.x, c.y, true, true), ok = (x: number, y: number) => this.free(x, y) && reach[y * W + x] < 100;
+    if (this.street) {
+      for (let i = rnd(99), n = 0; n < 99; i = (i + 17) % 99, n++) if (ok(i % W, Math.floor(i / W))) return { x: i % W, y: Math.floor(i / W) };
+      return null;
+    }
+    const [x0, x1] = [[0, 4], [0, 10], [6, 10], [0, 10]][this.arena], [y0, y1] = [[0, 8], [0, 3], [0, 8], [5, 8]][this.arena];
+    for (let n = 0; n < 200; n++) {
+      const at = this.level.place(x0 + rnd(x1 - x0 + 1), y0 + rnd(y1 - y0 + 1), (x, y) => this.occupied(x, y));
+      if (ok(at.x, at.y)) return at;
+    }
+    return null;
   }
 
   /** P96 ovl_0b5c: the monsters' attitude (`_w_attitudes` 0-7). No speaker → 6, a speaker of race ≥ 25 → 7. Else
