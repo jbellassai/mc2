@@ -566,7 +566,7 @@ async function main() {
       const s = hero.slot(PICK);
       if (s < 0) return done(p02[11]);                                // "%h needs a lockpick to do that."
       if (Math.min(99, (hero.rec.h_dextrty >> 1) + hero.rec.h_lockpck) < rnd(100)) {
-        hero.dec(s); sfx(21); return done(comtxt[0x90]);              // the pick breaks (text inferred: ovl_100b; P02 0x10D6 snap)
+        hero.dec(s); sfx(21); return done(comtxt[0x90]);              // the pick breaks: _DecObj, then comtxt 0x90 (P02 0xB25 → ovl_100b)
       }
       void goIn(p02[7], p02[9]);                                      // "The lock clicks open!" " The party goes inside."
     };
