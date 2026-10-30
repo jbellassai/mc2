@@ -22,6 +22,7 @@ import { Chamber } from './chamber';
 import { newGame, landed } from './newgame';
 import { BUILT, cost as spellCost, effect, targets as spellTargets } from './spells';
 import { sfx, song, audio, saveAudio, audible } from './sound';
+import { TOOLS } from './env';
 import { Fx, FX } from './fx';
 import { openScenario, editing, saveFile, type Snapshot } from './scenario';
 import { sidebar, type Command } from './sidebar';
@@ -58,8 +59,8 @@ async function main() {
   // Dev aids: ?hour=20 starts in the evening, ?at=74,25 starts on another square; any of them skips the new-game
   // screens (?profile=0-4 picks the hero).
   const q = new URLSearchParams(location.search);
-  const SANDBOX = import.meta.env.DEV || q.has('sandbox');   // the scenario editor: dev builds, or /sandbox/ (decision 7)
-  const dev = import.meta.env.DEV && ['at', 'world', 'level', 'hour', 'profile'].some(k => q.has(k));
+  const SANDBOX = TOOLS || q.has('sandbox');   // the scenario editor: dev builds and the single-file build, or /sandbox/ (decisions 7, 9)
+  const dev = TOOLS && ['at', 'world', 'level', 'hour', 'profile'].some(k => q.has(k));
   const savedSlots = Array.from({ length: 3 }, (_, i) => i + 1).flatMap(n => {
     try { const sv = JSON.parse(localStorage.getItem(`mc2.save.${n}`) ?? 'null'); return sv ? [{ slot: n, label: `${sv.place}, ${new Date(sv.when).toLocaleString()}` }] : []; }
     catch { return []; }
@@ -70,13 +71,13 @@ async function main() {
   panel.hide();
   sidebar.show();
   const clock = Clock.newGame();
-  if (import.meta.env.DEV && q.has('hour')) clock.hour = Math.min(23, Math.max(0, Number(q.get('hour')) || 0));
-  if (import.meta.env.DEV && q.has('at')) [START.x, START.y] = q.get('at')!.split(',').map(Number);
-  if (import.meta.env.DEV && /^D\d\d$/.test(q.get('level') ?? '')) START.level = q.get('level')!;   // ?level=D23
+  if (TOOLS && q.has('hour')) clock.hour = Math.min(23, Math.max(0, Number(q.get('hour')) || 0));
+  if (TOOLS && q.has('at')) [START.x, START.y] = q.get('at')!.split(',').map(Number);
+  if (TOOLS && /^D\d\d$/.test(q.get('level') ?? '')) START.level = q.get('level')!;   // ?level=D23
   const events = new Set(NEW_GAME_EVENTS);
   const party = new Party(hero, START.x, START.y);
   const lead = party.leader;                                 // the acting member (_curpla) is always the leader for now
-  if (import.meta.env.DEV) Object.assign(window, { dbg: { party, world } });   // for scripts/shot.mjs eval:
+  if (TOOLS) Object.assign(window, { dbg: { party, world } });   // for scripts/shot.mjs eval:
   let level = await Level.load(START.level);
   let outside: { level: Level; x: number; y: number } | null = null;   // where to return from a room
   let service: ServiceRoom | null = null;                               // the P05 room the party is in
@@ -2427,13 +2428,13 @@ async function main() {
     try { await restore(JSON.parse(localStorage.getItem(`mc2.save.${start.slot}`)!)); } catch (e) { message = String(e); }
   }
   const [wx, wy] = (q.get('world') ?? '').split(',').map(n => parseInt(n));
-  if (import.meta.env.DEV && wx >= 0 && wy >= 0) {             // dev aid: ?world=x,y starts on the world map
+  if (TOOLS && wx >= 0 && wy >= 0) {             // dev aid: ?world=x,y starts on the world map
     const [x, y] = [wx, wy];
     go(await Level.load('D01'), x, y);
     await world.at(x, y, clock);
     message = '';
   }
-  if (import.meta.env.DEV) Object.assign(window, { dbg: { party, world, clock, events, assigns, dunrms, fx, FX, get level() { return level; }, get fight() { return fight; }, get chamber() { return chamber; } } });   // for scripts/shot.mjs eval:
+  if (TOOLS) Object.assign(window, { dbg: { party, world, clock, events, assigns, dunrms, fx, FX, get level() { return level; }, get fight() { return fight; }, get chamber() { return chamber; } } });   // for scripts/shot.mjs eval:
   render();
   document.body.dataset.ready = '1';                         // scripts/shot.mjs waits for it
 }

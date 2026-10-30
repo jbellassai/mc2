@@ -6,6 +6,7 @@ import { renderCmf, RATE } from './opl';
 import { parseMidi } from './midi';
 import { renderModern } from './modern';
 import { packFetch } from './pack';
+import { TOOLS } from './env';
 
 export type Music = 'modern' | 'original' | 'off';
 
@@ -43,7 +44,7 @@ const play = (b: AudioBuffer) => {
 /** The last effects (n) and songs (100 + n) started, for checking a run (dbg.played). */
 export const played: number[] = [];
 const note = (n: number) => { played.push(n); if (played.length > 20) played.shift(); };
-if (import.meta.env.DEV) Object.assign(window, { played, audioTime: () => [ctx?.state, ctx?.currentTime] });   // for scripts/shot.mjs eval: (before dbg exists)
+if (TOOLS) Object.assign(window, { played, audioTime: () => [ctx?.state, ctx?.currentTime] });   // for scripts/shot.mjs eval: (before dbg exists)
 
 let voice: AudioBufferSourceNode | null = null;
 /** _GameSound(n): fire and forget; like the Sound Blaster's single DMA voice, a new effect cuts the one playing. A

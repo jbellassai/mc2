@@ -2,6 +2,7 @@
 // ./pack/; anywhere else (the public site) it is converted in the browser from the player's own game files, which are
 // kept in IndexedDB (decision 1, convert.ts, importer.ts).
 import type { Files, Pack } from './convert';
+import { files as bundled } from 'virtual:bundle';
 
 export interface Door { x: number; y: number; pgm: number; id: number; type: number }
 export interface Pgm { program: number; tileset: number; datafile: number; disk: number }
@@ -57,6 +58,10 @@ const urls = new Map<string, string>();
 /** Opens the pack: the server's ./pack/ when it has one, else the game files kept in this browser, converted now.
  *  False when there are neither (the import screen asks for the files). */
 export async function openPack(): Promise<boolean> {
+  if (bundled) {                                                     // the single-file build carries it (decision 9)
+    local = new Map(Object.entries(bundled).map(([k, v]) => [k, Uint8Array.from(atob(v), c => c.charCodeAt(0))]));
+    return true;
+  }
   try {
     const r = await fetch(BASE + 'comtxt.json');
     if (r.ok && r.headers.get('content-type')?.includes('json')) return true;

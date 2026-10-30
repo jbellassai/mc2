@@ -122,3 +122,18 @@ Numbered, never reused. Status: DECIDED (not yet built) or IMPLEMENTED (with com
 **Consequences:** W/A/S/D no longer move in a fight. The layout is sized from the window height so map and sidebar sit side by side, and stacks below 760 px. The title font (Cinzel) loads from Google Fonts, falling back to Georgia.
 
 **Status:** IMPLEMENTED (this commit).
+
+## 9. A private single-file build, with the data and the dev tools, for personal sharing
+
+**Decision:** `npm run bundle` (in `web/`) builds `out/bundle/Magic Candle II.html` plus a `README.txt`, zipped: one page that opens straight from disk (file://) with no server, install or network. It embeds the data pack and `docs/events.md` (`virtual:bundle`, `vite.config.ts`), inlines the script, styles and title font, and turns the dev tools on (`TOOLS` in `web/src/env.ts`: the scenario editor on F2, the URL aids, `dbg`). It is for handing to one friend (Burton, on Windows, not technical): unzip, double-click.
+
+**Context:** The user wanted Burton to play the port, including the scenario editor, on his own Windows machine with no setup. The converted pack is small (3.9 MB), every data read goes through `packFetch`, and saves already live in `localStorage`, so the page can carry everything.
+
+**Alternatives rejected:**
+- *S3/CloudFront hosting with the data* — an unlisted URL is not private (links get forwarded and indexed), so it needs access control and an AWS setup for one person.
+- *An unsigned Windows .exe (Electron, a compiled server)* — Windows SmartScreen's "Windows protected your PC" warning stops a non-technical user; a page has no such warning.
+- *The public build with the import screen* — Burton would have to locate and import the game files himself, and the dev tools would be hidden.
+
+**Consequences:** Amends decision 1 for this build only: it carries game data, so it is never published or committed (`out/` is gitignored); the public build is unchanged (no data; the editor only via `/sandbox/`). Saves stay in that browser on that PC (opening the page in another browser starts without them). Building it needs the pack (`tools/export_json.py`) and one network fetch of the Cinzel font.
+
+**Status:** IMPLEMENTED (this commit).

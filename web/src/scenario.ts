@@ -4,6 +4,7 @@
 import { Level } from './level';
 import { json } from './pack';
 import { STATS, SKILLS, type HeroRecord } from './hero';
+import { events as bundledEvents } from 'virtual:bundle';
 
 export interface Snapshot {
   when: string; place: string;
@@ -55,7 +56,7 @@ export async function openScenario(ctx: ScenarioCtx) {
   open = true;
   const sv = structuredClone(ctx.snapshot());
   const index = (await json<{ id: string; name: string; kind: string }[]>('locations/index.json')).filter(l => l.kind !== 'region');
-  const events = parseEvents(await fetch('./docs/events.md').then(r => r.ok ? r.text() : '').catch(() => ''));
+  const events = parseEvents(bundledEvents ?? await fetch('./docs/events.md').then(r => r.ok ? r.text() : '').catch(() => ''));
   const style = el('style', { textContent: CSS });
   const body = el('div.sc-body');
   const tabs: [string, () => Promise<Node> | Node][] = [['Place', place], ['Time', time], ['Party', partyTab], ['Events', eventsTab], ['Files', files]];
