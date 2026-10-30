@@ -1657,6 +1657,14 @@ async function main() {
    *  "%h unearths treasure!" (0x82), each item listed (a pair with item 0x80 prints loctext[amount] instead), "Who will
    *  take the treasure?" (0x85) and the chosen member gets all of it (_IncObj; weapons and armour as one, unworn); a
    *  refusal stops there and the question comes back for the rest. */
+  /** _PrtTreasure (EXE 20a8:067A): `TREASMSG[item]` (DS:382C) names a phrase pair — 0x87 "A piece"/"%b pieces" (3),
+   *  0x89 "A suit"/"%b suits" (0x1F-0x27), 0x8B "One ration"/"%b rations" (0x31, 0x3C, 0x3D), 0x8D "The book"/"%b
+   *  books" (0x53-0x59) — then " of " (0x86) and the name; else "%i " (0x52), the name and "s" (0x51) unless one; ".". */
+  const prtTreasure = (item: number, n: number) => {
+    const m = item === 3 ? 0x87 : item >= 0x1f && item <= 0x27 ? 0x89 : [0x31, 0x3c, 0x3d].includes(item) ? 0x8b : item >= 0x53 && item <= 0x59 ? 0x8d : 0;
+    return (m ? ctext(m + (n !== 1 ? 1 : 0), { b: n }) + comtxt[0x86] + items[item]
+      : ctext(0x52, { i: n }) + items[item] + (n !== 1 ? comtxt[0x51] : '')) + comtxt[0x10];
+  };
   const treasure = (h: Hero, g: number) => {
     const key = `${level.id}:${g}`;
     panel.show();
@@ -1668,8 +1676,7 @@ async function main() {
     for (i++; i + 1 < t.length && t[i] !== 0xff; i += 2) loot.push([t[i], t[i + 1]]);
     panel.line(format(comtxt[0x82], h, h.name));
     for (const [item, n] of loot)
-      panel.line(item === 0x80 ? format(level.loc.texts[n] ?? '', h, h.name)
-        : item >= 9 && item <= 0x30 || n === 1 ? `1 ${items[item]}` : `${n} ${items[item]}${comtxt[0x51]}`);   // _PrtTreasure (assumed form)
+      panel.line(item === 0x80 ? format(level.loc.texts[n] ?? '', h, h.name) : prtTreasure(item, n));
     let left = loot.filter(([item]) => item !== 0x80);
     if (!left.length) { chests.add(key); return void panel.set([{ label: cmd[0], act: () => close() }]); }
     const ask = () => {
