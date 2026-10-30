@@ -1698,12 +1698,12 @@ async function main() {
   const spotTables = await json<{ ambush: { ids: number[]; events: number[] }; remarks: { ids: number[]; events: number[]; locspecs: number[] } }>('spots.json');
   const ambushed = new Set<number>();                                 // `_ambush` bits by ambush id
   let spotsDone = new Set<number>(), spotsLevel = '';                 // `_spetbldone`, kept while on the same level
-  /** After a step: the 3×3 squares around the leader, the first record per square (row by row from the top left;
-   *  the original's scan order was not traced). */
+  /** After a step (P02 ovl_189d): the party's 3×3 formation box, window + (4..6, 3..5) = the leader + (0..2, 0..2),
+   *  rows from the bottom, squares from the right; the first record per square (ovl_1926). */
   const spotsAround = async () => {
     if (spotsLevel !== level.id) { spotsDone = new Set(); spotsLevel = level.id; }
     const list = level.loc.spots ?? [];
-    for (let y = lead.y - 1; y <= lead.y + 1; y++) for (let x = lead.x - 1; x <= lead.x + 1; x++) {
+    for (let y = lead.y + 2; y >= lead.y; y--) for (let x = lead.x + 2; x >= lead.x; x--) {
       const i = list.findIndex((p, k) => p.x === x && p.y === y && !spotsDone.has(k) && p.type !== 2 && p.type !== 3);
       if (i < 0) continue;
       const p = list[i], on = party.members.some(m => m.x === x && m.y === y);

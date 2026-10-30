@@ -181,7 +181,8 @@ export class World {
     return this.ptrl.findIndex(([a, b], n) => a === x && b === y && a && !this.dead.has(n));
   }
 
-  /** P01 ovl_0a94, the 8 squares around the party (the scan order is not traced): first a guard spot (any in `gwrds`
+  /** P01 ovl_0a94, the 8 squares around the party in `_SearSq` order 7 … 0 (SERX/SERY, DS:38E2: SW, SE, NE, NW, S, E,
+   *  N, W), each pass on its own: first a guard spot (any in `gwrds`
    *  up to an x of 0, cleared or not) or a live patrol, which then chases the party, shows the skull (E00 0x0F); then a
    *  feature (`roomptr`) or enabled spot (`locptr`) of type below 0x14 shows its icon (P01 file 0x302 by type, or the
    *  spot's own) and prints its region text (file 0x316 by type, or the spot's; 0xFE none): "A stronghold!". Each icon
@@ -189,7 +190,7 @@ export class World {
   notice(px: number, py: number, events: Set<number>, doors: { x: number; y: number; type: number }[]): { x: number; y: number; frame: number; text?: number }[] {
     const out: { x: number; y: number; frame: number; text?: number }[] = [], g = hex(this.rec?.tables.gwrds ?? '');
     const guard = (x: number, y: number) => { for (let k = 0; k + 2 < g.length && g[k]; k += 3) if (g[k] === x && g[k + 1] === y) return true; return false; };
-    const around = [-1, 0, 1].flatMap(dy => [-1, 0, 1].map(dx => ({ x: px + dx, y: py + dy }))).filter(q => q.x !== px || q.y !== py);
+    const around = [[-1, 1], [1, 1], [1, -1], [-1, -1], [0, 1], [1, 0], [0, -1], [-1, 0]].map(([dx, dy]) => ({ x: px + dx, y: py + dy }));
     for (const { x, y } of around) {
       const n = guard(x, y) ? -1 : this.patrolAt(x, y);
       if (n >= 0) this.engaged.add(n);
