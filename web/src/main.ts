@@ -705,8 +705,8 @@ async function main() {
     if (entrance) {
       const pgm = rec.pgms[entrance.pgm];
       if (pgm.program === 2) return enterTown(pgm.datafile, entrance.tx + 4, entrance.ty + 3);
-      // Ziyx's (R36 47,38) is both an entrance and a feature of program 8; the feature's record names the room
-      // (assumption: P01's entrance path for a room program is not traced)
+      // Ziyx's (R36 47,38) is both an entrance and a feature of program 8: P01 checks the ROOM records first
+      // (ovl_12ea on `roomptr`, then spots, then `exitptr`), so the feature wins; no square has a town entrance and a feature
       if (!rec.doors.some(d => d.x === x && d.y === y)) { message = `${level.tileName(x, y)}: not built yet.`; return; }
     }
     const spot = ships.sailing ? null : world.spot(x, y, events);
