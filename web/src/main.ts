@@ -1595,8 +1595,7 @@ async function main() {
     if (!carrier) return;
     const pgm = level.loc.pgms[d.pgm];
     if (pgm?.program === 2) { go(await Level.load(`D${two(pgm.datafile)}`, pgm.tileset), lead.x, lead.y); return; }
-    if (pgm?.program === 5) { const said = message; await enterRoom(d); message = said; return; }
-    message += ` (P0${pgm?.program} D${two(pgm?.datafile ?? 0)}: not built yet.)`;
+    const said = message; await enterRoom(d); message = said;   // both key doors lead to P08 rooms (D60 0 and 7)
   };
 
   // ---- digging and lockpicking (P02 ovl_1131 Shovel, ovl_1044 Pick; rules/locations.md, Towns) ----
