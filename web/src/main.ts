@@ -1002,7 +1002,8 @@ async function main() {
   const strike = (t: Rec) => { report(fight!.attack(actor!, t, ctext)); partyTurn(); };
   /** Use in combat (P94 `_mnusel` 0x2B → _UseItem for the acting member): the consumables' handlers, synced onto the
    *  combat record (Potion also stands a downed member up; Gonshi gives 4 actions now; Nift 3 charges now); the
-   *  instruments play their songs (INT61_1d) and are never used up. One action (assumed). A Fireglobe is placed on a
+   *  instruments play their songs (INT61_1d) and are never used up. One action: P94 0x8FC returns the handler's carry,
+   *  clear on every INT61_1d exit (V06 0x2A50), set after _NoUse. A Fireglobe is placed on a
    *  marked square next to the user (INT61_1f, Fight.placeGlobe); the Horn calls the Tundra's Barbarians (Fight.horn). */
   const fightUse = () => {
     const a = actor!, r = a.hero!.rec;
