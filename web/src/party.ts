@@ -31,11 +31,15 @@ export class Party {
 
   constructor(lead: Hero, x: number, y: number) {
     this.members.push({ hero: lead, cell: 0, x, y, num: num(lead) });
+    this.retailor();
   }
 
   get leader(): Member { return this.members[0]; }
-  /** `_tailorcharm` (P97 0x728): the members' tailor skills summed, / 32 (assumed live; P97 sets it when the party changes). */
-  get tailorcharm(): number { return this.members.reduce((s, m) => s + (m.hero.rec.h_tailor as number), 0) >> 5; }
+  /** `_tailorcharm` (P97 ovl_0719, 0x728): the members' tailor skills summed, / 32, set only when the party changes
+   *  (P97 runs on every join and leave: dismissal, Assign, departures, a god's service via P09's LoadOvly(0x61)), so a
+   *  skill raised meanwhile counts from the next change. */
+  tailorcharm = 0;
+  private retailor() { this.tailorcharm = this.members.reduce((s, m) => s + (m.hero.rec.h_tailor as number), 0) >> 5 & 0xff; }
 
   /** Saved state (save.ts): the members' records and cells, `_npcsta`, the companions' records as they last left. */
   snapshot() {
@@ -51,6 +55,7 @@ export class Party {
     for (const m of s.members.slice(1)) this.members.push({ hero: new Hero(structuredClone(m.rec), items), cell: m.cell, x: 0, y: 0, num: m.num });
     this.away.clear(); for (const n of s.away) this.away.add(n);
     this.roster.clear(); for (const [n, r] of s.roster) this.roster.set(n, structuredClone(r));
+    this.retailor();
   }
 
   /** Everyone into formation from the origin (x, y). */
@@ -74,6 +79,7 @@ export class Party {
   add(rec: HeroRecord, items: string[], cell: number, x: number, y: number): Member {
     const hero = new Hero(rec, items), m = { hero, cell, x, y, num: num(hero) };
     this.members.push(m);
+    this.retailor();
     this.away.add(rec.h_orinum as number);
     return m;
   }
@@ -141,6 +147,7 @@ export class Party {
   /** P97 ovl_01fd: out of the party and its formation cell, back to the location tables, nothing in hand. */
   remove(m: Member) {
     this.members.splice(this.members.indexOf(m), 1);
+    this.retailor();
     this.away.delete(m.num);
     m.hero.rec.h_inhand = 0xff;
     this.roster.set(m.num, m.hero.rec);
