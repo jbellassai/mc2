@@ -651,25 +651,32 @@ async function main() {
    *  "Disguises are needed to enter this town." (V02 text 0), and the acting member, if Disguise is ready, is asked
    *  " Will %h cast Disguise?" (text 1); Yes casts it through _Magic (`_indisguise` 2 passes the place gate; the energy,
    *  a copy, the magic roll) and FAR_DISGUISE sets `_indisguise` 1. Refused or failed, P02 leaves at once by the
-   *  nearest exit (INT60_11) - the port keeps the party where it stood. Any other town or level ends the disguise.
-   *  Assumption: the port has no readied spell outside a fight, so the acting member is the first member (the leader
-   *  first) with Disguise memorised. */
+   *  nearest exit (INT60_11: the first exit record with the least |dx| + |dy| from window + (5,4), whose window it
+   *  takes onto the world map). Any other town or level ends the disguise. The acting member (`_curpla`, the port's
+   *  leader) must have Disguise ready (`h_rdyspl` 0x1D, set by Recall), else only text 0. */
   const enterTown = async (datafile: number, x: number, y: number, tileset?: number) => {
     const into = async () => { go(await Level.load(`D${two(datafile)}`, tileset), x, y); message = ''; render(); };
     if (!v02.disguise.towns.includes(datafile)) { disguise = 0; return into(); }
     if (disguise) return into();
-    const t = v02.disguise.texts, h = party.members.map(m => m.hero).find(h => h.rec.h_spells[4][1] > 0);
+    const t = v02.disguise.texts, h = lead.hero, r = h.rec;
+    const leave = async (text: string) => {                                                // INT60_11
+      const lv = await Level.load(`D${two(datafile)}`, tileset), rx = x + 1, ry = y + 1;  // window (x−4, y−3) + (5,4)
+      let best = 0xff, exit: Exit | undefined;
+      for (const e of lv.loc.exits) { const d = Math.abs(e.x - rx) + Math.abs(e.y - ry); if (d < best) { best = d; exit = e; } }
+      close(text);
+      if (exit) { await toWorldAt(exit.tx, exit.ty); message = text; render(); }
+    };
     panel.show();
-    if (!h) return close(t[0]);
+    if (r.h_rdyspl !== 29 || !r.h_spells[4][1]) return void leave(t[0]);
     panel.line(t[0] + format(t[1], h, h.name));
     panel.set([{ label: cmd[3], act: () => {
-      const r = h.rec, need = Math.max(1, cdata.spells.energy[29] - (r.h_magic >> 2));
-      if (r.h_energy < need) return close(comtxt[0x41]);                                   // "Not enough energy!"
+      const need = Math.max(1, cdata.spells.energy[29] - (r.h_magic >> 2));
+      if (r.h_energy < need) return void leave(comtxt[0x41]);                              // "Not enough energy!"
       const up = cdata.spells.skill.includes(29) ? magicUp(h) : '';
-      if (--r.h_spells[4][1] <= 0) r.h_spells[4][1] = 0;
+      if (--r.h_spells[4][1] <= 0) { r.h_spells[4][1] = 0; r.h_rdyspl = 0xff; }
       r.h_energy -= need; h.isHeTr();
       disguise = 1; close(up); void into();
-    } }, { label: cmd[4], act: () => close() }]);
+    } }, { label: cmd[4], act: () => void leave('') }]);
   };
   /** Onto the world map with the window at (tx, ty) (exits, teleportals). */
   const toWorldAt = async (tx: number, ty: number) => {
