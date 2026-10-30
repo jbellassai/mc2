@@ -531,6 +531,9 @@ export async function convert(files: Files, step: (done: number, of: number) => 
     pack.set(`music/${n}.cmf`, need(cstr(DS + p)));
     pack.set(`music/${n}.mid`, need(cstr(DS + p + 14 * 11)));
   }
+  // the template for exporting the port's state as a DOS saved game (dossave.ts toDos): the game's own slot A
+  const tpl = files.get('FFSAVA.MCS');
+  if (tpl) pack.set('dossave.mcs', tpl);
   // the game font (E26.MCT): 128 glyphs of 8×8 4bpp, ink 0 → opaque white, the rest clear, 16 a row
   const f26 = need('E26.MCT'), font = new Rgba(128, 64);
   u16s(f26, 0, 128).forEach((o, g) => {

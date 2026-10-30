@@ -447,6 +447,8 @@ def main(src, dst):
         # the MT-32 arrangement of the same song (_RolandLoad: 11-byte names after the CMF ones), for the modern music
         mid = exe[ds + p + 14 * 11:exe.index(b'\0', ds + p + 14 * 11)].decode().upper()
         open(f'{dst}/music/{n}.mid', 'wb').write(open(f'{src}/{mid}', 'rb').read())
+    # the template for exporting the port's state as a DOS saved game (dossave.ts toDos): the game's own slot A
+    if os.path.exists(f'{src}/FFSAVA.MCS'): open(f'{dst}/dossave.mcs', 'wb').write(open(f'{src}/FFSAVA.MCS', 'rb').read())
     # VGA full screens (P81 ovl_1469, tools/mce.py): 5 the Mindcraft logo, 1 the title, E/I/M the intro's pictures
     # (A, the original's game frame, is not used by the port)
     os.makedirs(f'{dst}/screens', exist_ok=True)

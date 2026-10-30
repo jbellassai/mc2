@@ -25,7 +25,7 @@ export function importGame(status: HTMLElement): Promise<void> {
       const files: Files = new Map();
       for (const f of Array.from(input.files ?? [])) {
         const name = f.name.toUpperCase(), depth = (f.webkitRelativePath || f.name).split('/').length;
-        if ((name === 'MC2.EXE' || KINDS.test(name)) && (!files.has(name) || depth <= 2)) files.set(name, new Uint8Array(await f.arrayBuffer()));
+        if ((name === 'MC2.EXE' || name === 'FFSAVA.MCS' || KINDS.test(name)) && (!files.has(name) || depth <= 2)) files.set(name, new Uint8Array(await f.arrayBuffer()));
       }
       input.value = '';
       const exe = files.get('MC2.EXE');

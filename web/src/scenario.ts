@@ -2,7 +2,8 @@
 // the game's own restore, so a scenario is just a save file. Place (location + square, picked on a map), time, the
 // party (companions, stats, skills, pack, spells, conditions), the event bits (labelled from docs/events.md) and files.
 import { Level } from './level';
-import { json } from './pack';
+import { json, packFetch } from './pack';
+import { fromDos, toDos, type DosSnapshot } from './dossave';
 import { STATS, SKILLS, type HeroRecord } from './hero';
 import { events as bundledEvents } from 'virtual:bundle';
 
@@ -55,6 +56,7 @@ export async function openScenario(ctx: ScenarioCtx) {
   if (open) return;
   open = true;
   const sv = structuredClone(ctx.snapshot());
+  let template: Uint8Array | null = null;                     // the last DOS save loaded (Files)
   const index = (await json<{ id: string; name: string; kind: string }[]>('locations/index.json')).filter(l => l.kind !== 'region');
   const events = parseEvents(bundledEvents ?? await fetch('./docs/events.md').then(r => r.ok ? r.text() : '').catch(() => ''));
   const style = el('style', { textContent: CSS });
@@ -250,7 +252,35 @@ export async function openScenario(ctx: ScenarioCtx) {
       try { Object.assign(sv, JSON.parse(await f.text())); status.textContent = `Loaded ${f.name}; Apply to play it.`; }
       catch (e) { status.textContent = String(e); }
     };
-    out.append(el('h3', { textContent: 'File' }), el('div.sc-row', {}, download, field('Load a scenario or save', upload)), el('h3', { textContent: 'Save slots' }));
+    // The original game's saved games (dossave.ts, formats.md): FFSAVx.MCS in, or this scenario written over a template
+    // save (the last one loaded here, else the game's own FFSAVA.MCS from the pack) as FFSAV<slot>.MCS.
+    const dosIn = el('input', { type: 'file', accept: '.mcs,.MCS' });
+    dosIn.onchange = async () => {
+      const f = dosIn.files?.[0];
+      if (!f) return;
+      try {
+        const b = new Uint8Array(await f.arrayBuffer());
+        Object.assign(sv, await fromDos(b, json));
+        template = b;
+        status.textContent = `Loaded ${f.name} (DOS); Apply to play it.`;
+      } catch (e) { status.textContent = String(e); }
+    };
+    const letter = el('select', {}, ...'ABCDEFGH'.split('').map(c => el('option', { value: c, textContent: `Game ${c}` })));
+    const dosOut = el('button', { type: 'button', textContent: 'Download as a DOS saved game' });
+    dosOut.onclick = async () => {
+      try {
+        const t = template ?? await packFetch('dossave.mcs').then(r => r.ok ? r.arrayBuffer() : null).then(b => b && new Uint8Array(b));
+        if (!t) throw new Error('No template save: load one of the game\'s FFSAVx.MCS files above first.');
+        const name = `FFSAV${letter.value}.MCS`, b = await toDos(sv as unknown as DosSnapshot, t, json);
+        const a = el('a', { href: URL.createObjectURL(new Blob([b as BlobPart], { type: 'application/octet-stream' })), download: name });
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+        status.textContent = `${name}: put it in the original game's folder (replacing the file of that name), then load game ${letter.value} there.`;
+      } catch (e) { status.textContent = String(e); }
+    };
+    out.append(el('h3', { textContent: 'File' }), el('div.sc-row', {}, download, field('Load a scenario or save', upload)),
+      el('h3', { textContent: 'The original game (DOS)' }), el('div.sc-row', {}, field('Load a DOS saved game (FFSAVx.MCS)', dosIn)),
+      el('div.sc-row', {}, letter, dosOut), el('h3', { textContent: 'Save slots' }));
     for (const n of [1, 2, 3]) {
       const has = ctx.slots.get(n);
       const save = el('button', { type: 'button', textContent: `Store in slot ${n}` });
