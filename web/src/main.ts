@@ -1505,8 +1505,8 @@ async function main() {
                { label: cmd[4], act: () => close() }]);
   };
   /** P04: stepping onto a mushroom asks "%h may pick %b %as." (D04 text 0); Yes gives `amount` of the patch's kind to
-   *  the acting member (_IncObj), and a refusal (comtxt 0x32 / 0x33) leaves it growing. Text 2 after picking is assumed
-   *  (P04 ovl_04dd, which prints both, is not decompiled). */
+   *  the acting member (_IncObj), and a refusal (comtxt 0x32 / 0x33) leaves it growing; then text 2 (P04 ovl_04dd prints
+   *  both: AX 0 at 0x39E, 2 at 0x421). */
   const pickAt = (x: number, y: number) => {
     const p = patch!, i = p.find(x, y), h = lead.hero;
     if (i < 0) return;
