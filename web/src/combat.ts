@@ -299,19 +299,44 @@ export class Fight {
     if (side) this.timestop = false;
   }
 
-  /** P06 ovl_1144: a missile flies the line from `a` toward `t` and stops on the first unwalkable or occupied square;
-   *  true when it reaches the target. (The line is a Bresenham walk as in `clear`.) */
+  /** P06 ovl_1144: a missile flies from `a` toward `t` (`flight`) and stops on the first unwalkable square;
+   *  true when it reaches the target. */
   missile(a: Rec, t: Rec): boolean { return this.clear(a, t); }
 
-  /** The squares the missile from `a` toward `t` passes, up to the target or the square that stops it (`G_TILEXY`). */
-  path(a: { x: number; y: number }, t: { x: number; y: number }): { x: number; y: number }[] {
-    const n = cheb(a, t.x, t.y), out = [];
-    for (let i = 1; i <= n; i++) {
-      const x = Math.round(a.x + (t.x - a.x) * i / n), y = Math.round(a.y + (t.y - a.y) * i / n);
-      out.push({ x, y });
-      if (i < n && (!this.level.walkable(x, y) || this.occupied(x, y))) break;
+  /** The squares the missile from `a` toward `t` is drawn on (`G_TILEXY`): up to the target, or the first unwalkable
+   *  square it is checked on (included); `past` (a missed arrow, P06 0x1229) flies on to the board's edge. */
+  path(a: { x: number; y: number }, t: { x: number; y: number }, past = false): { x: number; y: number }[] {
+    const out = [];
+    for (const q of this.flight(a, t)) {
+      out.push({ x: q.x, y: q.y });
+      if (q.x === t.x && q.y === t.y && !past) break;
+      if (!q.corner && !this.level.walkable(q.x, q.y)) break;
     }
     return out;
+  }
+
+  /** P06 ovl_1144: the squares a missile from `a` toward `t` passes, to the board's edge. It takes single x or y steps
+   *  (error term |dx| − |dy|, halved when not negative; the next step is along x while it is ≥ 0, after − |dy| for an
+   *  x step and + |dx| for a y step), and a step followed by one along the other axis is one diagonal move: the corner
+   *  square between them (`corner`) is passed over unchecked. Only the map is checked (`_Locate` against the tileset's
+   *  walkable list, ovl_132a), so no figure blocks a missile. */
+  private flight(a: { x: number; y: number }, t: { x: number; y: number }): { x: number; y: number; corner: boolean }[] {
+    const ax = Math.abs(t.x - a.x), ay = Math.abs(t.y - a.y), sx = t.x < a.x ? -1 : 1, sy = t.y < a.y ? -1 : 1;
+    const steps: boolean[] = [];                         // true = an x step
+    let x = a.x, y = a.y, e = ax - ay;
+    if (e >= 0) e >>= 1;
+    for (let xs = e >= 0; ; xs = e >= 0) {
+      if (xs) { x += sx; e -= ay; } else { y += sy; e += ax; }
+      if (x < 0 || y < 0 || x >= W || y >= H) break;
+      steps.push(xs);
+    }
+    x = a.x; y = a.y;
+    let skip = false;
+    return steps.map((xs, i) => {
+      if (xs) x += sx; else y += sy;
+      skip = !skip && steps[i + 1] !== xs;                 // P06 0x12B7: [9AAA]
+      return { x, y, corner: skip };
+    });
   }
 
   /** `_MDamage` (P06 ovl_0fa9): shield points absorb first, then HP; death, and the knockdown roll with the caster's
@@ -432,12 +457,18 @@ export class Fight {
     return this.weapon(a)?.type === 3 ? this.clear(a, t) : cheb(a, t.x, t.y) <= 1;
   }
 
-  /** P94 ovl_1af1 `_PATHBLK`: no unwalkable square or living record between the two (a Bresenham line; assumed). */
+  /** The player's target check (`_ChkRng`, `G_wrkamt` 1, or 100 with a bow): no line of fire is asked for, so a bow
+   *  may aim at anyone and the arrow stops at a wall (`attack`). */
+  reach(a: Rec, t: Rec): boolean {
+    return this.weapon(a)?.type === 3 || cheb(a, t.x, t.y) <= 1;
+  }
+
+  /** P94 ovl_1af1 `_PATHBLK` (P06 ovl_1144 with mode −1): the flight reaches the target before an unwalkable square;
+   *  one that runs off the board leaves the last check's answer, clear. */
   private clear(a: Rec, t: Rec): boolean {
-    const n = cheb(a, t.x, t.y);
-    for (let i = 1; i < n; i++) {
-      const x = Math.round(a.x + (t.x - a.x) * i / n), y = Math.round(a.y + (t.y - a.y) * i / n);
-      if (!this.level.walkable(x, y) || this.occupied(x, y)) return false;
+    for (const q of this.flight(a, t)) {
+      if (q.x === t.x && q.y === t.y) return true;
+      if (!q.corner && !this.level.walkable(q.x, q.y)) return false;
     }
     return true;
   }
@@ -456,7 +487,8 @@ export class Fight {
     const dx = t.x - a.x, dy = a.y - t.y, ax = Math.abs(dx), ay = Math.abs(dy);
     const dir = DIRTBL[(dx < 0 ? 8 : 0) | (dy < 0 ? 4 : 0) | (3 * ax >= ay + 2 ? 2 : 0) | (3 * ay <= ax + 1 ? 1 : 0)];
     // P06 ovl_143f: an arrow flies E01 tile 18 + keypad direction − 1 (`_weaptiles` row 2, P06 0xA3: CURDIR → keypad).
-    if (w?.type === 3) this.fx(FX.missile(this.path(a, t), 17 + ([4, 8, 6, 2, 7, 9, 3, 1][dir] ?? 5), 'E01'));
+    const from = { x: t.x, y: t.y }, arrow = 17 + ([4, 8, 6, 2, 7, 9, 3, 1][dir] ?? 5);
+    if (w?.type === 3 && !this.clear(a, t)) { this.fx(FX.missile(this.path(a, t), arrow, 'E01')); return out; }   // P06 0x97C: a wall, no roll
     let result: number;
     const inuse = (a.hero?.rec.h_inuse as number | undefined) ?? 0;
     if (inuse & 0x10) a.hero!.rec.h_inuse = inuse & ~0x10;               // Luffin: this blow cannot be dodged
@@ -490,6 +522,7 @@ export class Fight {
         `${text(0x4b)}${dam}${nift ? text(0x58, { b: t.nift }) : text(0x4c, { b: t.armor })}${text(0x4d)}${t.hp}`);
       if (result === 2) { out.push(text(0x48)); if (t.race !== 36) out.push(text(0x49, { a: t.name })); }
     }
+    if (w?.type === 3) this.fx(FX.missile(this.path(a, from, result === 0), arrow, 'E01'));   // P06 ovl_143f
     if (result) {                                          // a blow that lands (a Barg's with sound 11 and Spef2 on the target)
       if (a.race === 0x12) { this.sound(11); this.fx(FX.spef2(t)); }
       this.sound(1);

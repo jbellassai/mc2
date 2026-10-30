@@ -993,9 +993,9 @@ async function main() {
     for (const l of s.lines) panel.line(l);
     fx.play(FX.bang(s.at));
   };
-  /** Attack: the enemies in range (adjacent, or in a bow's clear line); choosing one strikes it. */
+  /** Attack: the enemies in reach (adjacent, or any with a bow); choosing one strikes it. */
   const aim = () => {
-    const a = actor!, foes = fight!.enemies(a).filter(t => fight!.inRange(a, t));
+    const a = actor!, foes = fight!.enemies(a).filter(t => fight!.reach(a, t));
     if (!foes.length) { panel.line(ctext(0x0d)); return; }                 // "Mark the target."
     panel.set([...foes.map(t => ({ label: `${t.name} (${t.x},${t.y})`, act: () => strike(t) })), { label: cmd[0], act: partyTurn }]);
   };
