@@ -6,7 +6,8 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
-    "bundle": "tsc --noEmit && vite build --mode bundle && node scripts/bundle.mjs"
+    "bundle": "tsc --noEmit && vite build --mode bundle && node scripts/bundle.mjs",
+    "deploy:private": "npm run bundle && node scripts/deploy-private.mjs"
   },
   "devDependencies": {
     "typescript": "^5.6.3",

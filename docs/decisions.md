@@ -137,3 +137,19 @@ Numbered, never reused. Status: DECIDED (not yet built) or IMPLEMENTED (with com
 **Consequences:** Amends decision 1 for this build only: it carries game data, so it is never published or committed (`out/` is gitignored); the public build is unchanged (no data; the editor only via `/sandbox/`). Saves stay in that browser on that PC (opening the page in another browser starts without them). Building it needs the pack (`tools/export_json.py`) and one network fetch of the Cinzel font.
 
 **Status:** IMPLEMENTED (this commit).
+
+## 10. The private bundle hosted as a Cloudflare Worker behind Cloudflare Access
+
+**Decision:** `MC2_WORKER=<name> npm run deploy:private` (in `web/`) builds the decision 9 bundle and deploys it as `index.html` of a Cloudflare Worker with static assets (`scripts/deploy-private.mjs`: wrangler pinned, config generated in gitignored `out/deploy`, `preview_urls` off). Cloudflare Access on the Worker's workers.dev route admits only an **Emails** allow-list by One-time PIN. Burton opens a URL instead of unzipping each new version; an update is the same command.
+
+**Context:** Decision 9's zip has to be re-sent for every update. The user wanted cheap hosting that Burton can use with no game files of his own.
+
+**Alternatives rejected:**
+- *S3/CloudFront* — private access needs signed URLs/cookies or an auth layer; Access gives email login on the free plan.
+- *Classic Cloudflare Pages* — wrangler 4.151 delegates `pages project create` to Workers (and fails on Vite 5); classic Pages needs an undocumented `--force`.
+- *Building from the Git repo or CI* — the bundle carries game data, which never goes through the public repo.
+- *An unlisted URL with no Access* — links get forwarded and indexed (decision 9).
+
+**Consequences:** The data leaves the machine only to Cloudflare, behind Access. Setup order (done 2026-11-02): register the account's workers.dev subdomain, deploy `--placeholder` (no data), enable Access on the workers.dev route, check an anonymous request gets a 302 to `*.cloudflareaccess.com`, then deploy the bundle. Gotchas: the Worker's quick "Enable Cloudflare Access" only offers domain rules and the Cloudflare-account login; the Emails rule is set in the Zero Trust policy editor and One-time PIN is added under Integrations → Identity providers (never a `gmail.com` domain rule). Access sends no PIN to addresses outside the policy. The Worker and subdomain names stay out of the repo. Saves live in the browser per origin, so saves made in the zip do not carry over (move them via the scenario editor's Files tab). The zip stays the offline fallback.
+
+**Status:** IMPLEMENTED (this commit).
