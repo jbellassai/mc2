@@ -1324,6 +1324,7 @@ async function main() {
     const pgm = level.loc.pgms[d.pgm];
     if (!hr || !pgm) return void (message = 'This door leads somewhere not built yet.');
     if (hr.group === 0xca && !events.has(level.loc.locnum === 0x41 ? 32 : 31)) hr = { ...hr, id: 0xfc, group: 0xde, map: 12 };
+    if (hr.id === 0xfc) events.add(level.loc.locnum === 0x41 ? 31 : 32);   // V02 INT60_12 (P02 0x98C): the decoy opens the other one's real room
     const key = `${level.id}:${hr.id}`, ch = await Chamber.build(hr, pgm.tileset, key, events), diff = Math.max(0, level.loc.locdiff - 1);
     const back = { level, x: lead.x, y: lead.y };
     if (dunrms.has(key)) return enterChamber(ch, d.type, back, false);
