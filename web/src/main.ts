@@ -245,6 +245,7 @@ async function main() {
 
   // ---- talking (dialogue.md) ----
   const talkTo = async (who: Figure) => {
+    if (who.num === 0xfd && special?.talk()) return;                   // FFFAR FAR_GREET: a 0xFD person (a casino's dealer) → `_swgreet` −3, P09 plays
     const elden = chamber?.says(who);
     if (elden) { panel.show(); panel.line(noted(1, `${who.name}: ${elden}`));   // P07 0x51F
       return void panel.set([{ label: cmd[0], act: () => close() }]); }
@@ -1973,7 +1974,6 @@ async function main() {
     const who = figures.find(f => f.x === x && f.y === y);
     message = '';
     if (keeper()) return;
-    if (!who && special?.talk()) return;                               // the casino: Talk to anyone but the gamblers
     const m = party.members.find(p => p.x === x && p.y === y);
     if (m) return talkTo({ x, y, type: 0, tile: 0, num: m.num, name: m.hero.name });
     if (who) return talkTo(who);
@@ -2260,7 +2260,8 @@ async function main() {
       if (special?.piece(item)) {                                      // a teleportal piece on a pedestal (P09)
         close();
         return mark(say(comtxt[0x0d]), (x, y) => {
-          const to = adjacent(x, y) ? special!.place(item, x, y, who) : null;   // P09 0xC58: the party dissolves, then 0x14
+          if (!adjacent(x, y)) { message = comtxt[0x0b]; return; }     // P09 0xA28 _ChkRng(x, y, 1, 1): "Out of range."
+          const to = special!.place(item, x, y, who);                   // P09 0xC58: the party dissolves, then 0x14
           if (to) void fade(true).then(() => { sfx(20); return toWorldAt(to.x, to.y); }).then(() => { party.members.forEach(m => hidden.delete(m)); render(); });
         });
       }
@@ -2602,6 +2603,7 @@ async function main() {
     if (panel.open && !marking) return;                           // in a fight the panel stays open (Jump)
     const t = view.cellAt(e, level.loc.kind === 'room' ? 5 : lead.x, level.loc.kind === 'room' ? 4 : lead.y);
     if (marking) { const f = marking; marking = null; message = ''; f(t.x, t.y); render(); return; }   // _Mark by clicking
+    if (talking) { talking = false; void talkAt(t.x, t.y).then(render); return; }   // FAR_GREET's _Mark reaches 10 squares
     look(t.x, t.y);
   });
 
@@ -2656,7 +2658,13 @@ async function main() {
     const from = act();                                                 // a direction from `_curpla`'s square
     if (looking) { looking = false; look(from.x + k[0], from.y + k[1]); return; }
     if (marking) { const f = marking; marking = null; message = ""; f(from.x + k[0], from.y + k[1]); render(); return; }
-    if (talking) { talking = false; void talkAt(from.x + k[0], from.y + k[1]).then(render); return; }
+    if (talking) {                                                       // across a table or counter: the square beyond (port aid)
+      talking = false;
+      let x = from.x + k[0], y = from.y + k[1];
+      const anyone = (a: number, b: number) => figures.some(f => f.x === a && f.y === b) || party.members.some(m => m.x === a && m.y === b);
+      if (!anyone(x, y) && !level.walkable(x, y) && anyone(x + k[0], y + k[1])) { x += k[0]; y += k[1]; }
+      void talkAt(x, y).then(render); return;
+    }
     queue = queue.then(() => step(...k)).catch(err => { status.textContent = String(err); console.error(err); });
   });
   if (!('slot' in start)) note(1, message);                    // P81 0x1AED: "%h has landed in Telermain."

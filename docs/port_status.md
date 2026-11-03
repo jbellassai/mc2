@@ -20,8 +20,8 @@ None known (2026-11-03). The last four (auto-hero casting, the Map, the notepad,
 - **World:** Assign and Dismiss are also on the sheet (the original: Talk only).
 - **Spells:** See's sound 9 follows 10 after an assumed 400 ms (the original's comes with `_MFXInit`); Assess lists every monster at once (the original waits for a key on each, highlighting it).
 - **Talk:** `%k` dropped.
-- **Notepad:** P95's fountain copy (its trigger untraced) is not logged; event 153 (notes saved) is not kept.
-- **Rooms:** teleportal pedestal out of reach prints nothing; elden answers 2–6 untested (event 115 has no known setter); casino Talk routing is assumed; Library task days `− research>>4` unverified.
+- **Notepad:** P95's fountain copy (its trigger untraced) is not logged. (Event 153, set when the notes are saved to disk, only feeds P98's "Your notes are not saved. Quit anyway?"; the port has no Quit and keeps the notes in the browser.)
+- **Rooms:** elden answers 2–6 are ported but unreachable, in the original too: nothing in the code, data or dialogue sets event 115 (`events.md`).
 
 ## Done (summary)
 
