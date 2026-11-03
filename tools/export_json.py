@@ -433,7 +433,8 @@ def main(src, dst):
         'd06': {'cast': list(d06[ptr[0]:ptr[1]]), 'crit': list(d06[ptr[1]:ptr[2]]), 'crit2': list(d06[ptr[2]:ptr[3]]),
                 'prey': list(d06[ptr[3]:ptr[3] + 42]), 'gonshi': list(d06[ptr[4]:ptr[5]]), 'sermin': list(d06[ptr[5]:ptr[6]]),
                 'potion': list(d06[ptr[6]:ptr[7]]), 'counts': list(d06[ptr[8]:ptr[8] + 56]), 'armor': list(d06[ptr[9]:ptr[10]]),
-                'dodge': list(d06[ptr[10]:ptr[11]]), 'prefs': list(d06[ptr[12]:ptr[12] + 132])}})
+                'dodge': list(d06[ptr[10]:ptr[11]]), 'prefs': list(d06[ptr[12]:ptr[12] + 132]),
+                'autospells': list(d06[ptr[11]:ptr[11] + 60])}})   # P94 ovl_157b: 10 spells per hero race
     # Sound (decision 5): _GameSound(n) plays FFFAR's name table entry n − 1 (file 0x3FB0, 13-byte names), converted to
     # sounds/n.wav; _song(n) plays `_cmffile[n]` (DS:3070) = MC2nnA.CMF, copied to music/n.cmf for the OPL2 synth.
     fff = open(f'{src}/FFFAR.MCO', 'rb').read()

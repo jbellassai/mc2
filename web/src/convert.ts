@@ -515,7 +515,8 @@ export async function convert(files: Files, step: (done: number, of: number) => 
     guarddiff: sl(p01, 0x33a, 0x34a),
     d06: { cast: sl(d06, ptr[0], ptr[1]), crit: sl(d06, ptr[1], ptr[2]), crit2: sl(d06, ptr[2], ptr[3]), prey: sl(d06, ptr[3], ptr[3] + 42),
       gonshi: sl(d06, ptr[4], ptr[5]), sermin: sl(d06, ptr[5], ptr[6]), potion: sl(d06, ptr[6], ptr[7]), counts: sl(d06, ptr[8], ptr[8] + 56),
-      armor: sl(d06, ptr[9], ptr[10]), dodge: sl(d06, ptr[10], ptr[11]), prefs: sl(d06, ptr[12], ptr[12] + 132) } });
+      armor: sl(d06, ptr[9], ptr[10]), dodge: sl(d06, ptr[10], ptr[11]), prefs: sl(d06, ptr[12], ptr[12] + 132),
+      autospells: sl(d06, ptr[11], ptr[11] + 60) } });
   step(5, 6);
 
   // sound (decision 5): _GameSound(n) plays FFFAR's name table entry n − 1 (file 0x3FB0, 13-byte names); _song(n) plays

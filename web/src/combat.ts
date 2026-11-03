@@ -9,7 +9,7 @@ import { notes } from './notes';
 import { json } from './pack';
 import type { Hero } from './hero';
 import type { Level } from './level';
-import { effect, monsterSpell } from './spells';
+import { effect, heroSpell, monsterSpell } from './spells';
 import { FX, type Frame } from './fx';
 
 interface Monster { name: string; hp: number; shield: number; weapon: number; armor: number; bravery: number; str: number;
@@ -20,7 +20,7 @@ interface Weapon { minst: number; basedam: number; type: number; unbreakable: nu
 export interface CombatData { monsters: Monster[]; groups: number[][]; weapons: Weapon[]; setupxy: number[]; maxtbl: number[];
   ranges: { x: number[][]; y: number[][] }; guarddiff: number[];
   loot: { thresholds: number[]; items: number[]; amounts: number[][]; an: number[] }; resurrect: string[];
-  d06: { cast: number[]; crit: number[]; crit2: number[]; prey: number[]; counts: number[]; armor: number[]; dodge: number[];
+  d06: { autospells: number[]; cast: number[]; crit: number[]; crit2: number[]; prey: number[]; counts: number[]; armor: number[]; dodge: number[];
     gonshi: number[]; sermin: number[]; potion: number[] };
   spells: { names: string[]; energy: number[]; where: number[]; side: number[]; skill: number[]; here: number[];
     summon: number[]; destroy: number[] };
@@ -45,6 +45,8 @@ export interface Rec {
 }
 
 const rnd = (n: number) => Math.floor(Math.random() * n);   // _RndCo
+/** A hero's spell chosen by the AI, cast through _Magic by the caller (main.ts); returns the lines to print. */
+export type Cast = (r: Rec, spell: number, target: Rec | null) => string[];
 /** Directions 0-7: W N E S NW NE SE SW (P06 file 0x93 dx, 0x9B dy). */
 const DX = [-1, 0, 1, 0, -1, 1, 1, -1], DY = [0, -1, 0, 1, -1, -1, 1, 1];
 /** P06 ovl_0b2b: attacker → target direction from sign and slope bits (table P06 file 0xB0B). */
@@ -601,15 +603,16 @@ export class Fight {
   /** P94 ovl_0a98, a hero fighting on auto (Head, Will): by the side leader's race, eat a Gonshi when RndCo(100) is
    *  below D06 ptr4 and none is working yet, drink a Potion when HP ≤ ptr6, eat a Sermin when energy < ptr5 (each only
    *  if carried, one action); otherwise act like a monster. `use` applies the item (Hero.use + the record sync).
-   *  (A hero with no target casts by the spell AI, ovl_157b — not modelled: it takes a random step.) */
-  autoHero(r: Rec, use: (r: Rec, item: number) => string[], text: (n: number, v?: Record<string, string | number>) => string): string[] {
+   *  `cast` runs a spell the AI chose through _Magic (heroSpell, P94 ovl_157b). */
+  autoHero(r: Rec, use: (r: Rec, item: number) => string[], text: (n: number, v?: Record<string, string | number>) => string,
+           cast?: Cast): string[] {
     const h = r.hero!.rec, lead = this.recs.find(o => o.side === r.side && this.alive(o) && o.state & 4) ?? this.recs[0];
     const d = this.data.d06, lr = lead.race;
     const has = (item: number) => h.h_invitem.includes(item);
     if (rnd(100) < d.gonshi[lr] && !((h.h_inuse as number) & 0x80) && has(0x34)) return use(r, 0x34);
     if (r.hp <= d.potion[lr] && has(0x32)) return use(r, 0x32);
     if ((h.h_energy as number) < d.sermin[lr] && has(0x33)) return use(r, 0x33);
-    return this.monsterAct(r, text);
+    return this.monsterAct(r, text, cast);
   }
 
   /** P94 ovl_0f32/ovl_10ef: on a flee square the record leaves ("%a flees!", comtxt 0xCA); otherwise it steps toward the
@@ -654,7 +657,7 @@ export class Fight {
   /** One action of a monster (P94 ovl_0b4b → ovl_0db1): keep or choose a target by the leader race's D06 criteria,
    *  then shoot, strike when adjacent, or step toward it (a random lower-distance neighbour), else a random move.
    *  A routed record (`c_state & 0x40`) flees instead. */
-  monsterAct(r: Rec, text: (n: number, v?: Record<string, string | number>) => string): string[] {
+  monsterAct(r: Rec, text: (n: number, v?: Record<string, string | number>) => string, cast?: Cast): string[] {
     if (r.state & 0x40) return this.fleeStep(r, text);
     const lead = this.recs.find(o => o.side === r.side && this.alive(o) && o.state & 4);
     const ldrace = lead ? lead.race : r.race;
@@ -663,9 +666,17 @@ export class Fight {
       const [a, chance, b] = this.data.d06.crit.slice(3 * ldrace, 3 * ldrace + 3);
       t = this.pick(r, rnd(100) < chance ? a : b, ldrace) ?? this.pick(r, this.data.d06.crit2[3 * ldrace + 2], ldrace)!;
       r.target = t ? t.recno : NONE;
+      if (!t && r.hero && cast) {                                       // P94 0xBEF: no target - a hero casts (ovl_157b)
+        const s = heroSpell(this, r);
+        if (s) return cast(r, s.spell, s.target);
+      }
     }
-    // D06 ptr0: the leader race's chance to cast instead (ovl_1553); a monster's spells cost it nothing here.
-    if (r.race >= 5 && rnd(100) < this.data.d06.cast[ldrace]) {
+    // D06 ptr0: the leader race's chance to cast instead: a hero by ovl_157b (P94 0xC26), a monster by ovl_1553, whose
+    // spells cost it nothing here.
+    if (r.hero && cast && rnd(100) < this.data.d06.cast[ldrace]) {
+      const s = heroSpell(this, r);
+      if (s) return cast(r, s.spell, s.target);
+    } else if (r.race >= 5 && rnd(100) < this.data.d06.cast[ldrace]) {
       const s = monsterSpell(this, r, this.data.monsters[r.race - 5].spells);
       if (s) { r.moves--; return [`${r.name}: ${this.data.spells.names[s.spell]}`, ...effect(this, r, s.spell, s.target, text)]; }
     }

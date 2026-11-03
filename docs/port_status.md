@@ -8,13 +8,12 @@ Fixed during the audit: **events 31/32** (the Slow Death decoy rooms, V02 `INT60
 not be freed and the game could not be finished (`rules/locations.md`, Dark Candle rooms). Fixed after it: the
 key-NPC talk events (P91 `ovl_05af`, which gate the Dorak guides' chain), the season events and the month's weather
 table (P92 `ovl_0265`), songs taught in conversation (P91 `ovl_0c57`), volunteer morale (P95 `ovl_0fc0`, P92 `ovl_02ed`), the resident's "I have a key" (P02 0xA16), event 30 on
-buying from NPC 88 (P90 0x989), room remarks to a companion (P91 `ovl_0a95`), the Map and Map Flask (P02 `ovl_13ab`/`ovl_13c4`, `_ShowMiniMap`), the notepad (P70, `rules/notepad.md`).
+buying from NPC 88 (P90 0x989), room remarks to a companion (P91 `ovl_0a95`), the Map and Map Flask (P02 `ovl_13ab`/`ovl_13c4`, `_ShowMiniMap`), the notepad (P70, `rules/notepad.md`), auto-heroes casting (P94 `ovl_157b`).
 
 ## Gaps that change play
 
 | gap | original | note |
 |---|---|---|
-| Auto-heroes never cast | P94 `ovl_157b`/`ovl_1553` | Head/Will heroes with no target step at random |
 | Acting member (`_curpla`) | P90 Buy/Sell, P02 Pick/Break, captains, patch moves | port always uses the player (leader) |
 
 ## Smaller differences

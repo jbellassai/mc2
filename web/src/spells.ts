@@ -67,13 +67,46 @@ function worth(f: Fight, c: Rec, spell: number, t: Rec): boolean {
 export function monsterSpell(f: Fight, c: Rec, spells: number[]): { spell: number; target: Rec | null } | null {
   const known = spells.slice(0, 2).filter(s => s !== 0xff && BUILT.has(s) && s !== 5 && s !== 35);
   if (!known.length) return null;
-  const spell = known[rnd(known.length)];
+  const spell = known[rnd(known.length)], target = aiTarget(f, c, spell);
+  return target === undefined ? null : { spell, target };
+}
+
+/** P94 ovl_15f8: the first record (in record order) on the spell's TALIGN side that passes `worth`; a group spell
+ *  (Zengrl ~ Heal, Zishoxe ~ Shield, Zutyun ~ Weaken, Zapall ~ Fireball) needs five and has no target (null).
+ *  Undefined = nothing worth it. */
+function aiTarget(f: Fight, c: Rec, spell: number): Rec | null | undefined {
   const group: Record<number, number> = { 20: 8, 21: 16, 23: 9, 19: 6 };
   const side = f.data.spells.side[group[spell] ?? spell];
+  if (side === 0xff) return undefined;                             // TALIGN 0xFF: not a combat spell
   const pool = f.recs.filter(t => f.visible(t) && (side === 0 ? t.side === c.side : t.side !== c.side));
-  if (spell in group) return pool.filter(t => worth(f, c, group[spell], t)).length >= 5 ? { spell, target: null } : null;
-  const target = pool.find(t => worth(f, c, spell, t));
-  return target ? { spell, target } : null;
+  if (spell in group) return pool.filter(t => worth(f, c, group[spell], t)).length >= 5 ? null : undefined;
+  return pool.find(t => worth(f, c, spell, t));
+}
+
+/** P94 ovl_157b, a hero on auto (Head, Will) casting: only with magic skill (`c_magskl`), and only a spell the hero
+ *  has memorised and the energy for (ovl_1721). First Restsoul (40) on a dead undead record 1-16 (`c_state & 0x82`,
+ *  ovl_196d); else a random pick from the first 9 of the race's 10 spells (D06 ptr11, `_NUMSPLS` 9 — the tenth is never
+ *  drawn), every copy of the pick dropped from the list (so a spell listed twice is likelier), until one has a
+ *  target. The caller casts it through _Magic (the hero's ready spell becomes this one). Jump is never chosen (none
+ *  of the lists hold it); spells the port has not built are skipped. */
+export function heroSpell(f: Fight, c: Rec): { spell: number; target: Rec | null } | null {
+  const h = c.hero!.rec, e = h.h_energy as number;
+  if (!c.mskl) return null;
+  const can = (sp: number) => sp !== 0xff && sp !== 24 && BUILT.has(sp) && h.h_spells[Math.floor(sp / 7)][sp % 7] > 0 &&
+    cost(f, sp, h.h_magic as number) <= e && !(sp >= 30 && sp <= 35 && f.magbits.has(sp));
+  if (can(40)) {
+    const u = f.recs.find(t => t.recno >= 1 && t.recno <= 16 && (t.state & 0x82) === 0x82);
+    if (u) return { spell: 40, target: u };
+  }
+  let list = f.data.d06.autospells.slice(10 * (h.h_race as number), 10 * (h.h_race as number) + 9);
+  while (list.length) {
+    const sp = list[rnd(list.length)];
+    list = list.filter(x => x !== sp);
+    if (!can(sp)) continue;
+    const t = aiTarget(f, c, sp);
+    if (t !== undefined) return { spell: sp, target: t };
+  }
+  return null;
 }
 
 /** The sound of a combat spell, from its V06 handler's `_GameSound`: Fear, Betray 10 (mag1), Shatter, Fireball,

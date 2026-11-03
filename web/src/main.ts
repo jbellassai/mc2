@@ -1103,7 +1103,8 @@ async function main() {
   const autoTurn = async (a: Rec) => {
     panel.set(heading ? [{ label: cmd[40], act: () => { heading = false; } }] : []);   // Stop
     while (fight && a.moves > 0 && fight.alive(a) && !fight.outcome()) {
-      report(fight.autoHero(a, (r, item) => { const l = useInFight(r, item); r.moves--; return l.map(x => x.replace(/^!/, '')); }, ctext));
+      report(fight.autoHero(a, (r, item) => { const l = useInFight(r, item); r.moves--; return l.map(x => x.replace(/^!/, '')); }, ctext,
+        (r, sp, t) => { r.hero!.rec.h_rdyspl = sp; return [`${r.name}: ${cdata.spells.names[sp]}`, ...castSpell(fight!, r, sp, t)]; }));   // P94 0x16B7: h_rdyspl, then _Magic
       render();
       await sleep(200);
     }
@@ -1115,6 +1116,18 @@ async function main() {
     panel.set([...known.map(([n, i]) => ({ label: `${cdata.spells.names[i]} (${n})`, act: () => {
       r.h_rdyspl = i; back();
     } })), { label: cmd[0], act: back }]);
+  };
+  /** _Magic's work once the spell and target are known: the effect, the energy, one memorised copy (the last clears
+   *  the ready spell), a magic skill roll for the SKLSPLS spells, `_magbits` for 30-35; uses one action. */
+  const castSpell = (f: Fight, a: Rec, sp: number, t: Rec | null, at?: { x: number; y: number }) => {
+    const r = a.hero!.rec, out = BUILT.has(sp) ? effect(f, a, sp, t, ctext, at) : [comtxt[0x119]];
+    r.h_energy -= spellCost(f, sp, r.h_magic); a.hero!.isHeTr();
+    const row = Math.floor(sp / 7), col = sp % 7;
+    if (--r.h_spells[row][col] <= 0) { r.h_spells[row][col] = 0; r.h_rdyspl = 0xff; }
+    if (cdata.spells.skill.includes(sp)) out.push(...f.skillUp(a, 3, ctext));
+    if (sp >= 30 && sp <= 35) f.magbits.add(sp);
+    a.moves--;
+    return out;
   };
   /** Magic (_Magic in combat, spells.md): the readied spell, if it may be cast in combat (`_splocs` & 16), was not
    *  already cast this encounter (30-35, `_magbits`) and the hero has the energy (`_EneUsg`); then its target, the
@@ -1128,13 +1141,7 @@ async function main() {
     if (r.h_energy < need) return void panel.line(comtxt[0x41]);                          // "Not enough energy!"
     const go = (t: Rec | null, at?: { x: number; y: number }) => {
       panel.line(`${a.name}: ${cdata.spells.names[sp]}`);
-      report(BUILT.has(sp) ? effect(f, a, sp, t, ctext, at) : [comtxt[0x119]]);
-      r.h_energy -= need; a.hero!.isHeTr();
-      const row = Math.floor(sp / 7), col = sp % 7;
-      if (--r.h_spells[row][col] <= 0) { r.h_spells[row][col] = 0; r.h_rdyspl = 0xff; }
-      if (cdata.spells.skill.includes(sp)) report(f.skillUp(a, 3, ctext));
-      if (sp >= 30 && sp <= 35) f.magbits.add(sp);
-      a.moves--;
+      report(castSpell(f, a, sp, t, at));
       partyTurn();
     };
     const pool = spellTargets(f, a, sp);
