@@ -41,6 +41,7 @@ export interface Rec {
   target: number;   // c_target, 0xFF none
   moves: number;    // c_removes: actions left this round
   loot?: { item: number; amount: number };   // c_itspc1/c_qaspc2 after the fight (P95 ovl_08f6); amount 0 = nothing
+  spells?: number[];     // c_spell1, c_spell2, c_renspl3 of a monster once Forget changed them (else its row's)
   magicused?: boolean;   // c_magicused: a hero who has cast this fight (_Magic → MABITON)
   doom?: number;    // _doombstlst: a Doombeast's group, | 0x80 on the real one (its five images have the bare number)
 }
@@ -550,8 +551,8 @@ export class Fight {
       this.sound(1);
     }
     if (a.hero) out.push(...this.afterHeroBlow(a, w, result, text));
-    // ovl_050a: a target that was hit turns on its attacker unless RndCo(100) ≤ its c_intel.
-    if (result !== 0 && this.alive(t) && t.int < rnd(100)) t.target = a.recno;
+    // ovl_050a: a target that was hit turns on its attacker unless RndCo(100) ≤ its c_intel, and is no longer routed
+    if (result !== 0 && this.alive(t) && t.int < rnd(100)) { t.target = a.recno; t.state &= ~0x40; }
     if (result === 0xff) for (const r of this.recs) if (r.target === t.recno) r.target = NONE;
     if (result && t.doom) this.unmask(a, t, result === 0xff);
     return out;
@@ -680,7 +681,7 @@ export class Fight {
       const s = heroSpell(this, r);
       if (s) return cast(r, s.spell, s.target);
     } else if (r.race >= 5 && rnd(100) < this.data.d06.cast[ldrace]) {
-      const s = monsterSpell(this, r, this.data.monsters[r.race - 5].spells);
+      const s = monsterSpell(this, r, r.spells ?? this.data.monsters[r.race - 5].spells);
       if (s) { r.moves--; return [`${r.name}: ${this.data.spells.names[s.spell]}`, ...effect(this, r, s.spell, s.target, text)]; }
     }
     if (r.hero && arm) {                                                // P94 0xC34: an unarmed hero, or a bow without arrows

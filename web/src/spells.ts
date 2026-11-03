@@ -56,7 +56,7 @@ function worth(f: Fight, c: Rec, spell: number, t: Rec): boolean {
       return !t.invis && near <= (t.str > 15 ? 0 : 2); }
     case 16: return t.shield <= 30;
     case 18: return !!(t.health & 0x20);
-    case 37: return t.hero ? t.hero.rec.h_rdyspl !== 0xff : false;
+    case 37: return t.hero ? t.hero.rec.h_rdyspl !== 0xff : t.race >= 5 && (t.spells ?? f.data.monsters[t.race - 5].spells)[0] !== 0xff;
   }
   return t.wskl > 15 || t.str > 15;
 }
@@ -202,7 +202,10 @@ export function effect(f: Fight, c: Rec, spell: number, t: Rec | null, text: Tex
       for (const r of f.recs.filter(r => r.side !== c.side && f.alive(r))) if (Math.max(Math.abs(r.x - t!.x), Math.abs(r.y - t!.y)) <= rad) r.invis = 0;
       return [];
     }
-    case 37: if (!t!.hero) return [text(0x96, { a: t!.name })];                             // Forget (monsters: c_spell1)
+    case 37: if (!t!.hero) {                                                                // Forget: a monster's c_spell1 = 0xFF
+        if (t!.race >= 5) { t!.spells = [...(t!.spells ?? f.data.monsters[t!.race - 5].spells)]; t!.spells[0] = 0xff; }
+        return [text(0x96, { a: t!.name })];
+      }
       { const h = t!.hero.rec, s = h.h_rdyspl;
         if (s !== 0xff) { h.h_spells[Math.floor(s / 7)][s % 7] = 0; h.h_rdyspl = 0xff; } }
       return [text(0x96, { a: t!.name })];
@@ -210,6 +213,11 @@ export function effect(f: Fight, c: Rec, spell: number, t: Rec | null, text: Tex
       const n = c.side === 0 ? Math.floor(m / 10) : 1;
       if (t!.wskl >= 16) t!.wskl = Math.max(15, t!.wskl - n);
       if (t!.mskl >= 16) t!.mskl = Math.max(15, t!.mskl - n);
+      if (t!.hero) {                                                    // V06 0x2584: written back to the hero
+        const h = t!.hero.rec as Record<string, number>, w = t!.weapon;
+        h.h_magic = t!.mskl;
+        h[w === 0xff || w < 9 ? 'h_fist' : w < 0x12 ? 'h_sword' : w < 0x1a ? 'h_axe' : 'h_archry'] = t!.wskl;
+      }
       return [];
     }
     case 40: if ((t!.state & 0x82) !== 0x82) return [text(0x95)];                           // Restsoul

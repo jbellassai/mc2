@@ -1236,7 +1236,7 @@ async function main() {
       } }, { label: cmd[4], act: partyTurn }]);
     }
     const t = fight!.at(a.x + dx, a.y + dy);
-    if (t && t.side) return strike(t);
+    if (t && t.side) return a.weapon >= 0x1a && a.weapon <= 0x1e ? partyTurn() : strike(t);   // P94 0x219: no bump-attack with a bow
     if (fight!.move(a, dx, dy, ctext)) { sfx(7); return partyTurn(); }   // _RMove's step
     sfx(14);                                                             // P94 0x1F4: not a monster
     message = `Blocked by ${t?.name ?? level.tileName(a.x + dx, a.y + dy)}.`;

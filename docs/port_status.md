@@ -18,8 +18,8 @@ None known (2026-11-03). The last four (auto-hero casting, the Map, the notepad,
 
 - **Acting member:** a P05 room or mushroom patch still moves the whole party / the leader rather than `_curpla` alone; Use asks whose pack instead of using `_curpla`; the aftermath screen moves the first living hero; the menus where `_Parser` allows the switch (`_chpmens` = menus 5, 10, 12, 13, 16, 21, 22) are approximated as "no panel open".
 - **World:** Teleport doesn't highlight valid squares; Assign is on the sheet, not Talk (Dismiss too).
-- **Combat AI:** flee has no leader handover or panic spread; a hit does not clear the routed bit 0x40; bump-attack also with a bow; no friendly-fire prompt; target-on-death event (P06 `ovl_0cde` step 6) untraced; Head asks no speed digit.
-- **Spells:** Drain on a hero only lowers the combat record; Forget on a monster keeps its spell; Assess uses the port's own text; See plays one sound (original 10 then 9), Confuse/Locate one (original three).
+- **Combat AI:** flee has no leader handover or panic spread; no friendly-fire prompt; target-on-death event (P06 `ovl_0cde` step 6) untraced; Head asks no speed digit.
+- **Spells:** Assess uses the port's own text; See plays one sound (original 10 then 9), Confuse/Locate one (original three).
 - **Talk:** `%k` dropped.
 - **Notepad:** not logged yet: the Whisper "Nothing happens." quirk (P02 0x403), P95's fountain copy; event 153 (notes saved) is not kept.
 - **Rooms:** ghost stays drawn after Restsoul until the next hour/re-entry; teleportal pedestal out of reach prints nothing; elden answers 2–6 untested (event 115 has no known setter); casino Talk routing is assumed; Library task days `− research>>4` unverified.
