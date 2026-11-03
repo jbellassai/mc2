@@ -17,7 +17,7 @@ interface Monster { name: string; hp: number; shield: number; weapon: number; ar
   anim: number; leader: number; undead: number }
 interface Weapon { minst: number; basedam: number; type: number; unbreakable: number; stbonus: number; sklbonus: number;
   race: number; hitlist: number[] }
-export interface CombatData { monsters: Monster[]; groups: number[][]; weapons: Weapon[]; setupxy: number[]; maxtbl: number[];
+export interface CombatData { fleedirs: number[][]; monsters: Monster[]; groups: number[][]; weapons: Weapon[]; setupxy: number[]; maxtbl: number[];
   ranges: { x: number[][]; y: number[][] }; guarddiff: number[];
   loot: { thresholds: number[]; items: number[]; amounts: number[][]; an: number[] }; resurrect: string[];
   d06: { autospells: number[]; prefs: number[]; cast: number[]; crit: number[]; crit2: number[]; prey: number[]; counts: number[]; armor: number[]; dodge: number[];
@@ -658,9 +658,11 @@ export class Fight {
     return this.monsterAct(r, text, cast, arm);
   }
 
-  /** P94 ovl_0f32/ovl_10ef: on a flee square the record leaves ("%a flees!", comtxt 0xCA); otherwise it steps toward the
-   *  nearest flee square. (The original heads for the exit opposite the enemies' centroid by a quadrant table, and a
-   *  fleeing leader passes leadership on and may spread panic — not modelled.) */
+  /** P94 ovl_0f32/ovl_10ef: on a flee square the record leaves ("%a flees!", comtxt 0xCA). Otherwise the vector from
+   *  the enemies' centroid (live, `c_state & 0x98` clear; rounded) to the record, + (10, 8), picks a row of V06's
+   *  `_FLEEPTR` table (y < 7 / < 12 / else × x < 8 / < 15 / else): 8 neighbour offsets in order of preference, and the
+   *  record steps to the first with the least path distance (`_blobmap` < 0x70), i.e. the first free one; none → the
+   *  action is spent. No enemy → the record's own square (the middle row). A fleeing monster leader steps down. */
   private fleeStep(r: Rec, text: (n: number, v?: Record<string, string | number>) => string): string[] {
     if (this.flee.has(r.y * W + r.x)) { this.remove(r); return [text(0xca, { a: r.name })]; }
     if (r.state & 4 && r.side) {                                       // P94 0x1028: a fleeing monster leader steps down
@@ -668,11 +670,18 @@ export class Fight {
       if (!next || rnd(2))                                             // panic: the side's others, but bravery 12, drop to 0
         for (const o of this.recs) if (o !== r && o.side === r.side && o.bravery !== 12) o.bravery = 0;
     }
-    const d = this.distances(r.x, r.y, false, r.recno < 6), goal = [...this.flee].sort((a, b) => d[a] - d[b])[0];
-    if (goal === undefined || d[goal] >= 0x7e) { r.moves--; return []; }
-    const g = this.distances(goal % W, Math.floor(goal / W), false, r.recno < 6), here = g[r.y * W + r.x];
-    const steps = [...Array(8).keys()].filter(k => this.free(r.x + DX[k], r.y + DY[k]) && g[(r.y + DY[k]) * W + r.x + DX[k]] < here);
-    if (steps.length) { const k = steps[rnd(steps.length)]; this.move(r, DX[k], DY[k], text); } else r.moves--;
+    const foes = this.recs.filter(o => o.side !== r.side && !(o.state & 0x98) && o.x >= 0);
+    let cx = r.x, cy = r.y;
+    if (foes.length) {
+      const n = foes.length, h = n >> 1;
+      cx = Math.floor((foes.reduce((s, o) => s + o.x, 0) + h) / n); cy = Math.floor((foes.reduce((s, o) => s + o.y, 0) + h) / n);
+    }
+    const vx = r.x + 10 - cx, vy = r.y + 8 - cy, row = this.data.fleedirs[(vy < 7 ? 0 : vy < 12 ? 1 : 2) * 3 + (vx < 8 ? 0 : vx < 15 ? 1 : 2)];
+    for (let j = 0; j < 8; j++) {
+      const dx = row[2 * j], dy = row[2 * j + 1];
+      if (this.free(r.x + dx, r.y + dy)) { this.move(r, dx, dy, text); return []; }
+    }
+    r.moves--;
     return [];
   }
 

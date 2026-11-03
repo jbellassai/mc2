@@ -509,6 +509,8 @@ export async function convert(files: Files, step: (done: number, of: number) => 
       summon: sl(v06, 0x14ae, 0x14ae + 37), destroy: sl(v06, 0x2466, 0x2466 + 37) },
     songs: { instruments: sl(v06, 0x28ff, index(v06, [0], 0x28ff)), races: Array.from({ length: 4 }, (_, k) => sl(v06, 0x4ec + 8 * k, 0x4ee + 8 * k)),
       names: Array.from({ length: 4 }, (_, k) => split(ex(0x4014, 0x4200), 0).slice(8 * k, 8 * k + 2).map(latin1)) },
+    // P94 ovl_0f32 flight: _FLEEPTR = V06 word 7 → 9 offsets (y band × 3 + x band) of 8 signed {dx, dy} preferences
+    fleedirs: Array.from({ length: 9 }, (_, k) => [...v06.subarray(u16(v06, u16(v06, 7) + 2 * k), u16(v06, u16(v06, 7) + 2 * k) + 16)].map(b => b << 24 >> 24)),
     parley: { texts: texts(v06.subarray(u16(v06, 5), 0x45a), 40), kins: texts(ex(0x4084, 0x42ae), 40), attitudes: texts(ex(0x42ae, 0x4320), 8),
       worth: u16s(p96, 0xb3f, 6), rolls: sl(p96, 0xb4b, 0xb5c) },
     maxtbl: list(ex(0x2c7e, 0x2c7e + 120)),
