@@ -163,7 +163,14 @@ async function main() {
     if (clock.hour === 0) {                                             // P92 ovl_01cd, the new day's events
       if (disasterday && clock.juldate - disasterday === 7) events.add(1);   // the White Scroll's disaster
       if (clock.juldate === 20) events.add(114);
+      for (const { hero: { rec: h } } of party.members.slice(1))         // P92 ovl_02ed: volunteers warm up, to 100
+        if (h.h_relatn === 1 && (h.h_attitude as number) < 100) h.h_attitude = (h.h_attitude as number) + 1;
       if (clock.date === 1 && clock.month === 9) events.add(27);       // month 9 begins (Ziyx's Book of Emenad)
+      if (clock.date === 1) {                                           // P92 ovl_0265: one season event (file 0x259), the weather table
+        for (const e of [9, 10, 11, 12]) events.delete(e);
+        events.add([12, 12, 9, 9, 9, 10, 10, 10, 11, 11, 11, 12][clock.month]);
+        if (level.loc.kind === 'world' && !patch) world.season(clock);
+      }
     }
     if (clock.hour === 0 && world.ships.daily()) for (const m of party.members) m.hero.rec.h_gold = 0;   // Amos (P92 ovl_0447)
     party.hunger(tables.hungerhours);
@@ -416,7 +423,14 @@ async function main() {
       panel.set(talkButtons(), word => {
         panel.line(`> ${word}`, 'you');
         const r = t.ask(word);
-        if (r.end) end(); else speak(r.text);
+        if (r.end) return end();
+        speak(r.text);
+        if (r.song !== undefined) {   // P91 ovl_0c57: everyone learns h_songs[s >> 3] bit s & 7; _CalUpd1 ×2 + _CalUpd = 15 minutes
+          const k = r.song >> 3, n = r.song & 7;
+          for (const l of t.performance(items[cdata.songs.instruments[k]], cdata.songs.names[k][n], party.members.length === 1)) panel.line(l);
+          for (const m of party.members) (m.hero.rec.h_songs as unknown as number[])[k] |= 1 << n;
+          tick(); tick(); tick();
+        }
       }, 'Ask about… (type a word, Enter)');
     }
     panel.show();
@@ -1308,8 +1322,20 @@ async function main() {
   const endFight = () => {
     const won = fight!.outcome() === 1, next = afterWin;
     afterWin = null; fightRoom = null;
-    if (won && next) { next(); fight = null; close(); return; }
-    level = outside!.level; party.place(outside!.x, outside!.y); outside = null; fight = null; close();
+    // P95 ovl_0fc0 after a won fight (_endcmbt < 2; 4 counts as 1): each surviving volunteer's attitude += loyalty − 20
+    // (at least 0); at ≤ 40 they leave when RndCo(80) ≥ attitude and RndCo(12) ≥ loyalty: "%a has fled." (comtxt 0x10D)
+    const gone: Member[] = [];
+    if (won) for (const r of fight!.recs) {
+      const m = party.members.find(p => p.hero === r.hero), h = m?.hero.rec;
+      if (!m || !h || r.state & 0x88 || h.h_relatn !== 1) continue;
+      const att = h.h_attitude = Math.max(0, (h.h_attitude as number) + (h.h_loyalty as number) - 20);
+      if (att <= 40 && rnd(80) >= att && rnd(12) >= (h.h_loyalty as number)) gone.push(m);
+    }
+    if (won && next) next();   // places the members by their fight records, so the leavers go after it
+    else { level = outside!.level; party.place(outside!.x, outside!.y); outside = null; }
+    for (const m of gone) { party.partyEvents(events, p97.events, m.num, false); party.remove(m); }
+    if (gone.length) figures = people();
+    fight = null; close(gone.map(m => comtxt[0x10d].replace('%a', m.hero.name)).join(' '));
   };
 
   // ---- dungeon rooms (rules/locations.md, Doors into dungeon rooms; P07) ----

@@ -5,16 +5,14 @@ What the original does that the web port does not, by area, judged from `docs/ru
 closed; delete a row rather than marking it done.
 
 Fixed during the audit: **events 31/32** (the Slow Death decoy rooms, V02 `INT60_12`) were never set, so Zidoni could
-not be freed and the game could not be finished (`rules/locations.md`, Dark Candle rooms).
+not be freed and the game could not be finished (`rules/locations.md`, Dark Candle rooms). Fixed after it: the
+key-NPC talk events (P91 `ovl_05af`, which gate the Dorak guides' chain), the season events and the month's weather
+table (P92 `ovl_0265`), songs taught in conversation (P91 `ovl_0c57`), volunteer morale (P95 `ovl_0fc0`, P92 `ovl_02ed`).
 
 ## Gaps that change play
 
 | gap | original | note |
 |---|---|---|
-| Key-NPC talk events never set | P91 `ovl_05af` (table @0x16/@0x20): NPC 113→24, 164→38, 168→50, 169→53, 170→56, 172→60, 163→79, 171→82, 21→95, 175→100 | `rules/dialogue.md`; dialogue and placements gated on them stay locked |
-| Season events 9–12 never rotate | P92 `ovl_0265` (month change) | event 10 (summer) set forever: Shumaran never moves |
-| NPCs never teach songs | P91 script `'S'` (`h_songs` bit, +15 min) | parsed in `talk.ts`, never executed |
-| Volunteer morale | P95 `ovl_0fc0` (after combat: +loyalty−20, may leave ≤ 40); P92 `ovl_02ed` (+1 daily) | volunteers never sour, desert or warm up |
 | Auto-heroes never cast | P94 `ovl_157b`/`ovl_1553` | Head/Will heroes with no target step at random |
 | Map command / Map Flask (Pearl) | P02 `ovl_13c4` | no minimap |
 | Notepad | P70 (`NOTES000.MCN`, event byte 19 0x2) | |
@@ -25,7 +23,7 @@ not be freed and the game could not be finished (`rules/locations.md`, Dark Cand
 
 ## Smaller differences
 
-- **World:** season weather table not re-copied at a new month (only on region change); captain countdown and Amos's theft run at midnight instead of 08:00 / 07:00, and Amos zeroes `h_gold` instead of taking Coin items; event bit 0 (day/night) never set; `mflags[month]` untraced and unported; Teleport doesn't highlight valid squares; Assign is on the sheet, not Talk (Dismiss too).
+- **World:** captain countdown and Amos's theft run at midnight instead of 08:00 / 07:00, and Amos zeroes `h_gold` instead of taking Coin items; event bit 0 (day/night) never set; Teleport doesn't highlight valid squares; Assign is on the sheet, not Talk (Dismiss too).
 - **Combat AI:** monsters cast without spending energy, never Restsoul undead, never re-arm (D06 ptr12), "magic-user" criterion never matches (`c_magicused` untracked); flee has no leader handover or panic spread; a hit does not clear the routed bit 0x40; bump-attack also with a bow; no friendly-fire prompt; target-on-death event (P06 `ovl_0cde` step 6) untraced; Head asks no speed digit.
 - **Spells:** Drain on a hero only lowers the combat record; Forget on a monster keeps its spell; Assess uses the port's own text; See plays one sound (original 10 then 9), Confuse/Locate one (original three).
 - **Talk:** location default greeting/farewell (loc+60/+61) skipped; `_met` not kept (elven prince); `%k` dropped.

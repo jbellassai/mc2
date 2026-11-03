@@ -426,7 +426,8 @@ export async function convert(files: Files, step: (done: number, of: number) => 
     events: Object.fromEntries(list(p97.subarray(0x68e, 0x69d)).map((c, i) => [String(c), p97[0x69d + i]])) });
   const p91 = need('P91.MCO'), end = index(p91, [0xff], 0x48), pairs = p91.subarray(0x48, end);
   dump('p91text.json', { lines: texts(p91.subarray(end + 1, 0x2e0), 16),
-    weather: Array.from({ length: pairs.length >> 1 }, (_, i) => [pairs[2 * i], pairs[2 * i + 1]]) });
+    weather: Array.from({ length: pairs.length >> 1 }, (_, i) => [pairs[2 * i], pairs[2 * i + 1]]),
+    song: texts(p91.subarray(0xb9a, 0xc57), 6) });   // ovl_0c57, script 'S'
   const p01 = need('P01.MCO'), s8 = (o: number, n: number) => list(p01.subarray(o, o + n)).map(sb);
   dump('p01.json', { terraintime: list(p01.subarray(0x276, 0x284)), weathertime: s8(0x280, 12), terrainenergy: list(p01.subarray(0x298, 0x2a6)),
     swimweather: list(p01.subarray(0x2f6, 0x302)),

@@ -4,11 +4,12 @@ import { sfx } from './sound';
 import type { Figure } from './level';
 
 interface Cmd { op: 'E' | 'C' | 'S'; arg?: number; alt?: number; song?: number }
+const KEY_NPCS = [113, 164, 168, 169, 170, 172, 163, 171, 21, 175], KEY_EVENTS = [24, 38, 50, 53, 56, 60, 79, 82, 95, 100];
 interface Entry { word: number; resp: number; cmds: Cmd[] }
 interface Slot { script: Entry[]; greet: number; bye: number; unknown: number; skill: number; nobuy: number; shop: { item: number; pays: number; charges: number }[];
   gifts: { item: number; min: number; fewer: number; enough: number; event: number }[] }
 interface Conversation { texts: string[]; words: string[]; slots: Slot[] }
-interface SmallTalk { lines: string[]; weather: [number, number][] }
+interface SmallTalk { lines: string[]; weather: [number, number][]; song: string[] }
 
 /** What conversations need to know about the speaker's side. */
 export interface Speaker { readonly name: string; readonly female: boolean; readonly charm: number }
@@ -70,7 +71,8 @@ export class Talk {
 
   /** ovl_045d: the slot's greet text, else "Well met, adventurer. My name is <name>." (common texts 0x17, 0x19, 0x10). */
   greeting(): string {
-    const s = this.slot;
+    const s = this.slot, k = KEY_NPCS.indexOf(this.who.num);
+    if (k >= 0) this.events.add(KEY_EVENTS[k]);                      // ovl_05af: talking to a key NPC (P91 0x16/0x20)
     if (s && s.greet !== 0xff) return this.say(this.conv!.texts[s.greet]);
     return this.say(this.comtxt[0x17] + (this.name ? this.comtxt[0x19] + this.name + this.comtxt[0x10] : ''));
   }
@@ -81,7 +83,7 @@ export class Talk {
   }
 
   /** ovl_05e2: find the typed word's entry, apply E/C/S commands, print the response; no entry → ovl_0a08 (its reply and sound 14). */
-  ask(typed: string): { text: string; end: boolean } {
+  ask(typed: string): { text: string; end: boolean; song?: number } {
     const words = this.conv ? this.conv.words : this.loc.words;
     const texts = this.conv ? this.conv.texts : this.loc.texts;
     const script = this.slot ? this.slot.script : this.loc.script;
@@ -98,8 +100,15 @@ export class Talk {
       if (c.op === 'E' && !this.events.has(c.arg!)) resp = c.alt!;
       // P91 0x79E: charm + _tailorcharm (a byte) against need − _chrmods[slot]; _chrmods is only ever cleared (_Tobo)
       if (c.op === 'C' && ((this.hero.charm + this.tailor) & 0xff) < c.arg!) { resp = c.alt!; extra = '\n' + this.small.lines[15]; }   // dialogue.md
+      if (c.op === 'S') return { text: this.say(texts[resp] + extra), end: false, song: c.song };   // P91 0x7EE: ends the script
     }
     return { text: this.say(texts[resp] + extra), end: false };
+  }
+
+  /** P91 ovl_0c57 (script 'S'): the performance after the reply - texts 0, 1|3 (one member | party), 2|4, 5. */
+  performance(instrument: string, song: string, alone: boolean): string[] {
+    const t = (n: number) => format(this.small.song[n], this.hero, this.name, { l: instrument, f: song });
+    return [(t(0) + t(alone ? 1 : 3)).trim(), t(alone ? 2 : 4), t(5)];
   }
 
   /** Menu item 1: a random small-talk line for the current weather (P91 pairs at file 0x48). */

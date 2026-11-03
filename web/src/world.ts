@@ -45,7 +45,11 @@ export class World {
     if (r === this.region) { this.rec ??= await json<Location>(`locations/R${32 + r}.json`); return; }   // same region: no copy
     this.region = r;
     this.rec = await json<Location>(`locations/R${32 + r}.json`);
-    this.ssn = [...hex(this.rec.tables.weathr).slice(12 * SEASON[clock.month], 12 * SEASON[clock.month] + 12)];
+    this.season(clock);
+  }
+  /** Copies the region's weather table for the month's season (also P92 ovl_0265 at a new month on the world map). */
+  season(clock: Clock) {
+    if (this.rec) this.ssn = [...hex(this.rec.tables.weathr).slice(12 * SEASON[clock.month], 12 * SEASON[clock.month] + 12)];
   }
 
   /** P01 ovl_0c28 / ovl_0c64: the region's spot at (x, y), `LOCSPOT{x, y, pgmidx, rmid, type, wx, wy, ev, text, icon}`

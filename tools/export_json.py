@@ -302,7 +302,8 @@ def main(src, dst):
     p91 = open(f'{src}/P91.MCO', 'rb').read()   # small talk: {weather, line} pairs at 0x48, 0xFF, then the lines
     end = p91.index(0xFF, 0x48); pairs = p91[0x48:end]
     dump(f'{dst}/p91text.json', {'lines': [x.decode('latin1') for x in p91[end + 1:0x2E0].split(b'\0')[:16]],
-                                  'weather': [[pairs[i], pairs[i + 1]] for i in range(0, len(pairs) - 1, 2)]})
+                                  'weather': [[pairs[i], pairs[i + 1]] for i in range(0, len(pairs) - 1, 2)],
+                                  'song': [x.decode('latin1') for x in p91[0xB9A:0xC57].split(b'\0')[:6]]})   # ovl_0c57, script 'S'
     p01 = open(f'{src}/P01.MCO', 'rb').read()   # world map (rules/time_weather.md, World-map step cost; locations.md, World map)
     s8 = lambda o, n: [b - 256 if b > 127 else b for b in p01[o:o + n]]
     # terraintime / terrainenergy run to 14 entries: a swimmer's step indexes them with river 12 / water 13 and reads the
