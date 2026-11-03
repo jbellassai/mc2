@@ -41,13 +41,14 @@ export function format(s: string, hero: Speaker, other: string, vars: Record<str
 export class Talk {
   private constructor(private loc: Location, private who: Figure, private hero: Speaker, private events: Set<number>,
                       private comtxt: string[], private small: SmallTalk, private conv: Conversation | null,
-                      private tailor: number) {}
+                      private tailor: number, private met: Set<number>) {}
 
-  static async open(loc: Location, who: Figure, hero: Speaker, events: Set<number>, tailor = 0): Promise<Talk> {
+  /** `met` is `_met`, the named people already greeted (FFFAR FAR_GREETKNPC: _FirstMeet or _SecondMeet). */
+  static async open(loc: Location, who: Figure, hero: Speaker, events: Set<number>, tailor: number, met: Set<number>): Promise<Talk> {
     const [comtxt, small] = await Promise.all([json<string[]>('comtxt.json'), json<SmallTalk>('p91text.json')]);
     const named = who.num < 0xfa;
     const conv = named ? await json<Conversation>(`conversations/C${String(who.num >> 3).padStart(2, '0')}.json`) : null;
-    return new Talk(loc, who, hero, events, comtxt, small, conv, tailor);
+    return new Talk(loc, who, hero, events, comtxt, small, conv, tailor, met);
   }
 
   /** The notetaking level of the last greeting or answer (rules/notepad.md: P91 0x4D1/0x53D/0x834/0x88D/0xA56, FFFAR 0x2F49). */
@@ -71,18 +72,28 @@ export class Talk {
     return this.say(this.conv!.texts[ok ? g.enough : g.fewer]);
   }
 
-  /** ovl_045d: the slot's greet text, else "Well met, adventurer. My name is <name>." (common texts 0x17, 0x19, 0x10). */
+  /** A named person (FFFAR FAR_GREETKNPC by `_met`). The first meeting (P91 ovl_045d) marks `_met`, sets a key NPC's
+   *  event (ovl_05af) and says the slot's first greet byte, else the location's `loc+60` text, else "Well met,
+   *  adventurer. My name is <name>." (comtxt 0x17, 0x19, 0x10). A later one (ovl_0546, `_SecondMeet`) says the second
+   *  byte (`bye` in the pack) when both bytes are set, else `loc+61`, else "Greetings, %h, it's good to see you
+   *  again." (0x18). There is no farewell. Townsfolk (FFFAR FAR_GREET): `loc+59`, else 0x17. */
   greeting(): string {
-    const s = this.slot, k = KEY_NPCS.indexOf(this.who.num);
+    const s = this.slot, n = this.who.num, lt = (i: number) => this.say(this.loc.texts[i] ?? '');
+    this.level = 1;
+    if (!s) { this.level = 3; return this.loc.greet[0] !== 0xff ? lt(this.loc.greet[0]) : this.say(this.comtxt[0x17]); }
+    if (this.met.has(n)) {
+      if (s.greet !== 0xff && s.bye !== 0xff) return this.say(this.conv!.texts[s.bye]);
+      if (this.loc.greet[2] !== 0xff) return lt(this.loc.greet[2]);
+      this.level = 3;
+      return this.say(this.comtxt[0x18]);
+    }
+    this.met.add(n);
+    const k = KEY_NPCS.indexOf(n);
     if (k >= 0) this.events.add(KEY_EVENTS[k]);                      // ovl_05af: talking to a key NPC (P91 0x16/0x20)
-    this.level = s ? (s.greet !== 0xff ? 1 : 2) : 3;
-    if (s && s.greet !== 0xff) return this.say(this.conv!.texts[s.greet]);
+    if (s.greet !== 0xff) return this.say(this.conv!.texts[s.greet]);
+    if (this.loc.greet[1] !== 0xff) return lt(this.loc.greet[1]);
+    this.level = 2;
     return this.say(this.comtxt[0x17] + (this.name ? this.comtxt[0x19] + this.name + this.comtxt[0x10] : ''));
-  }
-
-  farewell(): string | null {
-    const s = this.slot;
-    return s && s.bye !== 0xff ? this.say(this.conv!.texts[s.bye]) : null;
   }
 
   /** ovl_05e2: find the typed word's entry, apply E/C/S commands, print the response; no entry → ovl_0a08 (its reply and sound 14). */

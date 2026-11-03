@@ -43,7 +43,7 @@
 //                unique but 251 (D65, D93), so bit 251 maps to both; their group-0xCA stand-in is id 0xFC (P02 0x947).
 //                A bit no pack level has an HROOM (or treasure group, for _chests) for is dropped by fromDos
 //  M _ambush     ambushed, bit = ambush id (spot d2)
-//  C _met        NPCs met (FFFAR FirstMeet/SecondMeet, P91 ovl_045d); not modelled by the port: greeting texts only
+//  M _met        met: named people greeted before (FFFAR FirstMeet/SecondMeet, P91 ovl_045d/ovl_0546)
 //  M _chests     chests 'Dnn:g', bit = treasure group g (spot d2; groups are unique across levels)
 //  M _grdsta _ptrlsta _ptrleng _lastgen _ptrlxy  world.cleared/dead/engaged/lastgen/ptrl (encounters.md Patrols)
 //  M _mushsta    patches.left, a nibble per patch, even id high (locations.md Mushroom patches); bytes 15-19 carried
@@ -84,7 +84,7 @@ export type DosSnapshot = {
     dead: number[]; engaged: number[]; lastgen: number[]; seg: number;
     ships: { sta: number[]; days: number[]; x: number[]; y: number[]; cur: number };
   };
-  patches: number[]; dunrms: string[]; duntre: string[]; chests: string[]; ambushed: number[]; rent: number[];
+  patches: number[]; dunrms: string[]; duntre: string[]; chests: string[]; ambushed: number[]; met?: number[]; rent: number[];
   walk: number[]; casino: number[]; gates: number[]; detect: number; snakes: [string, number, number, number][];
   scroll: number; disasterday: number; vankruhxy: [number, number]; assigns: (Rec | null)[]; wild: { x: number; y: number };
   been: number; disguise: number;
@@ -286,7 +286,7 @@ export async function fromDos(b: Uint8Array, load: Load): Promise<DosSnapshot> {
       ships: { sta: [...b.subarray(O._capsta, O._capsta + 6)], days: [...b.subarray(O._capdays, O._capdays + 6)],
         x: [...b.subarray(O._boatx, O._boatx + 6)], y: [...b.subarray(O._boaty, O._boaty + 6)], cur: at('_curcap') === 0xff ? -1 : at('_curcap') },
     },
-    patches: mush, dunrms: await dunkeys('_dunrms'), duntre: await dunkeys('_duntre'), chests, ambushed: bits(b, O._ambush, 256),
+    patches: mush, dunrms: await dunkeys('_dunrms'), duntre: await dunkeys('_duntre'), chests, ambushed: bits(b, O._ambush, 256), met: bits(b, O._met, 256),
     rent: [...b.subarray(O._rents, O._rents + 8)], walk: [0, 0], casino: Array.from({ length: 8 }, (_, i) => w('_casino', i)),
     gates: bits(b, O._dnggates, 8), detect: w('_detectsw'), snakes, scroll: at('_scrollonfloor'), disasterday: w('_disasterday'),
     vankruhxy: [0, 0], assigns, wild: { x: at('_wildx'), y: at('_wildy') }, been: w('_beenflg'), disguise: w('_indisguise'),
@@ -362,6 +362,7 @@ export async function toDos(sv: DosSnapshot, template: Uint8Array, load: Load): 
   const ids = (keys: string[]) => keys.map(k => Number(k.split(':')[1]));
   putBits(d, O._dunrms, 256, ids(sv.dunrms)); putBits(d, O._duntre, 256, ids(sv.duntre)); putBits(d, O._chests, 256, ids(sv.chests));
   putBits(d, O._ambush, 256, sv.ambushed);
+  if (sv.met) putBits(d, O._met, 256, sv.met);
   putBits(d, O._dnggates, 8, sv.gates);
   for (let i = 0; i < 15; i++) set('_mushsta', (sv.patches[2 * i] & 15) << 4 | sv.patches[2 * i + 1] & 15, i);
   sv.rent.slice(0, 8).forEach((r, i) => set('_rents', r, i));

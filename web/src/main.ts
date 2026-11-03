@@ -250,8 +250,10 @@ async function main() {
     speaker = null;
     if (!(who.num < 0x20 && assigns.get(who.num)) && armed(by.hero)) return;
     const prince = special?.greet(who.num, by.hero);
+    if (prince && events.has(4)) met.add(who.num);                     // P09 ovl_0611: the elf greets - `_met[113]`
     if (prince) { panel.show(); panel.line(`${who.name}: ${prince}`); return void panel.set([{ label: cmd[0], act: () => close() }]); }
     const opening = scene?.greet(who, by);
+    if (opening?.leave) met.add(who.num);                               // the Altesen priest: `_met[158]` (P08)
     if (opening?.leave) { await leave(level.loc.exits[0]); message = opening.text; return render(); }   // the priest sends the party out
     if (!opening && who.num < 0xfa && level.loc.kind === 'room' && by !== party.members[0]) {
       // P91 ovl_0a95: in a room program (_curmpg > 2) a member other than the player (_curpla ≠ 0) gets the room's remark
@@ -261,10 +263,10 @@ async function main() {
     }
     if (who.num >= 0xfa && ((by.hero.rec.h_charm as number) + party.tailorcharm & 0xff) < level.loc.lcharm)   // FFFAR 0x3245 → ovl_308e
       return close(noted(1, format(comtxt[0x13] + npctypes[who.type] + comtxt[0x14] + comtxt[0x16].replace('%b', String(level.loc.lcharm)), by.hero, '')));
-    const t = await Talk.open(level.loc, who, by.hero, events, party.tailorcharm);
+    const t = await Talk.open(level.loc, who, by.hero, events, party.tailorcharm, met);
     const speak = (s: string) => panel.line(`${who.name ? who.name + ': ' : ''}${s}`);
     const said = (lvl: number, s: string) => { speak(s); note(lvl, `${who.name ? who.name + ': ' : ''}${s}`); };
-    const end = () => { const bye = t.farewell(); close(bye ? `${who.name}: ${bye}` : ''); };
+    const end = () => close();                                          // FFFAR: no farewell
     await loadTrade();
     const coins = (n: number) => `${n} ${comtxt[0xb1]}`;
     const pouch = (item: number) => lot(item) > 1 ? comtxt[0xb2].replace('%b', String(lot(item))) : '';
@@ -1760,6 +1762,7 @@ async function main() {
   // ---- special spots (rules/locations.md, Special spots; P02 ovl_189d/ovl_151a) ----
   const spotTables = await json<{ ambush: { ids: number[]; events: number[] }; remarks: { ids: number[]; events: number[]; locspecs: number[] } }>('spots.json');
   const ambushed = new Set<number>();                                 // `_ambush` bits by ambush id
+  const met = new Set<number>();                                      // `_met`: named people greeted before (talk.ts)
   let spotsDone = new Set<number>(), spotsLevel = '';                 // `_spetbldone`, kept while on the same level
   /** After a step (P02 ovl_189d): the party's 3×3 formation box, window + (4..6, 3..5) = the leader + (0..2, 0..2),
    *  rows from the bottom, squares from the right; the first record per square (ovl_1926). */
@@ -2415,7 +2418,7 @@ async function main() {
     clock: { minute: clock.minute, hour: clock.hour, date: clock.date, month: clock.month, weather: clock.weather, juldate: clock.juldate },
     events: [...events], party: party.snapshot(), level: { id: level.id, ts: level.tileset }, at: { x: lead.x, y: lead.y },
     world: world.snapshot(), patches: [...patches.left], dunrms: [...dunrms], duntre: [...duntre], chests: [...chests],
-    ambushed: [...ambushed], rent: [...rent], walk: [walkSteps, walkTicks], casino: [...casino], gates: [...gates],
+    ambushed: [...ambushed], met: [...met], rent: [...rent], walk: [walkSteps, walkTicks], casino: [...casino], gates: [...gates],
     detect, snakes: snakes.map(r => [...r] as [string, number, number, number]), scroll: scroll.item, disasterday, vankruhxy,
     assigns: assigns.snapshot(), wild: wildAt, been, disguise,
   });
@@ -2429,6 +2432,7 @@ async function main() {
     patches.left.splice(0, patches.left.length, ...sv.patches);
     for (const [set, vals] of [[dunrms, sv.dunrms], [duntre, sv.duntre], [chests, sv.chests]] as [Set<string>, string[]][]) { set.clear(); vals.forEach(v => set.add(v)); }
     ambushed.clear(); sv.ambushed.forEach(v => ambushed.add(v));
+    met.clear(); (sv.met ?? []).forEach(v => met.add(v));
     rent.splice(0, rent.length, ...sv.rent);
     casino.splice(0, 8, ...(sv.casino ?? casino.map(() => 1000)));
     gates.clear(); (sv.gates ?? []).forEach(g => gates.add(g));

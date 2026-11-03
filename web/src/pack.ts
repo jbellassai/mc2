@@ -21,6 +21,8 @@ export interface Location {
   mapsize: [number, number];
   doorstn: number;
   pearlsw: number;
+  /** loc+59..61: townsfolk greeting, first and second meeting texts (loctext indexes, 0xFF none; dialogue.md). */
+  greet: number[];
   blocks: Block[];
   words: string[];
   texts: string[];
