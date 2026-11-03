@@ -21,6 +21,8 @@ import { Fight, type Arm, type Rec } from './combat';
 import { Chamber } from './chamber';
 import { newGame, landed } from './newgame';
 import { BUILT, cost as spellCost, effect, targets as spellTargets } from './spells';
+/** `_offense` = 1 (V06 handlers: Fear, Shatter, Fireball, Weaken, Freeze, Drain, Betray, Forget, Acidball). */
+const OFFENSE = new Set([0, 2, 6, 9, 11, 27, 30, 36, 37]);
 import { sfx, song, audio, saveAudio, audible } from './sound';
 import { TOOLS } from './env';
 import { Fx, FX } from './fx';
@@ -1069,11 +1071,19 @@ async function main() {
     for (const l of s.lines) panel.line(l);
     fx.play(FX.bang(s.at));
   };
-  /** Attack: the enemies in reach (adjacent, or any with a bow); choosing one strikes it. */
+  /** P06 0x60B: a hero (not on auto) marking someone of the party's side - for an attack, or a spell with `_offense` -
+   *  is asked "Are you sure?" (comtxt 0xD6); No marks again, Yes goes on. */
+  const sure = (yes: () => void, again: () => void) => {
+    panel.line(comtxt[0xd6]);
+    panel.set([{ label: cmd[3], act: yes }, { label: cmd[4], act: again }]);
+  };
+  const allies = (a: Rec, ok: (t: Rec) => boolean) => fight!.recs.filter(t => t !== a && t.side === a.side && fight!.visible(t) && ok(t));
+  /** Attack: anyone in reach (adjacent, or any with a bow) - the enemies, then the party's side behind `sure`. */
   const aim = () => {
-    const a = actor!, foes = fight!.enemies(a).filter(t => fight!.reach(a, t));
-    if (!foes.length) { panel.line(ctext(0x0d)); return; }                 // "Mark the target."
-    panel.set([...foes.map(t => ({ label: `${t.name} (${t.x},${t.y})`, act: () => strike(t) })), { label: cmd[0], act: partyTurn }]);
+    const a = actor!, foes = fight!.enemies(a).filter(t => fight!.reach(a, t)), own = allies(a, t => fight!.reach(a, t));
+    if (!foes.length && !own.length) { panel.line(ctext(0x0d)); return; }   // "Mark the target."
+    panel.set([...foes.map(t => ({ label: `${t.name} (${t.x},${t.y})`, act: () => strike(t) })),
+      ...own.map(t => ({ label: `${t.name} (${t.x},${t.y})`, act: () => sure(() => strike(t), aim) })), { label: cmd[0], act: partyTurn }]);
   };
   const strike = (t: Rec) => { report(fight!.attack(actor!, t, ctext)); partyTurn(); };
   /** Use in combat (P94 `_mnusel` 0x2B → _UseItem for the acting member): the consumables' handlers, synced onto the
@@ -1194,7 +1204,10 @@ async function main() {
     // Jump (V06 INT61_16): "Mark who jumps." (0x111), then "Jumps where?" (0x65) on the map; Escape gives up the cast
     const pick = (t: Rec) => sp !== 24 ? go(t) : (panel.set([]), mark(comtxt[0x65], (x, y) => go(t, { x, y }), partyTurn));
     if (sp === 24) panel.line(comtxt[0x111]);
-    panel.set([...pool.map(t => ({ label: `${t.name} (${t.x},${t.y})`, act: () => pick(t) })), { label: cmd[0], act: partyTurn }]);
+    const own = OFFENSE.has(sp) ? allies(a, () => true) : [];           // V06 handlers that set `_offense` 1
+    const choose = () => panel.set([...pool.map(t => ({ label: `${t.name} (${t.x},${t.y})`, act: () => pick(t) })),
+      ...own.map(t => ({ label: `${t.name} (${t.x},${t.y})`, act: () => sure(() => pick(t), choose) })), { label: cmd[0], act: partyTurn }]);
+    choose();
   };
   /** Draw (_DrawWeap): a weapon 9-0x1E from the pack; refused for another race (comtxt 0x103), broken (0x39) or too
    *  heavy (0x69). Takes no action. */

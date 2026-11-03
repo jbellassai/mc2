@@ -266,6 +266,15 @@ export class Fight {
   flee = new Set<number>();
 
   /** Off the board: a fled hero (P94 ovl_01ad) or monster (ovl_10ef): `c_state |= 0x10`, position −1. */
+  /** A monster leader dead (P06 0xF64) or fleeing (P94 0x1028) gives up `c_state` 4 and P94 ovl_1089 makes the first
+   *  live record of its side and race (`c_state & 0xF9`, `c_health & 0xF0` clear) the leader. Returns it. */
+  succeed(r: Rec): Rec | undefined {
+    if (!(r.state & 4) || !r.side) return undefined;
+    r.state &= ~4;
+    const next = this.recs.find(o => o !== r && o.side && o.race === r.race && !(o.state & 0xf9) && !(o.health & 0xf0));
+    if (next) next.state |= 4;
+    return next;
+  }
   remove(r: Rec) { r.state |= 0x10; r.x = r.y = -1; r.moves = 0; for (const o of this.recs) if (o.target === r.recno) o.target = NONE; }
 
   /** P95 ovl_08f6, after a won fight, for every slain monster (not fled or removed): a coin flip; heads 5-10 Coins,
@@ -367,7 +376,7 @@ export class Fight {
     t.shield -= Math.min(n, shield);
     t.hp -= dam;
     let result = 1;
-    if (t.hp <= 0) { t.hp = 0; result = 0xff; t.state |= 0x80; for (const r of this.recs) if (r.target === t.recno) r.target = NONE; }
+    if (t.hp <= 0) { t.hp = 0; result = 0xff; t.state |= 0x80; this.succeed(t); for (const r of this.recs) if (r.target === t.recno) r.target = NONE; }
     else if (dam > 0 && !(t.health & 1) && t.race !== 28 && (c.wskl >> 3) + c.dex > rnd(100)) {
       result = 2; t.health |= 1; t.agi = 0; t.dex = 0;
       if (t.hero) t.hero.rec.h_cond1 = (t.hero.rec.h_cond1 as number) | 1;
@@ -534,7 +543,7 @@ export class Fight {
       const dam = nift ? 0 : Math.max(0, hit - t.armor);
       t.hp -= dam;
       result = 1;
-      if (t.hp <= 0) { t.hp = 0; result = 0xff; t.state |= 0x80; }
+      if (t.hp <= 0) { t.hp = 0; result = 0xff; t.state |= 0x80; this.succeed(t); }
       else if (dam > 0 && !(t.health & 1) && t.race !== 28 && (a.wskl >> 3) + a.dex > rnd(100)) {
         result = 2; t.health |= 1; t.agi = 0; t.dex = 0; t.moves = Math.min(t.moves, 1);   // knocked down
         if (t.hero) t.hero.rec.h_cond1 = (t.hero.rec.h_cond1 as number) | 1;              // Wounded
@@ -625,9 +634,7 @@ export class Fight {
   private fleeStep(r: Rec, text: (n: number, v?: Record<string, string | number>) => string): string[] {
     if (this.flee.has(r.y * W + r.x)) { this.remove(r); return [text(0xca, { a: r.name })]; }
     if (r.state & 4 && r.side) {                                       // P94 0x1028: a fleeing monster leader steps down
-      r.state &= ~4;
-      const next = this.recs.find(o => o !== r && o.side && o.race === r.race && !(o.state & 0xf9) && !(o.health & 0xf0));   // ovl_1089
-      if (next) next.state |= 4;
+      const next = this.succeed(r);
       if (!next || rnd(2))                                             // panic: the side's others, but bravery 12, drop to 0
         for (const o of this.recs) if (o !== r && o.side === r.side && o.bravery !== 12) o.bravery = 0;
     }

@@ -25,7 +25,9 @@ All percentage rolls are `_RndCo(100)` = uniform 0‥99 (`ovl_04af` is `RndCo(AX
    ```
 4. **Shield spell on a hero target**: if `c_renspl3` (+29, remaining shield charges) > 0 it is decremented, the blow does **0 damage** (`G_SWNIFT=1`); when it reaches 0 the hero's shield flag (`HERO+0xA5 & 0x40`) clears.
 5. **Armour**: `DAM = max(0, HIT − c_armor(+16))`.
-6. **Apply**: 16-bit HP at +10 `−= DAM`. If ≤ 0: `ARESULT=0xFF`, HP=0, `c_state |= 0x80` (dead); a target with `c_alignmnt != 0` and `c_state & 4` triggers a cross-overlay death event.
+6. **Apply**: 16-bit HP at +10 `−= DAM`. If ≤ 0: `ARESULT=0xFF`, HP=0, `c_state |= 0x80` (dead); a target with `c_alignmnt != 0` and `c_state & 4` (a monster leader) loses the leader bit and P06 0xF77 calls `_LocPgm` entry +6 = P94 `ovl_1089` with its race: the first live monster of that race becomes the leader (no panic, unlike a fleeing leader). Port: `combat.ts` *succeed*.
+
+**Friendly fire** (P06 0x60B, in the target selection): when the attacker and the marked record are both on the party side (`c_alignmnt` 0), the hero is not on auto (`_swauto`), and it is an attack or a spell whose V06 handler set `_offense` = 1 (Fear, Shatter, Fireball, Weaken, Freeze, Drain, Betray, Forget, Acidball; every other handler sets 0), "Are you sure?" (comtxt 0xD6, `_SetYN`): No marks again, Yes goes on. Port: party members are offered after the enemies, behind that question (`main.ts` *sure*).
 7. **Knockdown** (only on a real hit with DAM > 0, target not already down (`c_health & 1`), target race ≠ 28 (Vankruh), attacker not casting):
    ```
    if c_wpnskl(attacker)/8 + c_dext(attacker) > RndCo(100):  ARESULT=2,
