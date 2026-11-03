@@ -11,7 +11,7 @@ export interface Ghost { x: number; y: number; num: number; tile: number; shown:
   sheet?: 'E01' }   // E01: a monster's combat tile `tile`
 /** `hide`: squares whose figure is not drawn while it dissolves in. */
 /** `fill`: the 11×9 window cleared to an EGA colour. */
-export interface Overlay { icons: Icon[]; tints: Tint[]; invert: boolean; ghosts?: Ghost[]; hide?: At[]; fill?: number }
+export interface Overlay { icons: Icon[]; tints: Tint[]; invert: boolean; ghosts?: Ghost[]; hide?: At[]; fill?: number; lit?: At[] }
 export interface Frame extends Partial<Overlay> { ms: number; sound?: number }
 type At = { x: number; y: number };
 

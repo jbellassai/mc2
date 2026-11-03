@@ -17,7 +17,7 @@ None known (2026-11-03). The last four (auto-hero casting, the Map, the notepad,
 ## Smaller differences
 
 - **Acting member:** the menus where `_Parser` allows the switch (`_chpmens` = menus 5, 10, 12, 13, 16, 21, 22) are approximated as "no panel open" (plus the aftermath screen, assumed); P07/P08 rooms move `_curpla` like P05 (assumed).
-- **World:** Teleport doesn't highlight valid squares; Assign and Dismiss are also on the sheet (the original: Talk only).
+- **World:** Assign and Dismiss are also on the sheet (the original: Talk only).
 - **Combat AI:** Head asks no speed digit.
 - **Spells:** Assess uses the port's own text; See plays sound 10 only (the original's 9 comes with its `_MFXInit` effect). (Confuse and Locate's three `_GameSound(0x0F)` have no wait between them, so each cuts the last: one sound, as in the port.)
 - **Talk:** `%k` dropped.

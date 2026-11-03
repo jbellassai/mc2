@@ -117,6 +117,7 @@ async function main() {
   const seeAll = () => events.has(105) || locate > 0;
   const fx = new Fx(() => render(), sfx);
   const hidden = new Set<object>();   // people the ending is fading in or has blasted away
+  let highlight: { x: number; y: number }[] = [];                                           // squares lit for a pick (Teleport)
   let noticed: { x: number; y: number; frame: number; text?: number }[] = [];   // P01 ovl_0a94's icons, until the next step
   const render = () => {
     const room = level.loc.kind === 'room', wild = level.loc.kind === 'world';
@@ -131,7 +132,8 @@ async function main() {
     const people = (fight ? fight.recs.filter(r => r.num !== 0xff && shown(r)).map(r => ({ x: r.x, y: r.y, num: r.num, race: r.race, faint: r.invis > 0 }))
       : (wild ? [lead] : party.members.filter(m => !hidden.has(m))).map(m => ({ x: m.x, y: m.y, num: m.num, race: m.hero.rec.h_race as number, faint: false })))   // world: the leader alone
       .map(p => disguise ? { ...p, frame: 0x246 + Math.min(4, p.race) } : p);   // _SetDisgTiles: E00 0x246 + race
-    view.draw(level, room ? 5 : lead.x, room ? 4 : lead.y, figures.filter(f => !hidden.has(f) && (!room || f.x < 11 && f.y < 9)), people, phase, icons, fx.overlay);   // a room is its 11×9 window (D74 room 3 has a townsman at y 9)
+    view.draw(level, room ? 5 : lead.x, room ? 4 : lead.y, figures.filter(f => !hidden.has(f) && (!room || f.x < 11 && f.y < 9)), people, phase, icons,
+      highlight.length ? { ...(fx.overlay ?? { icons: [], tints: [], invert: false }), lit: highlight } : fx.overlay);   // a room is its 11×9 window (D74 room 3 has a townsman at y 9)
     const where = wild || patch || (fight && outside?.level.loc.kind === 'world') ? `${world.rec?.name.replace(/\s*[MX]$/, '') ?? ''}, ${tables.weathers[clock.weather]}` : place();
     status.textContent = `${clock}  —  ${where}${message ? '  —  ' + message : ''}`;
     sidebar.update(party.members.map(m => {
@@ -1058,7 +1060,7 @@ async function main() {
     if (heading || autoHeroes.has(actor.recno) || actor.state & 0x40) return void autoTurn(actor);   // a routed hero runs (P94 0x362: the AI's flee)
     panel.set([{ label: cmd[7], act: aim }, { label: cmd[27], act: magic }, { label: cmd[35], act: () => recall(actor!.hero!, partyTurn) }, { label: cmd[43], act: fightUse },
       { label: cmd[25], act: () => fightLook(actor!, partyTurn) },
-      { label: cmd[19], act: () => { heading = true; partyTurn(); } }, { label: cmd[46], act: () => { autoHeroes.add(actor!.recno); partyTurn(); } },
+      { label: cmd[19], act: () => { heading = true; panel.line(comtxt[0xf5]); partyTurn(); } }, { label: cmd[46], act: () => { autoHeroes.add(actor!.recno); partyTurn(); } },
       { label: cmd[14], act: () => drawWeapon(actor!, partyTurn) }, { label: cmd[30], act: () => { actor!.moves = 0; partyTurn(); } }]);
     render();
   };
@@ -1138,6 +1140,8 @@ async function main() {
    *  the fight) run P94 ovl_0a98 (Fight.autoHero) for the hero's actions. Head's speed digit is not asked. */
   const autoHeroes = new Set<number>();
   let heading = false;
+  /** `[si-0x6758]`, the auto-combat pause in `_AutoPause` units of 200 ms: 4, or 9 − the digit pressed during Head. */
+  let autoPause = 4;
   const autoTurn = async (a: Rec) => {
     panel.set(heading ? [{ label: cmd[40], act: () => { heading = false; } }] : []);   // Stop
     while (fight && a.moves > 0 && fight.alive(a) && !fight.outcome()) {
@@ -1145,7 +1149,7 @@ async function main() {
         (r, sp, t) => { r.hero!.rec.h_rdyspl = sp; return [`${r.name}: ${cdata.spells.names[sp]}`, ...castSpell(fight!, r, sp, t)]; },   // P94 0x16B7: h_rdyspl, then _Magic
         rearm));
       render();
-      await sleep(200);
+      await sleep(autoPause * 200);
     }
     partyTurn();
   };
@@ -2155,17 +2159,22 @@ async function main() {
     if (shipCamp || camping) return fail(rec.texts[0x19]);
     const t = p89.tiers.filter(v => v <= m).length - 1, wx = lead.x - 5, wy = lead.y - 4;
     close();
-    mark(say(comtxt[0x0d]), (x, y) => {
+    const valid = (x: number, y: number) => {
       const sx = x - wx, sy = y - wy;
-      const ok = t >= 0 && sx >= p89.x0[t] && sx < p89.x1[t] && sy >= p89.y0[t] && sy < p89.y1[t] && !(sx === 5 && sy === 4)
+      return t >= 0 && sx >= p89.x0[t] && sx < p89.x1[t] && sy >= p89.y0[t] && sy < p89.y1[t] && !(sx === 5 && sy === 4)
         && !world.guards().some(g => g.x === x && g.y === y) && world.patrolAt(x, y) < 0
         && !rec.exits.some(e => e.x === x && e.y === y) && !rec.doors.some(d => d.x === x && d.y === y)
         && !p89.rects.some(([x0, y0, x1, y1]) => x >= x0 && x <= x1 && y >= y0 && y <= y1) && level.walkable(x, y);
-      if (!ok) { sfx(14); message = comtxt[0x119]; return; }       // P89 0x23E / 0x2AD
+    };
+    highlight = [];                                                     // P89 ovl_0392: the valid squares are lit (_OrTile)
+    for (let sy = 0; sy < 9; sy++) for (let sx = 0; sx < 11; sx++) if (valid(wx + sx, wy + sy)) highlight.push({ x: wx + sx, y: wy + sy });
+    mark(say(comtxt[0x0d]), (x, y) => {
+      highlight = [];
+      if (!valid(x, y)) { sfx(14); message = comtxt[0x119]; return; }   // P89 0x23E / 0x2AD
       sfx(20);
       party.shift(x - lead.x, y - lead.y);
       void world.at(x, y, clock).then(() => { done(''); notice(x, y); render(); });
-    }, () => { sfx(14); message = comtxt[0x119]; render(); });
+    }, () => { highlight = []; sfx(14); message = comtxt[0x119]; render(); });
   };
   /** _SkillUp0 (combat.md): skill `idx` (SKILLS order) +1 with chance (50 − skill)/4 % below 50, else 1 %, up to
    *  _MaxSkill; returns comtxt 0x60 or ''. */
@@ -2617,7 +2626,10 @@ async function main() {
     if (SANDBOX && editing()) return;
     if (SANDBOX && e.key === 'F2' && !fight && !panel.open) { e.preventDefault(); scenarioCmd(); return; }
     if (fight) {
-      if (heading) { heading = false; return; }                   // any key ends Head (after the current action)
+      if (heading) {                                                     // P94 0x3E6: a digit sets the speed, any other key ends Head
+        if (/^[0-9]$/.test(e.key)) autoPause = 9 - Number(e.key); else heading = false;
+        return;
+      }
       if (marking) { if (e.key === 'Escape') { marking = null; message = ''; unmark(); render(); } return; }   // a square by clicking
       const k = e.key.startsWith('Arrow') && KEYS[e.key];                 // letters are the fight's command keys
       if (k && actor && !autoHeroes.has(actor.recno)) { e.preventDefault(); fightStep(...k); }
