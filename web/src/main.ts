@@ -1,7 +1,7 @@
 // Milestone 1 (decision 2): walk around Telermain from a fresh start.
 import { Level, type Figure } from './level';
 import { Clock } from './clock';
-import { View } from './view';
+import { View, EGA } from './view';
 import { resolveRoom, BASE_X, BASE_Y } from './room';
 import { json, hex, two, openPack, isLocal, forgetFiles, type Door, type Exit } from './pack';
 import { importGame } from './importer';
@@ -2171,10 +2171,50 @@ async function main() {
       if (item === 0x40) return who === hero ? recallAway() : done(format(comtxt[0x1d], hero, hero.name));   // "Only %h can do that."
       if (chamber?.candle && chamber.type <= 5 && item === 0x4a + chamber.type && !chamber.freed && !events.has(0x3c + chamber.type)) return done(candle(who, item));
       if (chamber && item === 0x50 && chamber.hr.reward && !(chamber.hr.reward & 0x80)) return openChest(who);
+      if (!chamber && !patch && !special && !scene && (level.loc.kind === 'level' || level.loc.kind === 'world' && item === 0x3f) && (item === 0x3e || item === 0x3f)) return mapUse(who, item);
       if (level.loc.kind === 'level' && (item === 0x50 || item === 0x46)) { close(); return item === 0x50 ? lockpick(who) : dig(who); }
       if (!tables.useall.includes(item) || party.members.length < 2) return done(once(who, item));
       panel.line(say(comtxt[0x3c]));
       panel.set([{ label: cmd[3], act: () => done(everyone(item)) }, { label: cmd[4], act: () => done(once(who, item)) }]);
+    };
+    /** Map 0x3F (P02 ovl_13ab, P01 ovl_1334) and Map Flask 0x3E (P02 ovl_13c4; elsewhere _NoUse): the minimap where
+     *  the location's pearlsw is 0; else the Map says comtxt 0x84 and the flask takes a Pearl or a Blu Pearl from the
+     *  member's own pack (_SearchInv; with both it asks, text 14, Yes = Blu), and 1 in 10 a plain Pearl shatters it when
+     *  h_dextrty ≤ RndCo(20) (text 13, −1 Map Flask, no map). */
+    const mapUse = (who: Hero, item: number) => {
+      if (!level.loc.pearlsw) return miniMap();
+      if (item === 0x3f) return done(comtxt[0x84]);
+      const has = (n: number) => who.slot(n) >= 0;
+      if (!has(1) && !has(2)) return done(format(p02[12], who, who.name));
+      const drop = (n: number) => {
+        panel.line(format(p02[15], who, who.name, { a: items[n] }));
+        who.dec(who.slot(n));
+        if (n === 1 && !rnd(10) && who.rec.h_dextrty <= rnd(20)) { who.dec(who.slot(0x3e)); return done(p02[13]); }
+        miniMap();
+      };
+      if (!has(1) || !has(2)) return drop(has(1) ? 1 : 2);
+      panel.line(format(p02[14], who, who.name));
+      panel.set([{ label: cmd[3], act: () => drop(2) }, { label: cmd[4], act: () => drop(1) }, { label: cmd[0], act: () => close() }]);
+    };
+    /** _ShowMiniMap (EXE 07fa:1103): the loaded 42×42 block (the one whose 32×34 square holds the window), 4×3 pixels a
+     *  tile in the tileset's colorptr colour, and the player's square blinking (125 ms) until a key. */
+    const miniMap = () => {
+      const wild = level.loc.kind === 'world', p = party.members[0], wx = lead.x - (wild ? 5 : 4), wy = lead.y - (wild ? 4 : 3);
+      const b = level.loc.blocks.find(b => wx >= b.x && wx < b.x + 32 && wy >= b.y && wy < b.y + 34);
+      if (!b) return close();
+      const c = document.createElement('canvas'), g = c.getContext('2d')!;
+      c.width = 168; c.height = 126; c.style.cssText = 'width:336px;image-rendering:pixelated;display:block';
+      for (let y = 0; y < 42; y++) for (let x = 0; x < 42; x++) {
+        g.fillStyle = EGA[(level.data.colors[level.cells[(b.y + y) * level.w + b.x + x]] ?? 0) & 15];
+        g.fillRect(4 * x, 3 * y, 4, 3);
+      }
+      let on = false;
+      const blink = setInterval(() => {
+        if (!c.isConnected) return clearInterval(blink);
+        g.fillStyle = (on = !on) ? '#fff' : '#000'; g.fillRect(4 * (p.x - b.x), 3 * (p.y - b.y), 4, 3);
+      }, 125);
+      panel.add(c);
+      panel.set([{ label: cmd[0], act: () => close() }]);
     };
     const list = (who: Hero) => {
       const codes = usable(who);

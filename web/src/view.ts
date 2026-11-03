@@ -4,7 +4,7 @@ import type { Level, Figure } from './level';
 import { ORDER, type Overlay, type Ghost } from './fx';
 
 /** The 16 EGA colours, for the effects' colour flashes. */
-const EGA = ['#000', '#00a', '#0a0', '#0aa', '#a00', '#a0a', '#a50', '#aaa', '#555', '#55f', '#5f5', '#5ff', '#f55', '#f5f', '#ff5', '#fff'];
+export const EGA = ['#000', '#00a', '#0a0', '#0aa', '#a00', '#a0a', '#a50', '#aaa', '#555', '#55f', '#5f5', '#5ff', '#f55', '#f5f', '#ff5', '#fff'];
 
 export const COLS = 21, ROWS = 15, TILE = 16;
 export interface Icon { x: number; y: number; frame: number; sheet?: 'E01' }

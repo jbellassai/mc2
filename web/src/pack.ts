@@ -20,6 +20,7 @@ export interface Location {
   name: string;
   mapsize: [number, number];
   doorstn: number;
+  pearlsw: number;
   blocks: Block[];
   words: string[];
   texts: string[];
@@ -47,7 +48,7 @@ export interface RoomRecord extends Omit<Location, 'exits' | 'townsfolk' | 'npcs
   npcs: Npc[][];
 }
 
-export interface TileData { names: string[]; nameindex: number[]; walkable: number[]; walkable_los: number[]; anim: string; doors: string }
+export interface TileData { names: string[]; nameindex: number[]; walkable: number[]; walkable_los: number[]; anim: string; doors: string; colors: number[] }
 export interface Sprites { columns: number; npc: { start: number; frames: number }[] }
 
 const BASE = './pack/';
