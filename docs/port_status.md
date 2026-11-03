@@ -12,8 +12,7 @@ buying from NPC 88 (P90 0x989), room remarks to a companion (P91 `ovl_0a95`), th
 
 ## Gaps that change play
 
-| gap | original | note |
-|---|---|---|
+None known (2026-11-03). The last four (auto-hero casting, the Map, the notepad, the acting member) are closed.
 
 ## Smaller differences
 
