@@ -122,7 +122,7 @@ Shared pieces (asm offsets in V06):
 | Destroy (32) | 1a | 0x22a8 | target must be non-party; **the caster forgets all 42 memorised spells**; if the race is flagged 1 in the table at file 0x2466 (all monsters except Vankruh 28, Zakhad 30, Doombeast 32): target `c_state = 0x98`, position −1 (gone); else "resists" |
 | Restsoul (40) | 17 | 0x1f4d | target with `c_state & 0x82 == 0x82` (dead undead?): `c_state = (c_state & ~2) | 8`, position −1 — removed from the field |
 | Timestop (35) | 1b | 0x2530 | `_timestop = 1` (attacks auto-hit, see combat.md) |
-| Assess (5) | 0c | 0x102c | prints every living monster's name, HP (`c_hitptl/h`), armor, shield — no state change |
+| Assess (5) | 0c | 0x102c | sound 0x0B; records 23 → 6 alive, each: the name by role class (`_monstats` row byte 16 → V06 file 0x1021: 1, 7 "%a: spellcaster" 0xEB; 2, 5, 6, 9 "%a: archer" 0xEC; else "%a" 0xED), "Hit points: %u" 0xEE, "Armor: %b" 0xF0, "Shield: %b" 0xEF, the record highlighted, "%k" (a key); no state change |
 | — | 15 | 0x1d6b | unreferenced stub: clears `c_health & 0x20` of the target (cure-freeze variant) |
 
 Heal (8), Energy (12), Shield (16), Zengrl (20), Zishoxe (21) are FFFAR (above) and are reached from P94 through `SPLVECS` as everywhere else. Confuse, Repel, Locate, Teleport, Vision, Pierce, Walkwater, Resurrect, Detect, Glamour, Sense, Soulspeak have no combat handler.

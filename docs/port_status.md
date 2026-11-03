@@ -18,8 +18,7 @@ None known (2026-11-03). The last four (auto-hero casting, the Map, the notepad,
 
 - **Acting member:** the menus where `_Parser` allows the switch (`_chpmens` = menus 5, 10, 12, 13, 16, 21, 22) are approximated as "no panel open" (plus the aftermath screen, assumed); P07/P08 rooms move `_curpla` like P05 (assumed).
 - **World:** Assign and Dismiss are also on the sheet (the original: Talk only).
-- **Combat AI:** Head asks no speed digit.
-- **Spells:** Assess uses the port's own text; See plays sound 10 only (the original's 9 comes with its `_MFXInit` effect). (Confuse and Locate's three `_GameSound(0x0F)` have no wait between them, so each cuts the last: one sound, as in the port.)
+- **Spells:** See's sound 9 follows 10 after an assumed 400 ms (the original's comes with `_MFXInit`); Assess lists every monster at once (the original waits for a key on each, highlighting it).
 - **Talk:** `%k` dropped.
 - **Notepad:** not logged yet: the Whisper "Nothing happens." quirk (P02 0x403), P95's fountain copy; event 153 (notes saved) is not kept.
 - **Rooms:** teleportal pedestal out of reach prints nothing; elden answers 2–6 untested (event 115 has no known setter); casino Talk routing is assumed; Library task days `− research>>4` unverified.

@@ -136,6 +136,7 @@ function show(f: Fight, c: Rec, spell: number, t: Rec | null) {
     case 11: return f.fx(FX.spef3single(t!, 9));                                            // Freeze
     case 18: return f.fx(FX.spef3single(t!, 0xc));                                          // Zofir
     case 38: return f.fx(FX.spef6(t!));                                                     // Courage
+    case 28: return f.fx([{ ms: 400 }, { ms: 0, sound: 9 }]);                              // See: _MFXInit's sound 9 after 10 (the pause is assumed)
     case 37: return f.fx(FX.spef5(t!));                                                     // Forget
     case 30: return f.fx(FX.spef7(t!));                                                     // Betray
     case 14: case 40: return f.fx(FX.blink(person(t!), null));                              // Disappear, Restsoul: _MultiFX out
@@ -257,7 +258,14 @@ export function effect(f: Fight, c: Rec, spell: number, t: Rec | null, text: Tex
     }
     case 33: for (const r of foes()) if (rnd(12) < power(c, r, m)) { r.bravery = 0; r.state |= 0x40; }   // Terrify
       return [text(0x97, { a: c.name })];                                                  // Timestop
-    case 5: return f.recs.filter(r => r.side && f.alive(r)).map(r => `${r.name}: HP ${r.hp}, A ${r.armor}, SH ${r.shield}`);   // Assess
+    case 5: {                                                                               // Assess (V06 0x102C)
+      // records 23 → 6 alive: the name by role class (row byte 16, table V06 file 0x1021: 1, 7 spellcaster 0xEB;
+      // 2, 5, 6, 9 archer 0xEC; else 0xED), "Hit points: %u", "Armor: %b", "Shield: %b"; the original waits for a key each
+      const role = (r: Rec) => { const k = r.recno < 6 || r.recno === 22 || r.race < 5 ? 0 : f.data.monsters[r.race - 5]?.cls ?? 0;
+        return [1, 7].includes(k) ? 0xeb : [2, 5, 6, 9].includes(k) ? 0xec : 0xed; };
+      return f.recs.filter(r => r.recno >= 6 && f.alive(r)).sort((a, b) => b.recno - a.recno)
+        .flatMap(r => [text(role(r), { a: r.name }), text(0xee, { u: r.hp }), text(0xf0, { b: r.armor }), text(0xef, { b: r.shield })]);
+    }
     // FFFAR: Heal / Zengrl set HP to the maximum and stand a downed target up; Energy = a Sermin; Shield = the caster's
     // magic skill; Zishoxe = half of it on the whole side.
     case 8: case 20: for (const r of spell === 8 ? [t!] : mine()) {
