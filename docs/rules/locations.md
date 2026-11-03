@@ -67,7 +67,7 @@ At a `spetbl` spot of type 2/3: same pick formula as chests (`dex/2 + lockpick` 
 
 ## Towns (`P02`, program 2)
 - **Time**: every 12 steps = one 5-minute tick (`_CalUpd`); every second tick all members lose 1 energy (`ovl_0fca`). The walk-on-water counter decrements per step.
-- **Locked doors** (`ovl_196b`, menu 0x10 = Knock/Pick/Break/End): a door whose `type` is not 0 or 3 (and has no key bit) is locked; unless its resident is in the party ("I have a key") it gives four choices:
+- **Locked doors** (`ovl_196b`, menu 0x10 = Knock/Pick/Break/End): a door whose `type` is not 0 or 3 (and has no key bit) is locked; unless its resident is in the party — then there is no menu: that member says text 5 "I have a key. Shall we go in?" (P02 0xA16 `_InParty` → 0xCBA), Yes clears the lock and goes in, No leaves — it gives four choices:
   - *Knock* (sound 0x11): if the resident is in (`_TimCalc` on their hours, not removed in `_npcsta`, and the RESID event conditions hold) → "A voice from within asks: Whom do you seek?" — type a word; if it matches the resident's name (`_WMatch` against `gwrds`) → "That's me! Would you like to come in?" (yes = enter), else "There is no one here by that name. Goodbye!". Nobody home → "There is no response." If the resident is in your party → "I have a key. Shall we go in?".
   - *Pick lock*: impossible when `doorstn == 0xFF`; needs a Pick (0x50); `min(99, dex/2 + lockpick) > RndCo(100)` → "The lock clicks open!" (entered with `rmdata+5 = 1`), else the pick breaks.
   - *Break*: impossible when `doorstn == 0xFF`; succeeds if `doorstn < h_strngth` of the acting hero → "%h breaks open the door!" (`rmdata+5 = 2`), else "The door withstands %h's assault." `doorstn` is one value per location (`LOCTYPE+56`).

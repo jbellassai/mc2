@@ -242,6 +242,12 @@ async function main() {
     if (prince) { panel.show(); panel.line(`${who.name}: ${prince}`); return void panel.set([{ label: cmd[0], act: () => close() }]); }
     const opening = scene?.greet(who, by);
     if (opening?.leave) { await leave(level.loc.exits[0]); message = opening.text; return render(); }   // the priest sends the party out
+    if (!opening && who.num < 0xfa && level.loc.kind === 'room' && by !== party.members[0]) {
+      // P91 ovl_0a95: in a room program (_curmpg > 2) a member other than the player (_curpla ≠ 0) gets the room's remark
+      // for this person, {npc, loctext} byte pairs at loc+26 until npc 0, instead of the conversation
+      const t = hex(level.loc.tables.hroomptr ?? ''), i = t.findIndex((n, j) => !(j & 1) && (n === 0 || n === who.num));
+      if (i >= 0 && t[i]) return close(`${who.name}: ${format(level.loc.texts[t[i + 1]], by.hero, who.name ?? '')}`);
+    }
     if (who.num >= 0xfa && ((by.hero.rec.h_charm as number) + party.tailorcharm & 0xff) < level.loc.lcharm)   // FFFAR 0x3245 → ovl_308e
       return close(format(comtxt[0x13] + npctypes[who.type] + comtxt[0x14] + comtxt[0x16].replace('%b', String(level.loc.lcharm)), by.hero, ''));
     const t = await Talk.open(level.loc, who, by.hero, events, party.tailorcharm);
@@ -278,7 +284,11 @@ async function main() {
         speak(fill(comtxt[0xc0], total) + comtxt[0xc4]);
         yesNo(() => {
           if (hero.rec.h_gold < total) speak(say(comtxt[0x25]));                   // "%h doesn't have that much!"
-          else if (incObj(hero, s.item, n * count)) { hero.rec.h_gold -= total; speak(say(comtxt[0xc1])); }
+          else if (incObj(hero, s.item, n * count)) {
+            hero.rec.h_gold -= total;
+            if (who.num === 88) events.add(30);                            // P90 0x989: a purchase from NPC 88
+            speak(say(comtxt[0xc1]));
+          }
           menu();
         }, () => { speak(comtxt[0xc2]); menu(); });
       };
@@ -564,6 +574,11 @@ async function main() {
       panel.line(say(text));
       panel.set([{ label: cmd[3], act: () => void goIn() }, { label: cmd[4], act: menu }]);   // Yes / No
     };
+    const mate = r && party.members.find(m => m.num === r.num);
+    if (mate) {   // P02 0xA16: the resident is in the party - no lock menu; they offer (text 5), Yes goes in, No leaves
+      panel.line(`${mate.hero.name}: ${format(p02[5], mate.hero, hero.name)}`);
+      return panel.set([{ label: cmd[3], act: () => void goIn() }, { label: cmd[4], act: () => close() }]);
+    }
     const knock = () => {
       sfx(17);                                                        // P02 0xBDB: the knock Home = resident's hours (_TimCalc), not removed (_npcsta), RESID event conditions.
       const home = r && r.num !== 0xfe && !party.away.has(r.num) && clock.within(r.appear, r.disappear) &&

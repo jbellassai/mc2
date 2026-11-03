@@ -24,7 +24,7 @@ Example (C10 slot 0, Tomak's tribute collector): `tribute → "All visitors are 
 ## Greetings, farewells, side effects
 - Greeting (`ovl_045d`): marks `_met[npcno]`, then prints the slot's **greet** text = first byte of the 0xFF-terminated `{greet[, bye]}` list at C-file pointer 34+slot; if that is 0xFF, the location default `loc+60`; if that is 0xFF too (most locations), common texts 0x17 + 0x19 + the NPC's name + 0x10: "Well met, adventurer. My name is Sefil." An unknown word gets the slot's `+0x64` reply or common text 0x1B (`ovl_0a08`). Farewell (`ovl_0546`) uses the second byte (default `loc+61`).
 - Talking to one of ten key NPCs sets an event bit (`ovl_05af`, P91 table @0x16/@0x20): npc 113→event 24, 164→38, 168→50, 169→53, 170→56, 172→60, 163→79, 171→82, 21→95, 175→100.
-- Location-specific remarks (`ovl_0a95`): inside a **room** location (`_curmpg > 2`; never in towns, dungeon levels or the wilderness), when the talking member is not the player (`_curpla ≠ 0`) and the person spoken to (`_npcno`) is listed in `loc+26` byte pairs `{npc, loctext}` (until npc 0), `loctext[n]` is printed instead of the normal conversation.
+- Location-specific remarks (`ovl_0a95`): inside a **room** location (`_curmpg > 2`; never in towns, dungeon levels or the wilderness), when the talking member is not the player (`_curpla ≠ 0`) and the person spoken to (`_npcno`) is listed in `loc+26` byte pairs `{npc, loctext}` (until npc 0), `loctext[n]` is printed instead of the normal conversation. Only the throne rooms (D16 rooms 1 and 11) use it: King Rebnard (72) and NPC 61 answer a companion.
 - Player's own lines: `_PlaSays`/`_TypSays`/`_KNPCSays` are the room-program entries 0–2 of P91 (text output helpers).
 
 ## Text format codes
