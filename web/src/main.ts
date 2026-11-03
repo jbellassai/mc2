@@ -917,7 +917,7 @@ async function main() {
     onWin = won; fightDiff = diff; f.mood = f.attitude();
     if (!f.street && f.recs.find(r => r.side)?.race !== 28) advice();
     if (ambush) void monsterPhase();                                  // `_ambflg`: the monsters move first
-    else if (f.street) partyTurn();                                   // no pre-fight menu in a street fight
+    else if (f.street) { roundMorale(); partyTurn(); }                // no pre-fight menu in a street fight
     else prefight();
   };
   let onWin = () => {}, fightDiff = 0, afterWin: (() => void) | null = null;
@@ -995,7 +995,7 @@ async function main() {
   const begin = (ambush: boolean) => {
     const f = fight!, race = f.recs.find(r => r.recno === 6)?.race;
     if (f.room && (race === 28 || race === 30)) { panel.line(comtxt[race === 28 ? 0x105 : 0x116]); f.flee.clear(); }
-    if (ambush) void monsterPhase(); else partyTurn();
+    if (ambush) void monsterPhase(); else { roundMorale(); partyTurn(); }   // P94 ovl_02e8: an ambush round skips ovl_0742
   };
   /** Rally (ovl_06e7 menu 14 item 0): alone → "There is no one to rally!" (0) and back; a coin flip → "The enemy
    *  attacks!!" (4) and the monsters move first; else the speech (1) and RndCo(100) < the leader's leadership gives every
@@ -1055,7 +1055,7 @@ async function main() {
     actor = fight!.recs.find(r => r.hero && !r.side && fight!.alive(r) && r.moves > 0) ?? null;
     if (!actor) return void monsterPhase();
     message = `${actor.name}: ${actor.moves}`;
-    if (heading || autoHeroes.has(actor.recno)) return void autoTurn(actor);
+    if (heading || autoHeroes.has(actor.recno) || actor.state & 0x40) return void autoTurn(actor);   // a routed hero runs (P94 0x362: the AI's flee)
     panel.set([{ label: cmd[7], act: aim }, { label: cmd[27], act: magic }, { label: cmd[35], act: () => recall(actor!.hero!, partyTurn) }, { label: cmd[43], act: fightUse },
       { label: cmd[25], act: () => fightLook(actor!, partyTurn) },
       { label: cmd[19], act: () => { heading = true; partyTurn(); } }, { label: cmd[46], act: () => { autoHeroes.add(actor!.recno); partyTurn(); } },
@@ -1063,6 +1063,8 @@ async function main() {
     render();
   };
   const report = (lines: string[]) => { for (const l of lines) panel.line(l); sprung(); };
+  /** P94 ovl_0742 at a round's start: the morale of heroes 0-5 (Fight.morale). */
+  const roundMorale = () => { for (const r of fight!.recs.filter(r => r.recno < 6)) report(fight!.morale(r, ctext)); };
   /** A Fireglobe a step or a Jump set off (Fight.spring): its lines and a Bang on the square (V06 INT61_42). */
   const sprung = () => {
     const s = fight?.sprung;
@@ -1272,6 +1274,7 @@ async function main() {
     if (finished()) return;
     fight!.endSide(1);
     fight!.newRound();
+    roundMorale();
     partyTurn();
   };
   /** INT61_08: "VICTORY!" (0x4E), or every hero dead: "Alas, your quest has failed." (0x50). Loot follows (P95, *rollLoot*). */

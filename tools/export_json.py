@@ -393,7 +393,7 @@ def main(src, dst):
         r = exe[ds + 0x308E + 23 * k:ds + 0x308E + 23 * k + 23]
         return {'name': names[k], 'hp': struct.unpack_from('<H', r)[0], 'shield': r[2], 'weapon': r[3], 'armor': r[4],
                 'bravery': r[5], 'str': r[6], 'dex': r[7], 'agi': r[8], 'res': r[9], 'int': r[10], 'wskl': r[11], 'mskl': r[12],
-                'spells': list(r[13:16]), 'tile': struct.unpack_from('<H', r, 20)[0], 'anim': r[22],
+                'spells': list(r[13:16]), 'cls': r[16], 'tile': struct.unpack_from('<H', r, 20)[0], 'anim': r[22],
                 'leader': p96[0x39 + 5 + k], 'undead': p96[0x62 + 5 + k]}
     def weapon(k):
         r = exe[ds + 0x2CF6 + 9 * k:ds + 0x2CF6 + 9 * k + 9]

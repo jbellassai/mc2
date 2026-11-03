@@ -13,7 +13,7 @@ import { effect, heroSpell, monsterSpell } from './spells';
 import { FX, type Frame } from './fx';
 
 interface Monster { name: string; hp: number; shield: number; weapon: number; armor: number; bravery: number; str: number;
-  dex: number; agi: number; res: number; int: number; wskl: number; mskl: number; spells: number[]; tile: number;
+  dex: number; agi: number; res: number; int: number; wskl: number; mskl: number; spells: number[]; cls: number; tile: number;
   anim: number; leader: number; undead: number }
 interface Weapon { minst: number; basedam: number; type: number; unbreakable: number; stbonus: number; sklbonus: number;
   race: number; hitlist: number[] }
@@ -317,6 +317,36 @@ export class Fight {
       if (rnd(100) < n) r.moves++;
       if (r.hero && (r.hero.rec.h_inuse as number) & 0x80) r.moves = 4;   // Gonshi
     }
+  }
+
+  /** P94 ovl_07e5, the odds for `r`: each side's strength Σ (magic skill, doubled for heroes, + HP, + 30 for a monster
+   *  whose stat row byte 16 is 2, 5, 6 or 9) over its live records (`c_state & 0x98` clear); with own O and enemy E:
+   *  O = 0 → −3, E = 0 → +3, else ±min(3, (big + small/2) / small − 1), negative when outnumbered. */
+  private odds(r: Rec): number {
+    let own = 0, foe = 0;
+    for (const o of this.recs) {
+      if (o.state & 0x98) continue;
+      const cls = o.recno < 6 || o.recno === 22 || o.race < 5 ? 0 : this.data.monsters[o.race - 5]?.cls ?? 0;
+      const v = (o.recno < 6 ? o.mskl * 2 : o.mskl) + o.hp + ([2, 5, 6, 9].includes(cls) ? 30 : 0);
+      if (o.side === r.side) own += v; else foe += v;
+    }
+    if (!own) return -3;
+    if (!foe) return 3;
+    const f = (big: number, small: number) => Math.min(3, Math.floor((big + (small >> 1)) / small) - 1);
+    return own < foe ? -f(foe, own) : f(own, foe);
+  }
+
+  /** P94 0x761, morale: a record with actions left and not routed takes bravery + odds, −2 below a quarter of its
+   *  maximum HP; ≤ 0, or RndCo(100) above that × 8 + 50, routs it (`c_state |= 0x40`; a hero: "%a turns to flee!",
+   *  comtxt 0xF4). Heroes 0-5 at each round's start (ovl_0742, not after an ambush's first monster phase), and every
+   *  record before each AI decision (P94 0x10D7). Bravery 12 never routs. */
+  morale(r: Rec, text: (n: number, v?: Record<string, string | number>) => string): string[] {
+    if (!r.moves || r.state & 0x40) return [];
+    let d = r.bravery + this.odds(r);
+    if (r.hp * 4 < r.maxhp) d -= 2;
+    if (d > 0 && rnd(100) <= d * 8 + 50) return [];
+    r.state |= 0x40;
+    return r.recno < 6 ? [text(0xf4, { a: r.name })] : [];
   }
 
   /** P94 ovl_0655, after a side's phase: its records' invisibility, freeze and fear turns count down. */
@@ -676,7 +706,8 @@ export class Fight {
    *  then shoot, strike when adjacent, or step toward it (a random lower-distance neighbour), else a random move.
    *  A routed record (`c_state & 0x40`) flees instead. */
   monsterAct(r: Rec, text: (n: number, v?: Record<string, string | number>) => string, cast?: Cast, arm?: Arm): string[] {
-    if (r.state & 0x40) return this.fleeStep(r, text);
+    const fled = this.morale(r, text);                                  // P94 0x10D7
+    if (r.state & 0x40) return [...fled, ...this.fleeStep(r, text)];
     const lead = this.recs.find(o => o.side === r.side && this.alive(o) && o.state & 4);
     const ldrace = lead ? lead.race : r.race;
     let t = this.recs[r.target === NONE ? -1 : this.recs.findIndex(o => o.recno === r.target)];

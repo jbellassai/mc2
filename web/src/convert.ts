@@ -485,7 +485,7 @@ export async function convert(files: Files, step: (done: number, of: number) => 
   const monster = (k: number) => {
     const r = exe.subarray(DS + 0x308e + 23 * k, DS + 0x308e + 23 * k + 23);
     return { name: mnames[k], hp: u16(r, 0), shield: r[2], weapon: r[3], armor: r[4], bravery: r[5], str: r[6], dex: r[7], agi: r[8],
-      res: r[9], int: r[10], wskl: r[11], mskl: r[12], spells: list(r.subarray(13, 16)), tile: u16(r, 20), anim: r[22],
+      res: r[9], int: r[10], wskl: r[11], mskl: r[12], spells: list(r.subarray(13, 16)), cls: r[16], tile: u16(r, 20), anim: r[22],
       leader: p96[0x39 + 5 + k], undead: p96[0x62 + 5 + k] };
   };
   const weapon = (k: number) => {
