@@ -248,7 +248,12 @@ async function main() {
     }
     const by = speaker ?? act();
     speaker = null;
-    if (!(who.num < 0x20 && assigns.get(who.num)) && armed(by.hero)) return;
+    // FFFAR FAR_GREET: a party member on the square (_IsItPla) - oneself mumbles (comtxt 0x0C), anyone else answers
+    // "Yes, my friend?" (0x22) and their own conversation follows (_Tobo, `_npccat` 1); no weapon check
+    const mate = party.members.find(m => m.num === who.num && m.x === who.x && m.y === who.y);
+    if (mate === by) return close(format(comtxt[0x0c], by.hero, by.hero.name));
+    const away = !mate && who.num < 0x20 && !!assigns.get(who.num);   // on assignment: `_AssSays` + 0x18 (FFFAR 0x2F7E)
+    if (!mate && !away && armed(by.hero)) return;
     const prince = special?.greet(who.num, by.hero);
     if (prince && events.has(4)) met.add(who.num);                     // P09 ovl_0611: the elf greets - `_met[113]`
     if (prince) { panel.show(); panel.line(`${who.name}: ${prince}`); return void panel.set([{ label: cmd[0], act: () => close() }]); }
@@ -373,9 +378,16 @@ async function main() {
     const talkButtons = (): Button[] => [
       { label: 'News', act: () => { panel.line('> News', 'you'); speak(t.news() ?? t.ask('').text); } },
       { label: 'Weather', act: () => { panel.line('> Weather', 'you'); speak(t.weather(clock.weather) ?? t.ask('').text); } },
-      { label: cmd[23], act: () => void invite() },                     // Invite
-      ...(t.shop.length ? [{ label: cmd[9], act: buy }, { label: comtxt[0x17b], act: sell }] : []),   // Buy, Sell
-      { label: cmd[29], act: offer },                                   // Offer (P90 Give)
+      ...(mate ? [                                                      // a party member: EXE _BuySell 0xC6, _Offer 0xD5
+        { label: cmd[23], act: () => said(3, comtxt[0x1f]) },             // Invite: FAR_ICANT (assumed for `_npccat` 1)
+        { label: cmd[9], act: () => said(3, comtxt[0xc6].trim()) }, { label: comtxt[0x17b], act: () => said(3, comtxt[0xc6].trim()) },
+        { label: cmd[29], act: () => said(3, comtxt[0xd5].trim()) },
+        ...(mate !== party.members[0] ? [{ label: cmd[12], act: () => dismiss(mate) }] : []),   // Dismiss (FFFAR menu 8 item 5)
+      ] : [
+        { label: cmd[23], act: () => void invite() },                   // Invite
+        ...(t.shop.length ? [{ label: cmd[9], act: buy }, { label: comtxt[0x17b], act: sell }] : []),   // Buy, Sell
+        { label: cmd[29], act: offer },                                 // Offer (P90 Give)
+      ]),
       { label: cmd[0], act: end }];
     /** Offer (P90 Give, ovl_037c; economy.md, Giving): "What will %h offer?" (comtxt 0xD3) and an item of the speaker's.
      *  The Orb goes to ovl_0621 (orb). Otherwise FAR_OK2GIVE: only the player or a volunteer gives (0x2F); never the
@@ -460,7 +472,10 @@ async function main() {
       }, 'Ask about… (type a word, Enter)');
     }
     panel.show();
-    if (opening) panel.line(opening.text); else { const g = t.greeting(); said(t.level, g); }
+    if (opening) panel.line(opening.text);
+    else if (mate) said(3, comtxt[0x22]);                               // FFFAR 0x2DD3
+    else if (away) said(3, say(comtxt[0x18]));                          // FFFAR 0x2F9D
+    else { const g = t.greeting(); said(t.level, g); }
     menu();
   };
 
@@ -1740,9 +1755,9 @@ async function main() {
     for (i++; i + 1 < t.length && t[i] !== 0xff; i += 2) loot.push([t[i], t[i + 1]]);
     panel.line(format(comtxt[0x82], h, h.name));
     for (const [item, n] of loot)
-      panel.line(item === 0x80 ? format(level.loc.texts[n] ?? '', h, h.name) : prtTreasure(item, n));
+      panel.line(item === 0x80 ? noted(2, p02[16] + format(level.loc.texts[n] ?? '', h, h.name)) : prtTreasure(item, n));   // P02 ovl_1366: "The scroll reads: "
     let left = loot.filter(([item]) => item !== 0x80);
-    if (!left.length) { chests.add(key); return void panel.set([{ label: cmd[0], act: () => close() }]); }
+    if (!left.length) return void panel.set([{ label: cmd[0], act: () => close() }]);   // only a scroll: no taker, the bit stays clear (P02 OV_0x13b)
     const ask = () => {
       panel.line(comtxt[0x85]);
       panel.set(party.members.map(m => ({ label: m.hero.name, act: () => {
@@ -1917,9 +1932,17 @@ async function main() {
     message = '';
     if (keeper()) return;
     if (!who && special?.talk()) return;                               // the casino: Talk to anyone but the gamblers
+    const m = party.members.find(p => p.x === x && p.y === y);
+    if (m) return talkTo({ x, y, type: 0, tile: 0, num: m.num, name: m.hero.name });
     if (who) return talkTo(who);
-    message = say(comtxt[0x11]) + level.tileName(x, y) + comtxt[0x10];
+    // FFFAR ovl_2c1b: "%h talks to <tile>." + the square's look text when in sight (a 0x80 spot needs a person there);
+    // its notepad level (cs:0x2C03) starts at 0 and is 2 once a look text was added, for the rest of the session
+    const h = act().hero, spot = (level.loc.look ?? []).find(l => l.x === x && l.y === y && !(l.text & 0x80));
+    let text = format(comtxt[0x11], h, h.name) + level.tileName(x, y) + comtxt[0x10];
+    if (spot && (level.loc.kind !== 'level' || inSight(x, y))) { text += format(level.loc.texts[spot.text] ?? '', h, h.name); talkNote = 2; }
+    message = noted(talkNote, text);
   };
+  let talkNote = 0;
   /** Whisper (H; `_Whisper`): "What magic word will %h whisper?" (comtxt 0xCD), matched against the location's `gwrds`
    *  (`_whspnum`, 0xFE no match). A word nothing answers gets "Nothing happens." (0x83: P01 0x47C, P04, P05, P07, P09),
    *  except in a town or dungeon level: P02 ovl_0830 only looks the word up in its table (file 0x57 {word, locspec}
