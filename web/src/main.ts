@@ -1986,21 +1986,23 @@ async function main() {
   };
   let talkNote = 0;
   /** Whisper (H; `_Whisper`): "What magic word will %h whisper?" (comtxt 0xCD), matched against the location's `gwrds`
-   *  (`_whspnum`, 0xFE no match). A word nothing answers gets "Nothing happens." (0x83: P01 0x47C, P04, P05, P07, P09),
-   *  except in a town or dungeon level: P02 ovl_0830 only looks the word up in its table (file 0x57 {word, locspec}
+   *  (`_whspnum`, 0xFE no match). A word nothing answers gets "Nothing happens." (0x83: P01 0x47C, P04, P05, P07, P09, P02),
+   *  and in a town or dungeon level P02 ovl_0830 first looks the word up in its table (file 0x57 {word, locspec}
    *  until 0xFF; the one entry is Deadwood's "Yommanis", word 7 at 0x3A, whose tile changes at file 0x5A are
-   *  {entry, newtile, x, y}: 0x5C at (29,11), 0x59 at (30,11)) and prints nothing. */
-  const whisper = (by: Member = lead) => {
+   *  {entry, newtile, x, y}: 0x5C at (29,11), 0x59 at (30,11)); any other word gets 0x83 there too (P02 0x3D6). */
+  const whisper = (by: Member = act()) => {
     panel.show();
-    if (scene && party.members.length > 1 && by === lead && !speaker) return pick(h => { speaker = party.members.find(m => m.hero === h)!; whisper(speaker); });
+    if (scene && party.members.length > 1 && by === act() && !speaker) return pick(h => { speaker = party.members.find(m => m.hero === h)!; whisper(speaker); });
     speaker = null;
     panel.line(format(comtxt[0xcd], by.hero, by.hero.name));
     panel.set([{ label: cmd[0], act: () => close() }], w => {
       panel.line(`> ${w}`, 'you');
       if (special?.whisper(w)) return;
       if (program() === 2) {
-        if (wmatch(w, level.loc.words) === 7 && level.loc.locnum === 0x3a) { level.set(29, 11, 0x5c); level.set(30, 11, 0x59); }
-        return close();
+        const n = wmatch(w, level.loc.words);
+        if (n === 7 && level.loc.locnum === 0x3a) { level.set(29, 11, 0x5c); level.set(30, 11, 0x59); return close(); }
+        if (n >= 0) note(n, comtxt[0x83]);                              // P02 0x3D6: logged at the word's index as level
+        return close(comtxt[0x83]);                                      // "Nothing happens." (0xFE, no word: never logged)
       }
       const s = scene?.whisper(wmatch(w, level.loc.words), by);
       figures = people();                                               // the egg cracking shows Jemil (event 120)

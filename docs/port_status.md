@@ -20,7 +20,7 @@ None known (2026-11-03). The last four (auto-hero casting, the Map, the notepad,
 - **World:** Assign and Dismiss are also on the sheet (the original: Talk only).
 - **Spells:** See's sound 9 follows 10 after an assumed 400 ms (the original's comes with `_MFXInit`); Assess lists every monster at once (the original waits for a key on each, highlighting it).
 - **Talk:** `%k` dropped.
-- **Notepad:** not logged yet: the Whisper "Nothing happens." quirk (P02 0x403), P95's fountain copy; event 153 (notes saved) is not kept.
+- **Notepad:** P95's fountain copy (its trigger untraced) is not logged; event 153 (notes saved) is not kept.
 - **Rooms:** teleportal pedestal out of reach prints nothing; elden answers 2–6 untested (event 115 has no known setter); casino Talk routing is assumed; Library task days `− research>>4` unverified.
 
 ## Done (summary)
