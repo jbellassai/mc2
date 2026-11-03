@@ -50,6 +50,8 @@ export class Talk {
     return new Talk(loc, who, hero, events, comtxt, small, conv, tailor);
   }
 
+  /** The notetaking level of the last greeting or answer (rules/notepad.md: P91 0x4D1/0x53D/0x834/0x88D/0xA56, FFFAR 0x2F49). */
+  level = 0xff;
   get name(): string { return this.who.name ?? ''; }
   /** Merchant data (economy.md): shop list, trade skill, no-buy flag. Empty for townsfolk. */
   get shop() { return this.slot?.shop ?? []; }
@@ -73,6 +75,7 @@ export class Talk {
   greeting(): string {
     const s = this.slot, k = KEY_NPCS.indexOf(this.who.num);
     if (k >= 0) this.events.add(KEY_EVENTS[k]);                      // ovl_05af: talking to a key NPC (P91 0x16/0x20)
+    this.level = s ? (s.greet !== 0xff ? 1 : 2) : 3;
     if (s && s.greet !== 0xff) return this.say(this.conv!.texts[s.greet]);
     return this.say(this.comtxt[0x17] + (this.name ? this.comtxt[0x19] + this.name + this.comtxt[0x10] : ''));
   }
@@ -92,9 +95,11 @@ export class Talk {
     if (!e) {
       const u = this.slot?.unknown ?? 0xff;
       sfx(14);   // ovl_0a08 ends with the error sound
+      this.level = 3;
       return { text: this.say(u !== 0xff ? texts[u] : this.comtxt[0x1b]), end: false };
     }
     if (e.resp === 0xff) return { text: '', end: true };
+    this.level = this.slot ? 1 : 2;
     let resp = e.resp, extra = '';
     for (const c of e.cmds) {
       if (c.op === 'E' && !this.events.has(c.arg!)) resp = c.alt!;

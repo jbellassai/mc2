@@ -26,6 +26,7 @@ import { TOOLS } from './env';
 import { Fx, FX } from './fx';
 import { openScenario, editing, saveFile, type Snapshot } from './scenario';
 import { sidebar, type Command } from './sidebar';
+import { notes } from './notes';
 import type { Icon } from './view';
 
 const status = document.getElementById('status')!;
@@ -144,6 +145,11 @@ async function main() {
     figures = people();
   };
   const close = (msg = '') => { panel.hide(); message = msg; render(); };
+  /** _PrtScrap(level) → _WriteNote: keep `text` in the notepad at notetaking level 1-3 (notes.ts), dated and placed. */
+  const noted = (lvl: number, text: string) => (note(lvl, text), text);
+  notes.where = () => ({ minute: clock.minute, hour: clock.hour, date: clock.date, month: clock.month,
+    year: 10 + Math.floor((181 + clock.juldate) / 360), x: lead.x, y: lead.y, place: place() || world.rec?.name || '' });
+  const note = (lvl: number, text: string) => notes.write(lvl, text);
   const wildxy = () => level.loc.kind === 'world' ? { x: lead.x, y: lead.y } : wildAt;
   /** `_locspec`, `_currm` and `_hroomrec` as _AssignedHere reads them. */
   const spot = () => chamber ? { loc: chamberBack!.level.loc.locnum, room: 0xff, hroom: chamber.hr.id }
@@ -178,7 +184,7 @@ async function main() {
     const lrnTim = (sp: number, h: HeroRecord) => Math.max(2, tables.speltim[sp] - (h.h_intellg as number));   // _LrnTim
     for (const n of assigns.daily(clock, n => party.kept(n, r90[n - 1]), lrnTim)) party.away.delete(n);   // quit: home
     // Hirelings' payday (P92 ovl_09ff): 17:00 warning when the week earns under 6, 18:00 settlement; then departures.
-    const speak = (m: Member, s: string) => { const t = `${m.hero.name}: ${format(s, m.hero, hero.name)}`; if (panel.open) panel.line(t); else message = t; };
+    const speak = (m: Member, s: string) => { const t = noted(1, `${m.hero.name}: ${format(s, m.hero, hero.name)}`); if (panel.open) panel.line(t); else message = t; };
     if (clock.minute === 0 && (clock.hour === 17 || clock.hour === 18))
       for (const [m, att] of party.payday(clock.date, clock.hour === 18)) {
         if (clock.hour === 17 && att < 6) speak(m, p92[0]);
@@ -229,7 +235,8 @@ async function main() {
   // ---- talking (dialogue.md) ----
   const talkTo = async (who: Figure) => {
     const elden = chamber?.says(who);
-    if (elden) { panel.show(); panel.line(`${who.name}: ${elden}`); return void panel.set([{ label: cmd[0], act: () => close() }]); }
+    if (elden) { panel.show(); panel.line(noted(1, `${who.name}: ${elden}`));   // P07 0x51F
+      return void panel.set([{ label: cmd[0], act: () => close() }]); }
     if (scene && party.members.length > 1 && !speaker) {                // P08 scenes care who speaks (`_curpla`)
       panel.show(); panel.line(say(comtxt[0x11]).trim());
       return void panel.set([...party.members.map(m => ({ label: m.hero.name, act: () => { speaker = m; void talkTo(who); } })),
@@ -249,9 +256,10 @@ async function main() {
       if (i >= 0 && t[i]) return close(`${who.name}: ${format(level.loc.texts[t[i + 1]], by.hero, who.name ?? '')}`);
     }
     if (who.num >= 0xfa && ((by.hero.rec.h_charm as number) + party.tailorcharm & 0xff) < level.loc.lcharm)   // FFFAR 0x3245 → ovl_308e
-      return close(format(comtxt[0x13] + npctypes[who.type] + comtxt[0x14] + comtxt[0x16].replace('%b', String(level.loc.lcharm)), by.hero, ''));
+      return close(noted(1, format(comtxt[0x13] + npctypes[who.type] + comtxt[0x14] + comtxt[0x16].replace('%b', String(level.loc.lcharm)), by.hero, '')));
     const t = await Talk.open(level.loc, who, by.hero, events, party.tailorcharm);
     const speak = (s: string) => panel.line(`${who.name ? who.name + ': ' : ''}${s}`);
+    const said = (lvl: number, s: string) => { speak(s); note(lvl, `${who.name ? who.name + ': ' : ''}${s}`); };
     const end = () => { const bye = t.farewell(); close(bye ? `${who.name}: ${bye}` : ''); };
     await loadTrade();
     const coins = (n: number) => `${n} ${comtxt[0xb1]}`;
@@ -327,8 +335,8 @@ async function main() {
     /** _Invite (EXE 2166:01D6) → P97 ovl_03f7 (rules/npcs.md, Companions). */
     const invite = async () => {
       panel.line(`> ${cmd[23]}`, 'you');
-      if (who.num === 166) return speak(format(comtxt[0x63], by.hero, by.hero.name) + (events.has(123) ? '' : comtxt[0x64]));   // FAR_ICANT: Prince Jemil
-      if (who.num >= 0x20) return speak(comtxt[0x1f]);              // FAR_ICANT (FFFAR 0x311C): "I can't do that." 
+      if (who.num === 166) return said(3, format(comtxt[0x63], by.hero, by.hero.name) + (events.has(123) ? '' : comtxt[0x64]));   // FAR_ICANT: Prince Jemil
+      if (who.num >= 0x20) return said(3, comtxt[0x1f]);              // FAR_ICANT (FFFAR 0x311C): "I can't do that." 
       const room = level.loc.kind === 'room';
       const cell = party.members.length < 6 ? party.freeCell((x, y) => room || level.walkable(x, y) && !figureAt(x, y)) : -1;
       if (cell < 0) { sfx(14); return panel.line(comtxt[0x20]); }   // "No room!" (LHITXT), then sound 14
@@ -342,7 +350,7 @@ async function main() {
         party.partyEvents(events, p97.events, who.num, true);
         if (!room) party.place(lead.x, lead.y);                       // _NewPXY: town programs only
         figures = people();
-        close(`${who.name}: ${comtxt[0x21]}`);                        // "I am honored."
+        close(noted(2, `${who.name}: ${comtxt[0x21]}`));              // "I am honored."
       };
       if (rec.h_relatn === 3 && !events.has(65)) return speak(say(p97.texts[0]));   // the King: `_events+8 & 2`
       if (rec.h_relatn !== 2) return join();
@@ -406,7 +414,7 @@ async function main() {
         if (item === 0) r.h_gold -= n;
         else if (item >= 9 && item <= 0x30) { r.h_invitem[slot] = 0xff; r.h_invamt[slot] = 0; }
         else for (let k = 0; k < n; k++) g.dec(slot);
-        speak(t.gift(item, n));
+        said(2, t.gift(item, n));
         menu();
       };
       panel.set([...(r.h_gold > 0 ? [{ label: `${r.h_gold} ${comtxt[0xb1]}`, act: () => pick(0, -1) }] : []),
@@ -425,8 +433,8 @@ async function main() {
       else if (k >= 0 && !events.has(ev)) {
         events.add(ev);
         line += [34, 35, 36].every(n => events.has(n)) ? f(15) + f(16) : [5, 6 + k, 9, 10, 11 + k, 14].map(f).join('');
-      } else line += f(1) + x[2 + rnd(3)];
-      panel.line(line);
+      } else { line += f(1) + x[2 + rnd(3)]; panel.line(line); return menu(); }
+      panel.line(noted(1, line));
       menu();
     }
     function menu() {
@@ -434,17 +442,17 @@ async function main() {
         panel.line(`> ${word}`, 'you');
         const r = t.ask(word);
         if (r.end) return end();
-        speak(r.text);
+        said(t.level, r.text);
         if (r.song !== undefined) {   // P91 ovl_0c57: everyone learns h_songs[s >> 3] bit s & 7; _CalUpd1 ×2 + _CalUpd = 15 minutes
           const k = r.song >> 3, n = r.song & 7;
-          for (const l of t.performance(items[cdata.songs.instruments[k]], cdata.songs.names[k][n], party.members.length === 1)) panel.line(l);
+          t.performance(items[cdata.songs.instruments[k]], cdata.songs.names[k][n], party.members.length === 1).forEach((l, i) => panel.line(noted(i < 2 ? 1 : 2, l)));
           for (const m of party.members) (m.hero.rec.h_songs as unknown as number[])[k] |= 1 << n;
           tick(); tick(); tick();
         }
       }, 'Ask about… (type a word, Enter)');
     }
     panel.show();
-    if (opening) panel.line(opening.text); else speak(t.greeting());
+    if (opening) panel.line(opening.text); else { const g = t.greeting(); said(t.level, g); }
     menu();
   };
 
@@ -479,7 +487,7 @@ async function main() {
    *  come and go with _MultiFX (P08 0x1890 appear, 0x18B4 vanish); the doom blasts each member, then the room's first
    *  person (ovl_0c41 → 0x1986: a burst around them, a flash, thunder, gone). */
   const ending = async () => {
-    const t = level.loc.texts, line = (n: number, h: Hero = hero, o = '') => panel.line(format(t[n], h, o));
+    const t = level.loc.texts, line = (n: number, h: Hero = hero, o = '') => panel.line(noted(1, format(t[n], h, o)));   // P08 0x1877, level 1
     const best = (f: string) => party.members.reduce((a, m) => (m.hero.rec[f] as number) > (a.hero.rec[f] as number) ? m : a).hero.name;
     panel.set([]);
     const appear = async () => {                                        // ovl_13bb (the room's people), then 0x1890
@@ -637,7 +645,7 @@ async function main() {
     const id = `D${String(exit.datafile).padStart(2, '0')}`, pgm = level.loc.pgms[exit.pgm];
     special = null;
     if (scene?.transport) {                                              // P08 ovl_0f20: the White Scroll's council
-      const said = format(level.loc.texts[3] ?? '', hero, hero.name).trim();
+      const said = noted(1, format(level.loc.texts[3] ?? '', hero, hero.name).trim());   // P08 0xF95
       scene = null; outside = null;
       fx.play(FX.flash()); await fx.idle();                              // ovl_0fb9
       await enterRoom(level.loc.doors[0], level.loc.pgms, 3);
@@ -697,8 +705,8 @@ async function main() {
       if (exit) { await toWorldAt(exit.tx, exit.ty); message = text; render(); }
     };
     panel.show();
-    if (r.h_rdyspl !== 29 || !r.h_spells[4][1]) return void leave(t[0]);
-    panel.line(t[0] + format(t[1], h, h.name));
+    if (r.h_rdyspl !== 29 || !r.h_spells[4][1]) return void leave(noted(3, t[0]));   // V02 0xD41
+    panel.line(noted(3, t[0] + format(t[1], h, h.name)));                             // V02 0xD6B
     panel.set([{ label: cmd[3], act: () => {
       const need = Math.max(1, cdata.spells.energy[29] - (r.h_magic >> 2));
       if (r.h_energy < need) return void leave(comtxt[0x41]);                              // "Not enough energy!"
@@ -722,7 +730,7 @@ async function main() {
     noticed = world.notice(x, y, events, world.rec!.doors);
     if (noticed.length) sfx(9);
     const named = noticed.filter(n => n.text !== undefined).pop();
-    if (named) message = world.rec!.texts[named.text!];
+    if (named) message = noted(3, world.rec!.texts[named.text!]);   // P01 0x15A3 at level 3
   };
   /** A world-map step (P01): a town entrance of the current region (`exitptr`) loads that town with the window at
    *  (tx, ty); a mushroom patch opens; a boat is boarded or, aboard, water is sailed and land disembarks (ships.md);
@@ -846,7 +854,7 @@ async function main() {
   /** ovl_15e4 after a step: "Your time is up" (0x25, ovl_0f95) or Amos' theft (0x2C). */
   const shipEvents = () => {
     const s = world.ships, e = s.step();
-    if (e === 'stolen') message = shipText(s.cur, 0x2c);
+    if (e === 'stolen') message = noted(1, shipText(s.cur, 0x2c));   // P01 0x15A3 at level 1
     if (e !== 'timeup') return;
     const i = s.cur, paid = (n: number) => { s.days[i] = n; s.sta[i] = 5; close(); };
     const work = () => {                                                // 0x26: No → back to buying days
@@ -1388,7 +1396,7 @@ async function main() {
     });
     message = '';
     const freed = assigns.rescue(back.level.loc.locnum, ch.hr.id, (x, y) => level.place(x, y, (a, b) => taken.some(t => t.x === a && t.y === b)), events);
-    if (freed.length) message = assigns.rescueText;                    // P07 ovl_05ad: a prison cell
+    if (freed.length) message = noted(3, assigns.rescueText);          // P07 ovl_05ad: a prison cell (0x623, level 3)
     figures = people();
   };
   /** P07 ovl_06c2, using the room's scroll (item 0x4A + type) in a Dark Candle room: an undeciphered scroll is blank
@@ -1405,7 +1413,7 @@ async function main() {
     if (reader) fx.play(FX.bang(reader));
     ch.snuff(); ch.freed = ch.elden(); events.add(0x3c + ch.type);
     figures = people();
-    return [t(6), t(7), t(8, ch.freed.name)].join(' ');
+    return noted(2, [t(6), t(7), t(8, ch.freed.name)].join(' '));   // P07 0x7F3
   };
   /** The chest and fountain need the acting member next to them (`_ChkRng` 1); otherwise " %w considers moving closer
    *  to it." (text 8; text 7 when another member makes the suggestion — `_Advice` chooses). */
@@ -1451,7 +1459,7 @@ async function main() {
     if (fresh) panel.show();                                           // after openChest its lines stay
     if (!at.near(1, 1)) { panel.line(ptext(8, h, {}, ch)); return void panel.set([{ label: cmd[0], act: () => done() }]); }
     if (duntre.has(ch.key)) { panel.line(ch.texts[1].trim()); return void panel.set([{ label: cmd[0], act: () => done() }]); }
-    panel.line(ptext(n === 1 ? 14 : 6, h, { a: items[item], b: n }, ch));
+    panel.line(fresh ? ptext(n === 1 ? 14 : 6, h, { a: items[item], b: n }, ch) : noted(1, ptext(n === 1 ? 14 : 6, h, { a: items[item], b: n }, ch)));   // P07 0xC0B / P95 0x153E: after a Pick
     panel.set([{ label: cmd[3], act: () => {
       const ok = item === 0 ? h.rec.h_gold + n <= 9999 && (h.rec.h_gold += n, true) : incObj(h, item, n);
       if (!ok) return done(ctext(h.slot(item) >= 0 ? 0x32 : 0x33, { o: h.name }));
@@ -1478,7 +1486,7 @@ async function main() {
         const row = Math.floor(spell / 7), col = spell % 7, before = r.h_spells[row][col];
         r.h_spells[row][col] = Math.min(99, before + ch.hr.amount);
         duntre.add(ch.key);
-        return close(ptext(12, h, { b: r.h_spells[row][col] - before, a: cdata.spells.names[spell] }));
+        return close(noted(2, ptext(12, h, { b: r.h_spells[row][col] - before, a: cdata.spells.names[spell] })));   // P07 0xE01
       }
       r.h_energy = 99; h.isHeTr();
       close(ptext(13, h));
@@ -1648,7 +1656,7 @@ async function main() {
     const t = level.loc.texts[recs[0].text + (carrier ? 0 : 1)] ?? '';
     if (carrier) for (const r of recs) level.set(r.x, r.y, r.newtile);
     const line = format(t.replace(/%a/g, items[key]), carrier?.hero ?? hero, hero.name);
-    message = carrier ? `${carrier.hero.name}: ${line}` : line;
+    message = noted(2, carrier ? `${carrier.hero.name}: ${line}` : line);   // P02 0xE2B / 0xE5F
     if (!carrier) return;
     const pgm = level.loc.pgms[d.pgm];
     if (pgm?.program === 2) { go(await Level.load(`D${two(pgm.datafile)}`, pgm.tileset), lead.x, lead.y); return; }
@@ -1763,7 +1771,7 @@ async function main() {
     if (k >= 0) events.add(spotTables.ambush.events[k]);
     const best = party.members.reduce((a, m) => (m.hero.rec.h_track as number) > (a.hero.rec.h_track as number) ? m : a);
     const seen = sensed === `${p.x},${p.y}` || rnd(200) < (best.hero.rec.h_track as number);
-    if (seen) message = format(comtxt[0xbb], hero, best.hero.name);
+    if (seen) message = noted(3, format(comtxt[0xbb], hero, best.hero.name));   // P02 0x16F3
     const wx = lead.x - 4, wy = lead.y - 3, lv = Level.view(level, wx, wy), diff = Math.max(0, level.loc.locdiff - 1);
     const f = Fight.street(cdata, lv, party.members, p.d1, diff, party.members.map(m => ({ x: m.x - wx, y: m.y - wy })));
     startFight(lv, f, diff, () => ambushed.add(p.d2), null, !seen);
@@ -1773,7 +1781,7 @@ async function main() {
    *  teleportal plays 0x14 and the party dissolves out (P02 ovl_151a), then `_mfxfadein` has the arrival play 0x14
    *  again and dissolve it in (ovl_0e9a, after the new map is drawn); the chute has neither. */
   const jump = async (pgm: number, x: number, y: number, type: number) => {
-    const g = level.loc.pgms[pgm], swept = type === 1, text = comtxt[swept ? 0x7b : 0x7e];
+    const g = level.loc.pgms[pgm], swept = type === 1, text = noted(3, comtxt[swept ? 0x7b : 0x7e]);   // P02 0x103D
     if (!g || g.program !== 2) { message = text; return; }
     if (swept) { message = text; sfx(20); await fade(true); }
     go(await Level.load(`D${two(g.datafile)}`, g.tileset), x + 4, y + 3);
@@ -1797,7 +1805,7 @@ async function main() {
     const t = spotTables.remarks;
     for (let k = 0; k < t.ids.length; k++) if (t.ids[k] === p.d3 && t.locspecs[k] === level.loc.locnum) events.add(t.events[k]);
     const text = format(level.loc.texts[p.d3] ?? '', who?.hero ?? hero, hero.name);
-    message = who ? `${who.hero.name}: ${text}` : text;
+    message = noted(2, who ? `${who.hero.name}: ${text}` : text);   // P02 0x1892
     return true;
   };
 
@@ -1838,7 +1846,7 @@ async function main() {
     const seen = level.loc.kind !== 'level' || inSight(x, y);
     let text = (seen ? say(comtxt[0x08]) : comtxt[0x115]) + what + comtxt[0x10];
     const spot = (level.loc.look ?? []).find(l => l.x === x && l.y === y);
-    if (spot && seen && (!(spot.text & 0x80) || (who && who.num >= 0x20))) text += say(level.loc.texts[spot.text & 0x7f] ?? '');
+    if (spot && seen && (!(spot.text & 0x80) || (who && who.num >= 0x20))) note(2, text += say(level.loc.texts[spot.text & 0x7f] ?? ''));   // _Look: LOOKNOTE 2
     if (special) text += special.look(x, y, lead);
     if (scene?.scrollAt(x, y)) {                                         // P08 ovl_16e9: the scroll on the floor
       const near = adjacent(x, y);
@@ -2055,7 +2063,7 @@ async function main() {
     if (b < 0) { f |= 4; b = -b; }
     if (b + 2 <= a * 3) f |= 2;
     if (b * 3 <= a + 1) f |= 1;
-    return format(comtxt[0x9d], h, h.name) + comtxt[0x9e + v02.sense[f]];
+    return noted(3, format(comtxt[0x9d], h, h.name) + comtxt[0x9e + v02.sense[f]]);   // V02 0x78F
   };
   /** Teleport (P01 ovl_1b02 → P89): not aboard (region text 0x1A) or while camping (0x19). The magic skill picks a
    *  tier ([10, 30, 50, 70, 90], below 10 nothing) and the window rectangle the target must lie in; the target is not
@@ -2088,7 +2096,7 @@ async function main() {
     if (v >= cdata.maxtbl[idx * 6 + r.h_race] || rnd(100) >= (v < 50 ? (50 - v) >> 2 : 1)) return '';
     r[f] = v + 1;
     sfx(13);                                                            // FAR_SKILLUP0: GameSound(0x0D) with the line
-    return ctext(0x60, { h: h.name, l });
+    return noted(3, ctext(0x60, { h: h.name, l }));                    // FFFAR 0x36EF
   };
   let shipCamp: (() => void) | null = null;   // camping aboard: one camp pass per sailing step (P93 SUB_04d4)
   let camping = false;                          // the camp menu is up (Teleport: "End camp activities first.")
@@ -2307,7 +2315,7 @@ async function main() {
       figures = people(); close(`${name} leaves the party.`);
     };
     const pick = (q: string, then: (n: number) => void) => {
-      panel.line(`${name}: ${fmt(q)}`);
+      panel.line(noted(3, `${name}: ${fmt(q)}`));                // P88 0xAB5
       panel.set([...assigns.dests(been).map(n => ({ label: assigns.destName(n), act: () => then(n) })), { label: cmd[0], act: () => close() }]);
     };
     const kind = service?.kind ?? 0;
@@ -2326,7 +2334,7 @@ async function main() {
         panel.set([{ label: cmd[3], act: () => { assigns.travel(make(null), n, w); part(); } }, { label: cmd[4], act: () => close() }]);
       }) },
       { label: assigns.menu[1], act: () => {                            // Stay: 1-30 days, then a stronghold
-        panel.line(`${name}: ${comtxt[0x72]}`);
+        panel.line(noted(3, `${name}: ${comtxt[0x72]}`));
         panel.set([{ label: cmd[0], act: () => close() }], word => {
           const days = Number(word);
           if (!Number.isInteger(days) || days < 1 || days > 30) return close();
@@ -2366,7 +2374,8 @@ async function main() {
       party.partyEvents(events, p97.events, num, false);
       party.remove(m);
       figures = people();
-      close(farewell ? `${name}: ${thanks}${say(comtxt[6])}` : '');
+      if (thanks) note(2, `${name}: ${thanks}`);                       // P97 0x3C7; the farewell 0x2A1 at level 3
+      close(farewell ? `${name}: ${thanks}${noted(3, say(comtxt[6]))}` : '');
     };
     panel.show();
     let plea = -1;
@@ -2379,7 +2388,7 @@ async function main() {
       } else plea = 5;
     }
     if (plea < 0) return go(true);
-    panel.line(`${name}: ${fmt(p97.texts[plea] + p97.texts[2])}`);
+    panel.line(noted(3, `${name}: ${fmt(p97.texts[plea] + p97.texts[2])}`));   // P97 0x353
     panel.set([{ label: cmd[3], act: () => go(false) }, { label: cmd[4], act: () => close() }]);
   };
   // ---- saving (decision 4): the port's own JSON snapshot in localStorage, three slots, only between activities ----
@@ -2445,6 +2454,30 @@ async function main() {
     };
     input.click();
   };
+  /** The Notes command (P70 menu 0x13: Look, Save, Print, Clear, Amount, End; the port has no Print). */
+  const notesMenu = () => {
+    const AMOUNT = ['None', 'Minimum', 'Normal', 'Maximum'];
+    panel.show();
+    panel.line(`Notes kept: ${notes.list.length}. Amount of notetaking: ${AMOUNT[notes.level]}.`);
+    panel.set([
+      { label: 'Look', act: () => {
+        panel.show();
+        if (!notes.list.length) panel.line('The notepad is empty.');
+        for (const n of notes.list) { panel.line(notes.heading(n), 'you'); panel.line(n.text); }
+        panel.set([{ label: cmd[0], act: notesMenu }]);
+      } },
+      { label: 'Save', act: () => {
+        const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([notes.file()], { type: 'text/plain' })), download: 'mc2-notes.txt' });
+        a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      } },
+      { label: 'Clear', act: () => {
+        panel.line('Clear the notepad?');
+        panel.set([{ label: cmd[3], act: () => { notes.clear(); notesMenu(); } }, { label: cmd[4], act: notesMenu }]);
+      } },
+      { label: 'Amount', act: () => panel.set(AMOUNT.map((a, i) => ({ label: a, act: () => { notes.setLevel(i); notesMenu(); } }))) },
+      { label: cmd[0], act: gameMenu },
+    ]);
+  };
   /** G: the game panel — save to or load from a slot, or start over. */
   const gameMenu = () => {
     const saved = (n: number) => { try { return JSON.parse(store.get(slotKey(n)) ?? 'null') as Save | null; } catch { return null; } };
@@ -2459,6 +2492,7 @@ async function main() {
       } })),
       ...(canSave() ? [{ label: 'Download save', act: () => saveFile(snapshot(), 'save') }] : []),
       { label: 'Upload save', act: uploadSave },
+      { label: 'Notes', act: notesMenu },
       ...(SANDBOX ? [{ label: 'Scenario', act: () => { close(); scenarioCmd(); } }] : []),
       { label: `Sound: ${audio.sound ? 'on' : 'off'}`, act: () => { audio.sound = !audio.sound; saveAudio(); menu(); } },
       { label: `Music: ${{ modern: 'modern', original: 'original FM', off: 'off' }[audio.music]}`, act: () => {
@@ -2528,6 +2562,7 @@ async function main() {
     if (talking) { talking = false; void talkAt(lead.x + k[0], lead.y + k[1]).then(render); return; }
     queue = queue.then(() => step(...k)).catch(err => { status.textContent = String(err); console.error(err); });
   });
+  if (!('slot' in start)) note(1, message);                    // P81 0x1AED: "%h has landed in Telermain."
   if ('slot' in start) {                                       // Continue: the chosen slot
     try { await restore(JSON.parse(localStorage.getItem(`mc2.save.${start.slot}`)!)); } catch (e) { message = String(e); }
   }

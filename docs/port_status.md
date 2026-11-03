@@ -8,14 +8,13 @@ Fixed during the audit: **events 31/32** (the Slow Death decoy rooms, V02 `INT60
 not be freed and the game could not be finished (`rules/locations.md`, Dark Candle rooms). Fixed after it: the
 key-NPC talk events (P91 `ovl_05af`, which gate the Dorak guides' chain), the season events and the month's weather
 table (P92 `ovl_0265`), songs taught in conversation (P91 `ovl_0c57`), volunteer morale (P95 `ovl_0fc0`, P92 `ovl_02ed`), the resident's "I have a key" (P02 0xA16), event 30 on
-buying from NPC 88 (P90 0x989), room remarks to a companion (P91 `ovl_0a95`), the Map and Map Flask (P02 `ovl_13ab`/`ovl_13c4`, `_ShowMiniMap`).
+buying from NPC 88 (P90 0x989), room remarks to a companion (P91 `ovl_0a95`), the Map and Map Flask (P02 `ovl_13ab`/`ovl_13c4`, `_ShowMiniMap`), the notepad (P70, `rules/notepad.md`).
 
 ## Gaps that change play
 
 | gap | original | note |
 |---|---|---|
 | Auto-heroes never cast | P94 `ovl_157b`/`ovl_1553` | Head/Will heroes with no target step at random |
-| Notepad | P70 (`NOTES000.MCN`, event byte 19 0x2) | |
 | Acting member (`_curpla`) | P90 Buy/Sell, P02 Pick/Break, captains, patch moves | port always uses the player (leader) |
 
 ## Smaller differences
@@ -23,7 +22,8 @@ buying from NPC 88 (P90 0x989), room remarks to a companion (P91 `ovl_0a95`), th
 - **World:** captain countdown and Amos's theft run at midnight instead of 08:00 / 07:00, and Amos zeroes `h_gold` instead of taking Coin items; event bit 0 (day/night) never set; Teleport doesn't highlight valid squares; Assign is on the sheet, not Talk (Dismiss too).
 - **Combat AI:** monsters cast without spending energy, never Restsoul undead, never re-arm (D06 ptr12), "magic-user" criterion never matches (`c_magicused` untracked); flee has no leader handover or panic spread; a hit does not clear the routed bit 0x40; bump-attack also with a bow; no friendly-fire prompt; target-on-death event (P06 `ovl_0cde` step 6) untraced; Head asks no speed digit.
 - **Spells:** Drain on a hero only lowers the combat record; Forget on a monster keeps its spell; Assess uses the port's own text; See plays one sound (original 10 then 9), Confuse/Locate one (original three).
-- **Talk:** location default greeting/farewell (loc+60/+61) skipped; `_met` not kept (elven prince); `%k` dropped.
+- **Talk:** location default greeting/farewell (loc+60/+61) skipped; `_met` not kept (elven prince); `%k` dropped. The notepad trace found FFFAR calling P91 entry 5 (`ovl_0546`) as `_SecondMeet`: the slot byte the port shows as a farewell is probably the greeting for a second meeting (default comtxt 0x18 "Greetings, %h, it's good to see you again.") — unverified.
+- **Notepad:** not logged yet (the port lacks or differs at these prints): Talk to a party member (FFFAR 0x2DD3), an assigned companion's greeting (0x2F9D), Buy/Sell and Offer refusals (EXE `_BuySell`/`_Offer`), "The scroll reads:" (P02 0x13A3), Talk at a look spot (FFFAR 0x2CCE, the port prints no look text there), the Whisper "Nothing happens." quirk (P02 0x403), P95's fountain copy; event 153 (notes saved) is not kept.
 - **Rooms:** ghost stays drawn after Restsoul until the next hour/re-entry; teleportal pedestal out of reach prints nothing; elden answers 2–6 untested (event 115 has no known setter); casino Talk routing is assumed; Library task days `− research>>4` unverified.
 
 ## Done (summary)

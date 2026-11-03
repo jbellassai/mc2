@@ -1,5 +1,6 @@
 // Service rooms run by P05 (docs/rules/services.md): inn, school, jobs, library, wizards' lodge.
 // Texts are the room D-file's own (D07-D11) plus common text; tables come from p05.json.
+import { notes } from './notes';
 import { json } from './pack';
 import { format, wmatch } from './talk';
 import { SKILLS, type Hero } from './hero';
@@ -175,7 +176,7 @@ export class ServiceRoom {
         if (!L.days[g]) {
           for (let n = (100 - research >> 2) + 1; n; n--) this.ctx.tick();   // the party waits while the hero reads
           this.line(this.texts[5]);
-          for (const t of L.lists[L.task[g]] ?? []) this.line(L.texts[t] ?? '');
+          for (const t of L.lists[L.task[g]] ?? []) { this.line(L.texts[t] ?? ''); notes.write(1, L.texts[t] ?? ''); }   // P05 0xF59
           return this.done();
         }
         const item = L.task[g] + 0x2e, a = this.ctx.items[item];

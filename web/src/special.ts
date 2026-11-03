@@ -1,6 +1,7 @@
 // Special rooms run by P09 (rules/special_rooms.md): casinos, temples, gates and the elven prince. The room kind is P09's `_rmtyp`
 // (7 casino, 10 teleportal, 11 meeting hall, 12 world temple, 13 dungeon temple, 14 gate) and `index` its OV_0x181
 // (`id − base`; for a temple, the god).
+import { notes } from './notes';
 import { format, wmatch } from './talk';
 import { panel } from './panel';
 import { json, hex } from './pack';
@@ -155,7 +156,7 @@ export class Special {
     if (this.kind !== TEMPLE && this.kind !== SHRINE) return '';
     const T = this.texts, g = this.index, h = from.hero, tile = this.level.tile(x, y);
     if (this.kind === TEMPLE && p09.altars.includes(tile)) {
-      if (Math.max(Math.abs(from.x - x), Math.abs(from.y - y)) <= 1) return this.say(p09.texts[0] + p09.texts[1]) + this.level.loc.words[g];
+      if (Math.max(Math.abs(from.x - x), Math.abs(from.y - y)) <= 1) { const w = this.say(p09.texts[0] + p09.texts[1]) + this.level.loc.words[g]; notes.write(1, w); return w; }   // P09 0x4D5
       return this.say(p09.texts[0]) + this.advice(p09.texts[3], p09.texts[2], 'h_intellg', h);
     }
     if (!p09.icons.includes(this.level.data.nameindex[tile])) return '';
@@ -198,6 +199,7 @@ export class Special {
     this.level.set(sx, sy, top); this.level.set(sx, sy + 1, low);            // P09 0xD6A: the statue awake, until slumber
     this.ctx.redraw();
     line(T[9 + this.record[0]] + T[g] + T[8]);
+    notes.write(3, T[9 + this.record[0]] + T[g] + T[8]);                    // P09 0xD39
     const d = this.demand(g);
     if (d === null && g < 4) { line(T[13], { a: this.ctx.kins[[3, 2, 0, 4][g]] }); return slumber(), true; }   // "I see no %a in your assemblage."
     if (d === null) { line(T[16] + T[10 + g]); return thunder(), true; }   // "You dare to waken me without offering …"
@@ -209,7 +211,8 @@ export class Special {
       slumber();
     };
     if (!d.take) return bless(), true;
-    line(T[19] + T[10 + g] + (g === 7 ? T[20] : '') + T[21], {}, d.name);   // "Welcome, mortals. I demand the sacrifice of …"
+    line(T[19] + T[10 + g] + (g === 7 ? T[20] : '') + T[21], {}, d.name);
+    notes.write(1, format(T[19] + T[10 + g] + (g === 7 ? T[20] : '') + T[21], h, d.name));   // P09 0xE68   // "Welcome, mortals. I demand the sacrifice of …"
     this.yesNo(() => { d.take!(); bless(); }, thunder);
     return true;
   }

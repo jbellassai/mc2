@@ -2,6 +2,7 @@
 // Look) whose program adds scenes keyed by (`_locspec`, room id): `_rmdata[7]` is the location the door was in (P02
 // 0x792 / P01 copy `_locspec`), `_rmdata[0]` the door's room id. The ending and the epilogue are in main.ts. Not
 // built: the room-wide colour flashes.
+import { notes } from './notes';
 import { json } from './pack';
 import { FX, type Frame } from './fx';
 import { format } from './talk';
@@ -96,8 +97,8 @@ export class Scene {
   enter(): string {
     const p = this.player().hero;
     if (this.locspec === 1 && this.room === 0 && p.rec.h_invitem[39] === 0xff && !this.has(28)) {
-      if (this.has(27)) { incObj(p, 0x58, 1); this.ctx.events.add(28); return this.say(this.loc[1], p); }
-      if (!this.has(103)) { incObj(p, 0x55, 1); this.ctx.events.add(103); return this.say(this.loc[0], p); }
+      if (this.has(27)) { incObj(p, 0x58, 1); this.ctx.events.add(28); return noted(2, this.say(this.loc[1], p)); }   // P08 0xCE9/0xD28
+      if (!this.has(103)) { incObj(p, 0x55, 1); this.ctx.events.add(103); return noted(2, this.say(this.loc[0], p)); }
     }
     if (this.locspec === 56 && this.room === 6 && !this.has(94)) return this.say(this.t[12], p);
     return '';
@@ -140,14 +141,15 @@ export class Scene {
         if (!this.has(85)) {                                              // the Blue Scroll (0x4F) for the player
           this.give(p, 0x4f);
           this.ctx.events.add(85);
-          return { text: `${who.name}: ${this.say(this.loc[0], h)}` };
+          return { text: noted(1, `${who.name}: ${this.say(this.loc[0], h)}`) };   // P08 0x1877, level 1
         }
         n = 1;
       } else if (!(this.elden & 8) || !kingHere) return null;
       else if (this.elden & 0x20) n = 2;
       else n = king ? 3 : 4;
     }
-    return { text: `${who.name}: ${this.say(this.loc[n], h)}` };           // _Offer1 (KNPCSays) + ovl_1862 loctext[n]
+    const text = `${who.name}: ${this.say(this.loc[n], h)}`;
+    return { text: n === 1 || n === 6 ? noted(1, text) : text };           // _Offer1 (KNPCSays) + ovl_1862 loctext[n]
   }
 
   /** ovl_0e86: give `item` to `h`, first dropping junk (P08 0xF49 list; the Conch only for the Orb) when the pack is
@@ -186,7 +188,7 @@ export class Scene {
    *  (14); else the cleverest member wonders about the Marked Ones (15). Null = not handled here. */
   use(item: number, user: Member): string | null {
     if (item !== ORB || this.locspec !== 1 || this.room !== 5 || this.bird) return null;
-    if (![34, 35, 36].every(this.has)) return this.say(this.t[15], user.hero, {}, this.wise().hero.name);
+    if (![34, 35, 36].every(this.has)) return noted(2, this.say(this.t[15], user.hero, {}, this.wise().hero.name));   // P08 0xDF7
     this.level.set(4, 2, 0x11); this.level.set(5, 2, 0x10); this.level.set(4, 3, 0x14); this.level.set(5, 3, 0x15);
     this.bird = true; this.ctx.sound(10); this.ctx.fx(FX.spef6(user));   // then Spef6 on the user
     return this.say(this.t[14], user.hero);
@@ -215,7 +217,7 @@ export class Scene {
     this.ctx.scroll.item = item;
     this.level.set(CELL.x, CELL.y, SCROLLTILE);
     this.ghost = 0;
-    return this.say(this.loc[1], h, { a: this.ctx.items[item] });
+    return noted(1, this.say(this.loc[1], h, { a: this.ctx.items[item] }));   // P08 0x169A
   }
 
   /** Is (x, y) the scroll on the floor (Look, ovl_16e9)? */
@@ -236,7 +238,7 @@ export class Scene {
     this.level.set(CELL.x, CELL.y, FLOOR);
     this.ctx.scroll.item = 0;
     if (item === WHITE) { this.transport = true; this.ctx.events.add(7); this.ctx.disaster(); }
-    return [this.say(this.loc[2], h), this.say(this.t[17], h, {}, this.wise().hero.name)].join(' ');
+    return noted(1, [this.say(this.loc[2], h), this.say(this.t[17], h, {}, this.wise().hero.name)].join(' '));   // P08 0x17E1
   }
 
   /** L_06fa: a scroll still on the floor once the ghost is gone holds everyone back: "%o refuses to leave the %a
@@ -247,3 +249,6 @@ export class Scene {
     return this.say(this.t[11], w, { a: this.ctx.items[this.scroll] }, w.name);
   }
 }
+
+/** rules/notepad.md: keep `text` at notetaking level `lvl`. */
+const noted = (lvl: number, text: string) => (notes.write(lvl, text), text);

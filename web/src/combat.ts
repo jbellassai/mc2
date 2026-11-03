@@ -5,6 +5,7 @@
 // Monsters cast their two spells by the leader race's D06 chance (spells.ts). The pre-fight Talk (rally, hailing the leader) is here and in main.ts.
 // Records 6-23 act by the AI whichever side they are on (a betrayed monster, a summoned one, a hero's double).
 // A Doombeast brings five images that never act; a blow on one makes it vanish (P96 ovl_1405, V06 INT61_24).
+import { notes } from './notes';
 import { json } from './pack';
 import type { Hero } from './hero';
 import type { Level } from './level';
@@ -384,7 +385,9 @@ export class Fight {
     r[field] = skill + 1;
     a.wskl = Fight.wpnSkl(h); a.mskl = r.h_magic;
     this.sound(13);                                       // FAR_SKILLUP: GameSound(0x0D)
-    return [text(0x60, { h: a.name, l: ['Sword', 'Axe', 'Archery', 'Magic', 'Fist'][idx] })];
+    const line = text(0x60, { h: a.name, l: ['Sword', 'Axe', 'Archery', 'Magic', 'Fist'][idx] });
+    notes.write(3, line);                                 // FFFAR 0x36EF
+    return [line];
   }
 
   /** P96 0x375: when `_curreg` is 12 (the Tundra) the set-up first builds Barbarians (race 41) as records 17-21, on the
