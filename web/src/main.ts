@@ -1335,7 +1335,7 @@ async function main() {
    *  entering the room (P95 returns before `_p07flg`; the `_exitdir` it sets is read only by P07), so the party is back
    *  outside the door. A dead body on the square swaps places with the mover; any other blocked step sounds 0x0E. */
   const poststep = (dx: number, dy: number) => {
-    const f = fight!, a = f.recs.find(r => r.hero && f.alive(r));
+    const f = fight!, a = f.recs.find(r => r.hero === act().hero && f.alive(r)) ?? f.recs.find(r => r.hero && f.alive(r));   // `_curpla`, else the first living hero
     if (!a) return;
     const x = a.x + dx, y = a.y + dy, door = fightRoom?.doors().some(d => d.x === x && d.y === y);
     const tired = !a.hero!.rec.h_energy, off = x < 0 || y < 0 || x >= 11 || y >= 9, blocked = tired || !f.free(x, y);
@@ -1469,7 +1469,7 @@ async function main() {
   };
   /** The chest and fountain need the acting member next to them (`_ChkRng` 1); otherwise " %w considers moving closer
    *  to it." (text 8; text 7 when another member makes the suggestion — `_Advice` chooses). */
-  const near = (x: number, y: number) => Math.max(Math.abs(lead.x - x), Math.abs(lead.y - y)) <= 1;
+  const near = (x: number, y: number) => Math.max(Math.abs(act().x - x), Math.abs(act().y - y)) <= 1;   // _ChkRng: `_curpla`
   const ptext = (n: number, h: Hero, v: Record<string, string | number> = {}, ch = chamber!) => format(ch.texts[n], h, h.name, v).trim();
   /** Where a chest is opened: P07 in the room (the leader's range, `opened`), or P95 on the aftermath screen (the acting
    *  record's range, its own flag OV_0x122F: P07 loads with its flag clear and rolls the lock again). */
@@ -1610,7 +1610,7 @@ async function main() {
    *  the acting member (_IncObj), and a refusal (comtxt 0x32 / 0x33) leaves it growing; then text 2 (P04 ovl_04dd prints
    *  both: AX 0 at 0x39E, 2 at 0x421). */
   const pickAt = (x: number, y: number) => {
-    const p = patch!, i = p.find(x, y), h = lead.hero;
+    const p = patch!, i = p.find(x, y), h = act().hero;
     if (i < 0) return;
     const vars = { a: items[p.item], b: p.amount };
     panel.show();
@@ -1624,15 +1624,15 @@ async function main() {
   const step = async (dx: number, dy: number) => {
     lastStep = { dx, dy };
     if (level.loc.kind === 'world') { await worldStep(dx, dy); return render(); }
-    const room = level.loc.kind === 'room';
-    const who = figureAt(lead.x + dx, lead.y + dy);
+    const room = level.loc.kind === 'room', me = room ? act() : lead;   // a room's _RMove moves `_curpla` alone
+    const who = figureAt(me.x + dx, me.y + dy);
     if (who) {   // walking into someone talks to them (the original uses a Talk command)
       message = '';
       if (!keeper()) await talkTo(who);
       return render();
     }
-    const movers = room ? [lead] : [...party.members].reverse();
-    const scared = scene?.step(dy, lead.hero);
+    const movers = room ? [me] : [...party.members].reverse();
+    const scared = scene?.step(dy, me.hero);
     if (scared) { message = scared; return render(); }
     const unable = movers.find(m => (m.hero.rec.h_cond1 as number) & 0xfc);   // Dead, Paralyzed, Exhausted, Poisoned, Starving
     if (unable) { message = `${unable.hero.name}: ${unable.hero.condition(conds)}.`; return render(); }
@@ -1672,7 +1672,7 @@ async function main() {
     sfx(7);                                                             // P02 ovl_02ab / _RMove: a step
     if (walkwater && !room) walkwater--;
     message = '';
-    if (patch) pickAt(lead.x, lead.y);
+    if (patch) pickAt(me.x, me.y);
     walked();
     if (level.loc.kind === 'level') await spotsAround();
     render();
@@ -1720,7 +1720,7 @@ async function main() {
   const mark = (prompt: string, then: (x: number, y: number) => void, cancel: () => void = () => {}) => {
     message = prompt; marking = then; unmark = cancel; render();
   };
-  const adjacent = (x: number, y: number) => Math.max(Math.abs(lead.x - x), Math.abs(lead.y - y)) <= 1;
+  const adjacent = (x: number, y: number) => Math.max(Math.abs(act().x - x), Math.abs(act().y - y)) <= 1;   // _ChkRng(x, y, 1): `_curpla`
   const spotAt = (x: number, y: number, type: number) => (level.loc.spots ?? []).find(p => p.x === x && p.y === y && p.type === type);
   /** Shovel: "Where shall %h dig?" (0x7F); an unwalkable square without a Look text → "%h is unable to dig there."
    *  (0x80); a type-3 spot whose treasure is still there → its treasure, else "%h finds nothing." (0x81). */
@@ -2200,8 +2200,7 @@ async function main() {
   };
   /** Use (U), _UseItem: the member's items 0x31-0x50 and 0x5B ("Select."). For the consumables (DS:8AE) a party of
    *  2+ is asked "Is this order for everyone?": then each member holding one uses it ("%o uses a %l.") or "%o has no %ls.".
-   *  Alone: success "%o uses a %l.", nothing to do → the item's _NoUse text. The original acts as `_curpla`; the port
-   *  asks whose pack first. */
+   *  Alone: success "%o uses a %l.", nothing to do → the item's _NoUse text. The member is the acting one (`_curpla`). */
   const useCmd = () => {
     const fmt = (s: string, who: Hero, item: number) => format(s.replace(/%l/g, items[item]), who, who.name);
     const usable = (who: Hero) => [...new Set(who.rec.h_invitem.filter(c => c > 0x30 && c < 0x51 || c === 0x5b))];
@@ -2292,9 +2291,7 @@ async function main() {
       panel.line(comtxt[0x2b]);                                                   // "Select."
       panel.set([...codes.map(c => ({ label: items[c], act: () => pick(who, c) })), { label: cmd[0], act: () => close() }]);
     };
-    if (party.members.length < 2) return list(hero);
-    panel.show();
-    panel.set([...party.members.map(m => ({ label: m.hero.name, act: () => list(m.hero) })), { label: cmd[0], act: () => close() }]);
+    list(act().hero);                                                    // _UseItem acts as `_curpla`
   };
   /** Transfr (FFFAR INT62_0a): "To whom?" (0x26; `_HeroSel(1, 0)`: the members, Drop, None; the giver ends it), then
    *  "Select." (0x2B) an item (Coins = h_gold). Unless the giver is dead: _BookChk (spell books 0x53-0x59: a Wizard
@@ -2609,7 +2606,8 @@ async function main() {
       if (k && actor && !autoHeroes.has(actor.recno)) { e.preventDefault(); fightStep(...k); }
       else if (k && before) { e.preventDefault(); prestep(...k); }
       else if (k && raising) { e.preventDefault(); poststep(...k); }
-      else if (raising && e.key.toLowerCase() === 'i') { raising = false; sheet(); }   // _Parser: the status screen (_Status0)
+      else if (raising && e.key.toLowerCase() === 'i') { raising = false; sheet(); }
+      else if (raising && /^[1-6]$/.test(e.key) && party.members[Number(e.key) - 1]) { acting = party.members[Number(e.key) - 1]; render(); }   // assumed allowed here   // _Parser: the status screen (_Status0)
       return;
     }
     if (panel.open) return;
@@ -2624,9 +2622,10 @@ async function main() {
     const k = KEYS[e.key];
     if (!k) return;
     e.preventDefault();
-    if (looking) { looking = false; look(lead.x + k[0], lead.y + k[1]); return; }
-    if (marking) { const f = marking; marking = null; message = ""; f(lead.x + k[0], lead.y + k[1]); render(); return; }
-    if (talking) { talking = false; void talkAt(lead.x + k[0], lead.y + k[1]).then(render); return; }
+    const from = act();                                                 // a direction from `_curpla`'s square
+    if (looking) { looking = false; look(from.x + k[0], from.y + k[1]); return; }
+    if (marking) { const f = marking; marking = null; message = ""; f(from.x + k[0], from.y + k[1]); render(); return; }
+    if (talking) { talking = false; void talkAt(from.x + k[0], from.y + k[1]).then(render); return; }
     queue = queue.then(() => step(...k)).catch(err => { status.textContent = String(err); console.error(err); });
   });
   if (!('slot' in start)) note(1, message);                    // P81 0x1AED: "%h has landed in Telermain."

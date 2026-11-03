@@ -16,7 +16,7 @@ None known (2026-11-03). The last four (auto-hero casting, the Map, the notepad,
 
 ## Smaller differences
 
-- **Acting member:** a P05 room or mushroom patch still moves the whole party / the leader rather than `_curpla` alone; Use asks whose pack instead of using `_curpla`; the aftermath screen moves the first living hero; the menus where `_Parser` allows the switch (`_chpmens` = menus 5, 10, 12, 13, 16, 21, 22) are approximated as "no panel open".
+- **Acting member:** the menus where `_Parser` allows the switch (`_chpmens` = menus 5, 10, 12, 13, 16, 21, 22) are approximated as "no panel open" (plus the aftermath screen, assumed); P07/P08 rooms move `_curpla` like P05 (assumed).
 - **World:** Teleport doesn't highlight valid squares; Assign is on the sheet, not Talk (Dismiss too).
 - **Combat AI:** flee has no leader handover or panic spread; no friendly-fire prompt; target-on-death event (P06 `ovl_0cde` step 6) untraced; Head asks no speed digit.
 - **Spells:** Assess uses the port's own text; See plays one sound (original 10 then 9), Confuse/Locate one (original three).
