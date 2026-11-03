@@ -8,16 +8,16 @@ Fixed during the audit: **events 31/32** (the Slow Death decoy rooms, V02 `INT60
 not be freed and the game could not be finished (`rules/locations.md`, Dark Candle rooms). Fixed after it: the
 key-NPC talk events (P91 `ovl_05af`, which gate the Dorak guides' chain), the season events and the month's weather
 table (P92 `ovl_0265`), songs taught in conversation (P91 `ovl_0c57`), volunteer morale (P95 `ovl_0fc0`, P92 `ovl_02ed`), the resident's "I have a key" (P02 0xA16), event 30 on
-buying from NPC 88 (P90 0x989), room remarks to a companion (P91 `ovl_0a95`), the Map and Map Flask (P02 `ovl_13ab`/`ovl_13c4`, `_ShowMiniMap`), the notepad (P70, `rules/notepad.md`), auto-heroes casting (P94 `ovl_157b`).
+buying from NPC 88 (P90 0x989), room remarks to a companion (P91 `ovl_0a95`), the Map and Map Flask (P02 `ovl_13ab`/`ovl_13c4`, `_ShowMiniMap`), the notepad (P70, `rules/notepad.md`), auto-heroes casting (P94 `ovl_157b`), the acting member (`_curpla`: keys 1–6 or a click on the party list; Talk, Buy/Sell, Pick/Break, ship days and the Disguise gate act as it).
 
 ## Gaps that change play
 
 | gap | original | note |
 |---|---|---|
-| Acting member (`_curpla`) | P90 Buy/Sell, P02 Pick/Break, captains, patch moves | port always uses the player (leader) |
 
 ## Smaller differences
 
+- **Acting member:** a P05 room or mushroom patch still moves the whole party / the leader rather than `_curpla` alone; Use asks whose pack instead of using `_curpla`; the aftermath screen moves the first living hero; the menus where `_Parser` allows the switch (`_chpmens` = menus 5, 10, 12, 13, 16, 21, 22) are approximated as "no panel open".
 - **World:** captain countdown and Amos's theft run at midnight instead of 08:00 / 07:00, and Amos zeroes `h_gold` instead of taking Coin items; event bit 0 (day/night) never set; Teleport doesn't highlight valid squares; Assign is on the sheet, not Talk (Dismiss too).
 - **Combat AI:** monsters cast without spending energy, never Restsoul undead, never re-arm (D06 ptr12), "magic-user" criterion never matches (`c_magicused` untracked); flee has no leader handover or panic spread; a hit does not clear the routed bit 0x40; bump-attack also with a bow; no friendly-fire prompt; target-on-death event (P06 `ovl_0cde` step 6) untraced; Head asks no speed digit.
 - **Spells:** Drain on a hero only lowers the combat record; Forget on a monster keeps its spell; Assess uses the port's own text; See plays one sound (original 10 then 9), Confuse/Locate one (original three).

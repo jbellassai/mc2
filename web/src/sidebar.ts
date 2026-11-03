@@ -1,7 +1,7 @@
 // The command sidebar beside the map, after the original frame's right column (VSCRA.MCE: the party list numbered
 // 1-6 and the menu window): the party with health and energy, and every command as a button with its hotkey.
 export interface Command { label: string; key: string; act: () => void }
-export interface Row { name: string; hp: number; hpmax: number; energy: number; state: string; ok: boolean }
+export interface Row { name: string; hp: number; hpmax: number; energy: number; state: string; ok: boolean; acting: boolean }
 
 const side = document.getElementById('side')!, partyBox = document.getElementById('party')!, cmdBox = document.getElementById('commands')!;
 const kbd = (k: string) => Object.assign(document.createElement('kbd'), { textContent: k });
@@ -41,6 +41,7 @@ export const sidebar = {
       q('.name').textContent = p.name;
       q('.state').textContent = p.state;
       r.classList.toggle('bad', !p.ok);
+      r.classList.toggle('acting', p.acting);
       r.title = `${p.name}: HP ${p.hp} / ${p.hpmax}, energy ${p.energy}`;
       (q('.hp i')).style.width = `${Math.max(0, Math.min(100, 100 * p.hp / Math.max(1, p.hpmax)))}%`;
       (q('.en i')).style.width = `${Math.max(0, Math.min(100, p.energy))}%`;

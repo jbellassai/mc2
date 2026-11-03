@@ -77,7 +77,11 @@ async function main() {
   if (TOOLS && /^D\d\d$/.test(q.get('level') ?? '')) START.level = q.get('level')!;   // ?level=D23
   const events = new Set(NEW_GAME_EVENTS);
   const party = new Party(hero, START.x, START.y);
-  const lead = party.leader;                                 // the acting member (_curpla) is always the leader for now
+  const lead = party.leader;                                 // the formation's leader (party slot 0, the player)
+  /** `_curpla`, the acting member: chosen with keys 1-6 or a click on the party list (_Parser, in the menus of
+   *  `_chpmens`); the player when the chosen member has left. */
+  let acting: Member | null = null;
+  const act = () => acting && party.members.includes(acting) ? acting : party.members[0];
   if (TOOLS) Object.assign(window, { dbg: { party, world } });   // for scripts/shot.mjs eval:
   let level = await Level.load(START.level);
   let outside: { level: Level; x: number; y: number } | null = null;   // where to return from a room
@@ -130,7 +134,7 @@ async function main() {
     status.textContent = `${clock}  —  ${where}${message ? '  —  ' + message : ''}`;
     sidebar.update(party.members.map(m => {
       const r = m.hero.rec, state = m.hero.condition(conds);
-      return { name: m.hero.name, hp: r.h_hitpts, hpmax: r.h_hpmax, energy: r.h_energy, state, ok: state === conds[0] };
+      return { name: m.hero.name, hp: r.h_hitpts, hpmax: r.h_hpmax, energy: r.h_energy, state, ok: state === conds[0], acting: m === act() && party.members.length > 1 };
     }), !fight && !panel.open);
   };
   /** School and job D-files have no location name: show the town's (the region's, from the world map). */
@@ -242,7 +246,7 @@ async function main() {
       return void panel.set([...party.members.map(m => ({ label: m.hero.name, act: () => { speaker = m; void talkTo(who); } })),
         { label: cmd[0], act: () => close() }]);
     }
-    const by = speaker ?? party.members[0];
+    const by = speaker ?? act();
     speaker = null;
     if (!(who.num < 0x20 && assigns.get(who.num)) && armed(by.hero)) return;
     const prince = special?.greet(who.num, by.hero);
@@ -267,8 +271,10 @@ async function main() {
     const fill = (s: string, n: number) => say(s.replace('%i', String(n)), who.name);
     const yesNo = (yes: () => void, no: () => void) => panel.set([{ label: cmd[3], act: yes }, { label: cmd[4], act: no }]);
     // The order the original assembles these common texts in is not traced; this follows the economy.md flow.
+    // Buy and Sell act as the speaker (`_curpla`, P90 / EXE _BuySell): their trade skill, gold and pack.
+    const bsay = (s: string, o = '') => format(s, by.hero, o);
     const ask = (q: string, max: number, then: (n: number) => void) => {
-      speak(say(q, who.name));
+      speak(bsay(q, who.name));
       panel.set([{ label: cmd[0], act: menu }], w => {
         const n = Number(w);
         panel.line(`> ${w}`, 'you');
@@ -278,12 +284,12 @@ async function main() {
       }, `0–${max}`);
     };
     const buy = () => {
-      speak(say(comtxt[0xac].trim(), who.name));
-      panel.set([...t.shop.map(s => ({ label: `${items[s.item]} — ${coins(prices(s, hero.rec.h_trade as number, t.skill).charges)}${pouch(s.item)}`,
+      speak(bsay(comtxt[0xac].trim(), who.name));
+      panel.set([...t.shop.map(s => ({ label: `${items[s.item]} — ${coins(prices(s, by.hero.rec.h_trade as number, t.skill).charges)}${pouch(s.item)}`,
         act: () => buyOne(s) })), { label: cmd[0], act: menu }]);
     };
     const buyOne = (s: { item: number; pays: number; charges: number }) => {
-      const each = prices(s, hero.rec.h_trade as number, t.skill).charges, n = lot(s.item);
+      const each = prices(s, by.hero.rec.h_trade as number, t.skill).charges, n = lot(s.item);
       panel.line(`> ${items[s.item]}`, 'you');
       speak(comtxt[0xb0] + coins(each) + pouch(s.item) + '.');
       const deal = (count: number) => {
@@ -291,11 +297,11 @@ async function main() {
         const total = each * count;
         speak(fill(comtxt[0xc0], total) + comtxt[0xc4]);
         yesNo(() => {
-          if (hero.rec.h_gold < total) speak(say(comtxt[0x25]));                   // "%h doesn't have that much!"
-          else if (incObj(hero, s.item, n * count)) {
-            hero.rec.h_gold -= total;
+          if (by.hero.rec.h_gold < total) speak(bsay(comtxt[0x25]));                   // "%h doesn't have that much!"
+          else if (incObj(by.hero, s.item, n * count)) {
+            by.hero.rec.h_gold -= total;
             if (who.num === 88) events.add(30);                            // P90 0x989: a purchase from NPC 88
-            speak(say(comtxt[0xc1]));
+            speak(bsay(comtxt[0xc1]));
           }
           menu();
         }, () => { speak(comtxt[0xc2]); menu(); });
@@ -305,28 +311,28 @@ async function main() {
     };
     const sell = () => {
       if (t.nobuy) { speak(comtxt[0xc7].trim()); return menu(); }
-      const wanted = t.shop.filter(s => sellable(hero, s.item).length);
-      if (!wanted.length) { speak(say(comtxt[0xb8], who.name)); return menu(); }
+      const wanted = t.shop.filter(s => sellable(by.hero, s.item).length);
+      if (!wanted.length) { speak(bsay(comtxt[0xb8], who.name)); return menu(); }
       speak(comtxt[0xbd].trim());
-      panel.set([...wanted.map(s => ({ label: `${items[s.item]} — ${coins(prices(s, hero.rec.h_trade as number, t.skill).pays)}${pouch(s.item)}`,
+      panel.set([...wanted.map(s => ({ label: `${items[s.item]} — ${coins(prices(s, by.hero.rec.h_trade as number, t.skill).pays)}${pouch(s.item)}`,
         act: () => sellOne(s) })), { label: cmd[0], act: menu }]);
     };
     const sellOne = (s: { item: number; pays: number; charges: number }) => {
-      const each = prices(s, hero.rec.h_trade as number, t.skill).pays, n = lot(s.item), slots = sellable(hero, s.item);
-      const have = single(s.item) && s.item <= 0x30 ? slots.length : hero.rec.h_invamt[slots[0]];
+      const each = prices(s, by.hero.rec.h_trade as number, t.skill).pays, n = lot(s.item), slots = sellable(by.hero, s.item);
+      const have = single(s.item) && s.item <= 0x30 ? slots.length : by.hero.rec.h_invamt[slots[0]];
       const max = Math.floor(have / n);
       panel.line(`> ${items[s.item]}`, 'you');
-      if (!max) { speak(say(comtxt[0xb8], who.name)); return menu(); }
-      if (s.item >= 0x53 && s.item <= 0x59 && hero.rec.h_race === 1 && hero.rec.h_invitem.filter(c => c >= 0x53 && c <= 0x59).length <= 1) {
+      if (!max) { speak(bsay(comtxt[0xb8], who.name)); return menu(); }
+      if (s.item >= 0x53 && s.item <= 0x59 && by.hero.rec.h_race === 1 && by.hero.rec.h_invitem.filter(c => c >= 0x53 && c <= 0x59).length <= 1) {
         sfx(14); panel.line(comtxt[0x2e]); return menu();                 // P90 0xA73 → 0x1044: "Wizards must keep at least one book."
       }
       const deal = (count: number) => {
         const total = each * count;
         speak(comtxt[0xc3] + coins(total) + '.' + comtxt[0xc5]);
         yesNo(() => {
-          hero.rec.h_gold += total;
-          for (let k = 0; k < n * count; k++) hero.dec(sellable(hero, s.item)[0]);
-          speak(say(comtxt[0xc1])); menu();
+          by.hero.rec.h_gold += total;
+          for (let k = 0; k < n * count; k++) by.hero.dec(sellable(by.hero, s.item)[0]);
+          speak(bsay(comtxt[0xc1])); menu();
         }, () => { speak(comtxt[0xc2]); menu(); });
       };
       speak(comtxt[0xc3] + coins(each) + pouch(s.item) + '.');
@@ -573,11 +579,11 @@ async function main() {
 
   const lockedDoor = (door: Door) => {
     const r = level.loc.residents[door.id];
-    const doorstn = level.loc.doorstn;
+    const doorstn = level.loc.doorstn, h = act().hero;               // Pick and Break: the acting member
     panel.show();
     panel.line(p02[0]);                                               // "The door is locked."
-    const done = (text: string) => { panel.line(say(text)); menu(); };
-    const goIn = async (...texts: string[]) => { close(); message = texts.map(t => say(t)).join(''); await enterRoom(door); render(); };
+    const done = (text: string) => { panel.line(format(text, h, h.name)); menu(); };
+    const goIn = async (...texts: string[]) => { close(); message = texts.map(t => format(t, h, h.name)).join(''); await enterRoom(door); render(); };
     const yesNo = (text: string) => {
       panel.line(say(text));
       panel.set([{ label: cmd[3], act: () => void goIn() }, { label: cmd[4], act: menu }]);   // Yes / No
@@ -601,15 +607,15 @@ async function main() {
     };
     const pick = () => {
       if (doorstn === 0xff) return done(p02[6]);                      // "%h resists the urge …"
-      const s = hero.slot(PICK);
+      const s = h.slot(PICK);
       if (s < 0) return done(p02[11]);                                // "%h needs a lockpick to do that."
-      if (Math.min(99, (hero.rec.h_dextrty >> 1) + hero.rec.h_lockpck) < rnd(100)) {
-        hero.dec(s); sfx(21); return done(comtxt[0x90]);              // the pick breaks: _DecObj, then comtxt 0x90 (P02 0xB25 → ovl_100b)
+      if (Math.min(99, (h.rec.h_dextrty >> 1) + h.rec.h_lockpck) < rnd(100)) {
+        h.dec(s); sfx(21); return done(comtxt[0x90]);              // the pick breaks: _DecObj, then comtxt 0x90 (P02 0xB25 → ovl_100b)
       }
       void goIn(p02[7], p02[9]);                                      // "The lock clicks open!" " The party goes inside."
     };
     const breakIn = () => {
-      if (doorstn === 0xff || doorstn >= hero.rec.h_strngth) return done(doorstn === 0xff ? p02[6] : p02[10]);
+      if (doorstn === 0xff || doorstn >= h.rec.h_strngth) return done(doorstn === 0xff ? p02[6] : p02[10]);
       void goIn(p02[8], p02[9]);                                      // "%h breaks open the door!"
     };
     function menu() {
@@ -690,13 +696,12 @@ async function main() {
    *  " Will %h cast Disguise?" (text 1); Yes casts it through _Magic (`_indisguise` 2 passes the place gate; the energy,
    *  a copy, the magic roll) and FAR_DISGUISE sets `_indisguise` 1. Refused or failed, P02 leaves at once by the
    *  nearest exit (INT60_11: the first exit record with the least |dx| + |dy| from window + (5,4), whose window it
-   *  takes onto the world map). Any other town or level ends the disguise. The acting member (`_curpla`, the port's
-   *  leader) must have Disguise ready (`h_rdyspl` 0x1D, set by Recall), else only text 0. */
+   *  takes onto the world map). Any other town or level ends the disguise. The acting member (`_curpla`) must have Disguise ready (`h_rdyspl` 0x1D, set by Recall), else only text 0. */
   const enterTown = async (datafile: number, x: number, y: number, tileset?: number) => {
     const into = async () => { go(await Level.load(`D${two(datafile)}`, tileset), x, y); message = ''; render(); };
     if (!v02.disguise.towns.includes(datafile)) { disguise = 0; return into(); }
     if (disguise) return into();
-    const t = v02.disguise.texts, h = lead.hero, r = h.rec;
+    const t = v02.disguise.texts, h = act().hero, r = h.rec;
     const leave = async (text: string) => {                                                // INT60_11
       const lv = await Level.load(`D${two(datafile)}`, tileset), rx = x + 1, ry = y + 1;  // window (x−4, y−3) + (5,4)
       let best = 0xff, exit: Exit | undefined;
@@ -823,8 +828,9 @@ async function main() {
       if (n + world.ships.days[i] > 99) { panel.line(shipText(i, 0x15)); return buyDays(i, ok, cancel); }
       panel.line(shipText(i, 0x13, { i: n * rate }));
       shipYesNo(() => {
-        if (lead.hero.rec.h_gold < n * rate) { panel.line(format(comtxt[0x25], lead.hero, lead.hero.name)); return cancel(); }
-        lead.hero.rec.h_gold -= n * rate;
+        const payer = act().hero;                                      // ovl_0fcc: the acting member pays
+        if (payer.rec.h_gold < n * rate) { panel.line(format(comtxt[0x25], payer, payer.name)); return cancel(); }
+        payer.rec.h_gold -= n * rate;
         ok(n);
       }, () => buyDays(i, ok, cancel));
     }, '0–99');
@@ -2543,7 +2549,7 @@ async function main() {
     { label: 'Game', key: 'G', act: () => gameMenu() },
     ...(SANDBOX ? [{ label: 'Scenario', key: 'F2', act: () => scenarioCmd() }] : []),
   ];
-  sidebar.commands(commands.map(c => ({ ...c, act: free(c.act) })), i => free(() => sheet(party.members[i].hero))());
+  sidebar.commands(commands.map(c => ({ ...c, act: free(c.act) })), i => free(() => { acting = party.members[i]; sheet(party.members[i].hero); })());
   addEventListener('keydown', e => {
     if (SANDBOX && editing()) return;
     if (SANDBOX && e.key === 'F2' && !fight && !panel.open) { e.preventDefault(); scenarioCmd(); return; }
@@ -2558,6 +2564,11 @@ async function main() {
       return;
     }
     if (panel.open) return;
+    if (/^[1-6]$/.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) {   // _Parser: choose the acting member (`_curpla`)
+      const m = party.members[Number(e.key) - 1];
+      if (!m || m === act()) sfx(14); else { acting = m; render(); }
+      return;
+    }
     const c = commands.find(c => c.key.length === 1 && c.key.toLowerCase() === e.key.toLowerCase());
     if (c) { c.act(); return; }
     if (e.key === 'Escape' && marking) { marking = null; message = ''; unmark(); render(); return; }
