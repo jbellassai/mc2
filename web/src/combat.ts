@@ -20,7 +20,7 @@ interface Weapon { minst: number; basedam: number; type: number; unbreakable: nu
 export interface CombatData { monsters: Monster[]; groups: number[][]; weapons: Weapon[]; setupxy: number[]; maxtbl: number[];
   ranges: { x: number[][]; y: number[][] }; guarddiff: number[];
   loot: { thresholds: number[]; items: number[]; amounts: number[][]; an: number[] }; resurrect: string[];
-  d06: { autospells: number[]; cast: number[]; crit: number[]; crit2: number[]; prey: number[]; counts: number[]; armor: number[]; dodge: number[];
+  d06: { autospells: number[]; prefs: number[]; cast: number[]; crit: number[]; crit2: number[]; prey: number[]; counts: number[]; armor: number[]; dodge: number[];
     gonshi: number[]; sermin: number[]; potion: number[] };
   spells: { names: string[]; energy: number[]; where: number[]; side: number[]; skill: number[]; here: number[];
     summon: number[]; destroy: number[] };
@@ -41,12 +41,15 @@ export interface Rec {
   target: number;   // c_target, 0xFF none
   moves: number;    // c_removes: actions left this round
   loot?: { item: number; amount: number };   // c_itspc1/c_qaspc2 after the fight (P95 ovl_08f6); amount 0 = nothing
+  magicused?: boolean;   // c_magicused: a hero who has cast this fight (_Magic → MABITON)
   doom?: number;    // _doombstlst: a Doombeast's group, | 0x80 on the real one (its five images have the bare number)
 }
 
 const rnd = (n: number) => Math.floor(Math.random() * n);   // _RndCo
 /** A hero's spell chosen by the AI, cast through _Magic by the caller (main.ts); returns the lines to print. */
 export type Cast = (r: Rec, spell: number, target: Rec | null) => string[];
+/** P94 0x19B7, re-arming a hero on auto (main.ts): the lines, or null when nothing suits (the action goes on). */
+export type Arm = (r: Rec, adjacent: boolean, noArrows: boolean) => string[] | null;
 /** Directions 0-7: W N E S NW NE SE SW (P06 file 0x93 dx, 0x9B dy). */
 const DX = [-1, 0, 1, 0, -1, 1, 1, -1], DY = [0, -1, 0, 1, -1, -1, 1, 1];
 /** P06 ovl_0b2b: attacker → target direction from sign and slope bits (table P06 file 0xB0B). */
@@ -605,14 +608,14 @@ export class Fight {
    *  if carried, one action); otherwise act like a monster. `use` applies the item (Hero.use + the record sync).
    *  `cast` runs a spell the AI chose through _Magic (heroSpell, P94 ovl_157b). */
   autoHero(r: Rec, use: (r: Rec, item: number) => string[], text: (n: number, v?: Record<string, string | number>) => string,
-           cast?: Cast): string[] {
+           cast?: Cast, arm?: Arm): string[] {
     const h = r.hero!.rec, lead = this.recs.find(o => o.side === r.side && this.alive(o) && o.state & 4) ?? this.recs[0];
     const d = this.data.d06, lr = lead.race;
     const has = (item: number) => h.h_invitem.includes(item);
     if (rnd(100) < d.gonshi[lr] && !((h.h_inuse as number) & 0x80) && has(0x34)) return use(r, 0x34);
     if (r.hp <= d.potion[lr] && has(0x32)) return use(r, 0x32);
     if ((h.h_energy as number) < d.sermin[lr] && has(0x33)) return use(r, 0x33);
-    return this.monsterAct(r, text, cast);
+    return this.monsterAct(r, text, cast, arm);
   }
 
   /** P94 ovl_0f32/ovl_10ef: on a flee square the record leaves ("%a flees!", comtxt 0xCA); otherwise it steps toward the
@@ -644,7 +647,7 @@ export class Fight {
       case 1: return best(e => dist[e.y * W + e.x], e => dist[e.y * W + e.x] < 0x7e);
       case 2: return best(e => e.hp);
       case 3: return best(e => e.agi);
-      case 4: return undefined;                                         // magic-users: no spells cast yet
+      case 4: return best(() => 0, e => !!e.magicused);                 // Magic-user: c_magicused
       case 5: return best(() => 0, e => this.weapon(e)?.type === 3);
       case 6: return best(() => 0, e => e.race === this.data.d06.prey[ldrace]);
       case 7: return best(() => 0, e => !!(e.state & 4));
@@ -657,7 +660,7 @@ export class Fight {
   /** One action of a monster (P94 ovl_0b4b → ovl_0db1): keep or choose a target by the leader race's D06 criteria,
    *  then shoot, strike when adjacent, or step toward it (a random lower-distance neighbour), else a random move.
    *  A routed record (`c_state & 0x40`) flees instead. */
-  monsterAct(r: Rec, text: (n: number, v?: Record<string, string | number>) => string, cast?: Cast): string[] {
+  monsterAct(r: Rec, text: (n: number, v?: Record<string, string | number>) => string, cast?: Cast, arm?: Arm): string[] {
     if (r.state & 0x40) return this.fleeStep(r, text);
     const lead = this.recs.find(o => o.side === r.side && this.alive(o) && o.state & 4);
     const ldrace = lead ? lead.race : r.race;
@@ -679,6 +682,13 @@ export class Fight {
     } else if (r.race >= 5 && rnd(100) < this.data.d06.cast[ldrace]) {
       const s = monsterSpell(this, r, this.data.monsters[r.race - 5].spells);
       if (s) { r.moves--; return [`${r.name}: ${this.data.spells.names[s.spell]}`, ...effect(this, r, s.spell, s.target, text)]; }
+    }
+    if (r.hero && arm) {                                                // P94 0xC34: an unarmed hero, or a bow without arrows
+      const type = this.weapon(r)?.type ?? 0, arrows = r.hero.rec.h_invitem.includes(0x51);
+      if (type === 0 || (type === 3 && !arrows)) {
+        const l = arm(r, !!t && Math.max(Math.abs(t.x - r.x), Math.abs(t.y - r.y)) <= 1, type === 3);
+        if (l) return l;
+      }
     }
     if (t && this.inRange(r, t)) return this.attack(r, t, text);
     if (t) {

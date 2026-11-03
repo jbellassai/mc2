@@ -17,7 +17,7 @@ import { camp, OPEN, SHIP, DUNGEON, INNROOM, GUEST } from './camp';
 import { Party, type Member } from './party';
 import { World } from './world';
 import { Patches, type Patch } from './patch';
-import { Fight, type Rec } from './combat';
+import { Fight, type Arm, type Rec } from './combat';
 import { Chamber } from './chamber';
 import { newGame, landed } from './newgame';
 import { BUILT, cost as spellCost, effect, targets as spellTargets } from './spells';
@@ -182,7 +182,10 @@ async function main() {
         if (level.loc.kind === 'world' && !patch) world.season(clock);
       }
     }
-    if (clock.hour === 0 && world.ships.daily()) for (const m of party.members) m.hero.rec.h_gold = 0;   // Amos (P92 ovl_0447)
+    // P92 hour tick: Amos at 07:00 (every Coin of every member, _DecObj0 item 0 = h_gold), the captains' days at 08:00
+    if (clock.hour === 7 && world.ships.amos()) for (const m of party.members) m.hero.rec.h_gold = 0;
+    if (clock.hour === 8) world.ships.countdown();
+    clock.daylight() ? events.delete(0) : events.add(0);                // sunrise clears event 0, sunset sets it
     party.hunger(tables.hungerhours);
     world.hour(clock);
     const lrnTim = (sp: number, h: HeroRecord) => Math.max(2, tables.speltim[sp] - (h.h_intellg as number));   // _LrnTim
@@ -1127,11 +1130,29 @@ async function main() {
     panel.set(heading ? [{ label: cmd[40], act: () => { heading = false; } }] : []);   // Stop
     while (fight && a.moves > 0 && fight.alive(a) && !fight.outcome()) {
       report(fight.autoHero(a, (r, item) => { const l = useInFight(r, item); r.moves--; return l.map(x => x.replace(/^!/, '')); }, ctext,
-        (r, sp, t) => { r.hero!.rec.h_rdyspl = sp; return [`${r.name}: ${cdata.spells.names[sp]}`, ...castSpell(fight!, r, sp, t)]; }));   // P94 0x16B7: h_rdyspl, then _Magic
+        (r, sp, t) => { r.hero!.rec.h_rdyspl = sp; return [`${r.name}: ${cdata.spells.names[sp]}`, ...castSpell(fight!, r, sp, t)]; },   // P94 0x16B7: h_rdyspl, then _Magic
+        rearm));
       render();
       await sleep(200);
     }
     partyTurn();
+  };
+  /** P94 0x19B7: a hero on auto with no weapon, or a bow and no arrows ("%h has no arrows.", 0x4F, first), takes the
+   *  first weapon of the race's D06 ptr12 list (22 items, 0 ends) in the pack that is not broken (wear < 99), not too
+   *  heavy (`wp_minst ≤ c_strngth`) and, for a bow, has arrows and no adjacent target: "%h draws %p %l." (0x3A); that
+   *  is the action. Nothing suitable: the action goes on as before. */
+  const rearm: Arm = (a, adjacent, noArrows) => {
+    const h = a.hero!, r = h.rec;
+    if (noArrows) report([format(comtxt[0x4f], h, h.name)]);
+    for (const it of cdata.d06.prefs.slice(22 * (r.h_race as number), 22 * (r.h_race as number) + 22)) {
+      if (!it) break;
+      const i = r.h_invitem.indexOf(it), w = cdata.weapons[it - 9];
+      if (i < 0 || !w || (r.h_invamt[i] & 0x7f) >= 0x63 || w.minst > a.str) continue;
+      if (w.type === 3 && (adjacent || !r.h_invitem.includes(0x51))) continue;
+      r.h_inhand = i; a.weapon = it; a.wskl = Fight.wpnSkl(h); a.moves--;
+      return [format(comtxt[0x3a], h, h.name, { l: items[it] })];
+    }
+    return null;
   };
   /** Recall (_RecSpl): ready one of the spells the hero has memorised (`h_spells`, `h_rdyspl`). Takes no action. */
   const recall = (h: Hero, back: () => void) => {
@@ -1149,6 +1170,7 @@ async function main() {
     if (--r.h_spells[row][col] <= 0) { r.h_spells[row][col] = 0; r.h_rdyspl = 0xff; }
     if (cdata.spells.skill.includes(sp)) out.push(...f.skillUp(a, 3, ctext));
     if (sp >= 30 && sp <= 35) f.magbits.add(sp);
+    a.magicused = true;                                                // MABITON
     a.moves--;
     return out;
   };

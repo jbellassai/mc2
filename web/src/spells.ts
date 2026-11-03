@@ -61,14 +61,21 @@ function worth(f: Fight, c: Rec, spell: number, t: Rec): boolean {
   return t.wskl > 15 || t.str > 15;
 }
 
-/** P94 ovl_1553 for a monster: one of its two spells (`c_spell1/2`) with a target on the TALIGN side that passes
- *  `worth`, the first in record order; group spells need five such records (Zengrl ~ Heal, Zishoxe ~ Shield,
- *  Zutyun ~ Weaken, Zapall ~ Fireball). Null when nothing is worth casting. Only the BUILT spells are tried. */
+/** P94 ovl_1553 for a monster: the candidates are spells 2 and 3 (`c_spell2`, `c_renspl3`) and, when set, spell 1
+ *  twice (`_SPELBUF1`, `_NUMSPLS` 2 or 4); a random one is drawn (every copy of it dropped, ovl_1647) until one has a
+ *  target (aiTarget). A monster pays no energy (_Magic's combat branch for records ≥ 6 only runs the spell). Null =
+ *  nothing worth casting. Only the BUILT spells are tried (not Assess or Timestop). */
 export function monsterSpell(f: Fight, c: Rec, spells: number[]): { spell: number; target: Rec | null } | null {
-  const known = spells.slice(0, 2).filter(s => s !== 0xff && BUILT.has(s) && s !== 5 && s !== 35);
-  if (!known.length) return null;
-  const spell = known[rnd(known.length)], target = aiTarget(f, c, spell);
-  return target === undefined ? null : { spell, target };
+  const [s1, s2, s3] = spells;
+  let list = [s2, s3, ...(s1 !== 0xff ? [s1, s1] : [])];
+  while (list.length) {
+    const sp = list[rnd(list.length)];
+    list = list.filter(x => x !== sp);
+    if (sp === undefined || sp === 0xff || !BUILT.has(sp) || sp === 5 || sp === 35) continue;
+    const target = aiTarget(f, c, sp);
+    if (target !== undefined) return { spell: sp, target };
+  }
+  return null;
 }
 
 /** P94 ovl_15f8: the first record (in record order) on the spell's TALIGN side that passes `worth`; a group spell

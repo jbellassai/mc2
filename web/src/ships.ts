@@ -40,14 +40,18 @@ export class Ships {
     return Math.min(255, Math.max(dx, dy) + ((Math.min(dx, dy) + 2) >> 2)) >> 4;
   }
 
-  /** P92 at the day change: ovl_040d counts every captain's days down (0 → home, 1 → expired, 5 → credit ran out);
-   *  ovl_0447 springs Amos' theft (state 6 → 7, no credit). Returns true when the party's coins are to be taken. */
-  daily(): boolean {
+  /** P92 ovl_040d, at 08:00 (the hour tick, P92 0x63): every captain's days count down (0 → home, 1 → expired,
+   *  5 → credit ran out). */
+  countdown() {
     for (let i = 0; i < 6; i++) {
       if (this.days[i]) this.days[i]--;
       if (this.days[i]) continue;
       this.sta[i] = ({ 0: 3, 1: 2, 5: 4 } as Record<number, number>)[this.sta[i]] ?? this.sta[i];
     }
+  }
+
+  /** P92 ovl_0447, at 07:00: Amos' theft springs (state 6 → 7, no credit). True when the party's coins are taken. */
+  amos(): boolean {
     if (this.sta[AMOS] !== 6) return false;
     this.sta[AMOS] = 7; this.days[AMOS] = 0;
     return true;

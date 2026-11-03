@@ -44,7 +44,7 @@ Private, not saved (P01 overlay data): `OV_0x1c5` days just bought, `OV_0x1c6` p
 
 New game: every captain is in state 3 at home (a fresh save shows `_capsta = 3×6`; the first world-map step copies the home coordinates into `_boatx/y`).
 
-**Daily (`P92 ovl_040d`, at the day change):** for each captain, `if capdays > 0: capdays -= 1`; then if `capdays == 0`: state 0 → 3, 1 → 2, 5 → 4 (other states unchanged).
+**Daily (`P92 ovl_040d`, at 08:00 — the hour tick calls it when the hour becomes 8, `ovl_0447` at 7):** for each captain, `if capdays > 0: capdays -= 1`; then if `capdays == 0`: state 0 → 3, 1 → 2, 5 → 4 (other states unchanged).
 
 **Every world-map step (`P01 ovl_15e4`, also on entering the world map):**
 - state 2 → state 0, `capdays = voyage_home(i)`;
@@ -101,7 +101,7 @@ The daily tick turns state 5 into 4; at the next step (`ovl_15e4`, `ovl_0f95`): 
 
 ## Amos (captain 2, the cheap one)
 
-Hiring Amos sets state 6. At the next daily tick (`P92 ovl_0447`): state 7, `capdays = 0`, and every party member's **Coin** entries are removed (`_SearchInv` item 0 per slot, `_DecObj0`). At the next step the theft message prints and the state becomes 5 with zero credit, so the following day Amos demands payment the party can no longer make — working for passage is the usual outcome. The game never gives the coins back.
+Hiring Amos sets state 6. At the next 07:00 (`P92 ovl_0447`): state 7, `capdays = 0`, and every party member's **Coin** entries are removed (`_SearchInv` item 0 per slot, `_DecObj0`). At the next step the theft message prints and the state becomes 5 with zero credit, so the following day Amos demands payment the party can no longer make — working for passage is the usual outcome. The game never gives the coins back.
 
 ## Captains ashore
 
