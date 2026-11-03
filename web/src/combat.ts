@@ -624,6 +624,13 @@ export class Fight {
    *  fleeing leader passes leadership on and may spread panic — not modelled.) */
   private fleeStep(r: Rec, text: (n: number, v?: Record<string, string | number>) => string): string[] {
     if (this.flee.has(r.y * W + r.x)) { this.remove(r); return [text(0xca, { a: r.name })]; }
+    if (r.state & 4 && r.side) {                                       // P94 0x1028: a fleeing monster leader steps down
+      r.state &= ~4;
+      const next = this.recs.find(o => o !== r && o.side && o.race === r.race && !(o.state & 0xf9) && !(o.health & 0xf0));   // ovl_1089
+      if (next) next.state |= 4;
+      if (!next || rnd(2))                                             // panic: the side's others, but bravery 12, drop to 0
+        for (const o of this.recs) if (o !== r && o.side === r.side && o.bravery !== 12) o.bravery = 0;
+    }
     const d = this.distances(r.x, r.y, false, r.recno < 6), goal = [...this.flee].sort((a, b) => d[a] - d[b])[0];
     if (goal === undefined || d[goal] >= 0x7e) { r.moves--; return []; }
     const g = this.distances(goal % W, Math.floor(goal / W), false, r.recno < 6), here = g[r.y * W + r.x];

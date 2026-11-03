@@ -18,7 +18,7 @@ None known (2026-11-03). The last four (auto-hero casting, the Map, the notepad,
 
 - **Acting member:** the menus where `_Parser` allows the switch (`_chpmens` = menus 5, 10, 12, 13, 16, 21, 22) are approximated as "no panel open" (plus the aftermath screen, assumed); P07/P08 rooms move `_curpla` like P05 (assumed).
 - **World:** Teleport doesn't highlight valid squares; Assign is on the sheet, not Talk (Dismiss too).
-- **Combat AI:** flee has no leader handover or panic spread; no friendly-fire prompt; target-on-death event (P06 `ovl_0cde` step 6) untraced; Head asks no speed digit.
+- **Combat AI:** flee heads for the nearest flee square, not away from the enemies' centroid; what `c_bravery` (zeroed by panic and Terrify) changes is untraced; no friendly-fire prompt; target-on-death event (P06 `ovl_0cde` step 6) untraced; Head asks no speed digit.
 - **Spells:** Assess uses the port's own text; See plays one sound (original 10 then 9), Confuse/Locate one (original three).
 - **Talk:** `%k` dropped.
 - **Notepad:** not logged yet: the Whisper "Nothing happens." quirk (P02 0x403), P95's fountain copy; event 153 (notes saved) is not kept.
