@@ -385,7 +385,7 @@ async function main() {
         { label: cmd[23], act: () => said(3, comtxt[0x1f]) },             // Invite: FAR_ICANT (assumed for `_npccat` 1)
         { label: cmd[9], act: () => said(3, comtxt[0xc6].trim()) }, { label: comtxt[0x17b], act: () => said(3, comtxt[0xc6].trim()) },
         { label: cmd[29], act: () => said(3, comtxt[0xd5].trim()) },
-        ...(mate !== party.members[0] ? [{ label: cmd[12], act: () => dismiss(mate) }] : []),   // Dismiss (FFFAR menu 8 item 5)
+        ...(mate !== party.members[0] ? [{ label: cmd[6], act: () => assign(mate) }, { label: cmd[12], act: () => dismiss(mate) }] : []),   // Assign, Dismiss (FFFAR menu 8; also on the sheet)
       ] : [
         { label: cmd[23], act: () => void invite() },                   // Invite
         ...(t.shop.length ? [{ label: cmd[9], act: buy }, { label: comtxt[0x17b], act: sell }] : []),   // Buy, Sell
@@ -2078,6 +2078,7 @@ async function main() {
       case 39: sfx(15); return done(sense(h, m));                                           // Sense (V02 INT60_13)
       case 40: case 41: {                                                                   // Restsoul, Soulspeak (P08)
         const s = scene?.spell(sp, h);
+        if (sp === 40 && s) figures = people();                          // the ghost's leaving event: it is gone now
         return s === null || s === undefined ? fail(ctext(0x56, { h: h.name })) : done(s);
       }
     }
